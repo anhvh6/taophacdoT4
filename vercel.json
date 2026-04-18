@@ -1,0 +1,17 @@
+{
+  "functions": {
+    "api/client.ts": {
+      "includeFiles": "dist/index.html"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/client/:id",
+      "destination": "/api/client?id=:id"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

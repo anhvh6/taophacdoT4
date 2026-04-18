@@ -1,0 +1,37 @@
+{
+  "name": "v3-mega-phương-facial-yoga-management-system",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.37.0",
+    "@react-oauth/google": "^0.13.5",
+    "@supabase/supabase-js": "^2.98.0",
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1",
+    "jwt-decode": "^4.0.0",
+    "lucide-react": "^0.562.0",
+    "puppeteer": "^24.40.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.4",
+    "react-player": "^3.4.0",
+    "recharts": "^3.8.0",
+    "tailwindcss": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "dotenv": "^17.3.1",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "xlsx": "^0.18.5"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "24.3 test Supabase V3 Mega Phương Facial Yoga Management System",
+  "description": "Github QLKH16.3",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
