@@ -455,7 +455,7 @@ grant execute on function authorize_device(text, text, text, text) to anon, auth
 grant execute on function request_device_approval(text, text, text, text) to anon, authenticated;
 
 drop function if exists enroll_customer_email(text, text, text);
-create or replace function enroll_customer_email(p_customer_id text, p_token text, p_email text)
+create or replace function enroll_customer_email(p_customer_id text, p_email text, p_token text)
 returns json security definer
 set search_path = public
 as $$
@@ -474,7 +474,7 @@ end;
 $$ language plpgsql;
 
 drop function if exists request_customer_email_change(text, text, text);
-create or replace function request_customer_email_change(p_customer_id text, p_token text, p_new_email text)
+create or replace function request_customer_email_change(p_customer_id text, p_new_email text, p_token text)
 returns json security definer
 set search_path = public
 as $$

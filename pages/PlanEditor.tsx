@@ -11,6 +11,19 @@ import { EXERCISE_TYPES, DEFAULT_SIDEBAR_BLOCKS, DEFAULT_CHEWING_INSTRUCTION } f
 import { GoogleGenAI } from "@google/genai";
 import { toInputDateString, formatDDMM, parseVNDate, addDays, formatVNDate } from '../utils/date';
 
+const isFlagEnabled = (value: any, fallback = true) => {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['false', '0', 'off', 'no', 'n', 'f', 'disabled'].includes(normalized)) return false;
+    if (['true', '1', 'on', 'yes', 'y', 't', 'enabled'].includes(normalized)) return true;
+  }
+  return fallback;
+};
+
 // Separate component for task rows to prevent unnecessary re-renders
 const Toggle: React.FC<{ checked: boolean; onChange: (val: boolean) => void; color?: string }> = ({ checked, onChange, color = 'peer-checked:bg-green-500' }) => (
   <label className="relative inline-flex items-center cursor-pointer">
@@ -196,6 +209,8 @@ export const PlanEditor: React.FC<{
     sidebar_blocks_json: [...DEFAULT_SIDEBAR_BLOCKS],
     note: draftCustomer?.note || "",
     chewing_status: draftCustomer?.chewing_status || DEFAULT_CHEWING_INSTRUCTION,
+    require_google_auth: true,
+    require_device_limit: true,
     trang_thai: 0,
     trang_thai_gan: "0",
     san_pham: [],
@@ -598,6 +613,8 @@ export const PlanEditor: React.FC<{
         customer_name: localName,
         note: localNote,
         chewing_status: localChewing,
+        require_google_auth: isFlagEnabled(customer.require_google_auth, true),
+        require_device_limit: isFlagEnabled(customer.require_device_limit, true),
         sidebar_blocks_json: localBlocks,
         is_customized: isCustomized,
         end_date: calculatedEndDate || customer.end_date,
@@ -1135,7 +1152,7 @@ export const PlanEditor: React.FC<{
                     <input 
                       type="checkbox" 
                       className="sr-only peer" 
-                      checked={customer.require_google_auth !== false} 
+                      checked={isFlagEnabled(customer.require_google_auth, true)}
                       onChange={e => setCustomer({...customer, require_google_auth: e.target.checked})}
                     />
                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -1151,7 +1168,7 @@ export const PlanEditor: React.FC<{
                     <input 
                       type="checkbox" 
                       className="sr-only peer" 
-                      checked={customer.require_device_limit !== false} 
+                      checked={isFlagEnabled(customer.require_device_limit, true)}
                       onChange={e => setCustomer({...customer, require_device_limit: e.target.checked})}
                     />
                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>

@@ -1,5 +1,5 @@
 
-import { Search, UserPlus, Users, Calendar, ExternalLink, Edit2, Copy, Package, Clock, AlertTriangle, CheckCircle, Archive, Zap, CopyPlus, UserCircle, Filter, Eraser, AlertCircle, X, Plus, Mail, MapPin, Truck, FileWarning, User, Play, List, ChevronDown, ChevronRight, ChevronLeft, Trash2, RefreshCw, ShoppingBag, Phone, ClipboardList, BookOpen, LogOut, BarChart3 } from 'lucide-react';
+import { Search, UserPlus, Users, Calendar, ExternalLink, Edit2, Copy, Package, Clock, AlertTriangle, CheckCircle, Archive, Zap, CopyPlus, UserCircle, Filter, Eraser, AlertCircle, X, Plus, Mail, MapPin, Truck, FileWarning, User, Play, List, ChevronDown, ChevronRight, ChevronLeft, Trash2, RefreshCw, ShoppingBag, Phone, ClipboardList, BookOpen, LogOut, BarChart3, Bell } from 'lucide-react';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Layout } from '../components/Layout';
 import { Card, Button, LineInput, Modal, Toast } from '../components/UI';
@@ -726,13 +726,20 @@ export const Dashboard: React.FC<{
           </a>
           {(() => {
             const unviewedCount = pendingRequests.filter(r => !viewedCustomerIds.has(r.customer_id)).length;
-            return unviewedCount > 0 && (
-              <button 
+            return (
+              <div 
+                className="relative cursor-pointer group"
                 onClick={(e) => { e.stopPropagation(); setIsRequestModalOpen(true); }}
-                className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-bounce shadow-lg shadow-red-200"
               >
-                {unviewedCount}
-              </button>
+                <div className={`p-2 rounded-xl transition-all ${unviewedCount > 0 ? 'bg-red-50 text-red-500 animate-[pulse_2s_infinite]' : 'bg-blue-50 text-blue-400'}`}>
+                  <Bell size={20} strokeWidth={2.5} />
+                </div>
+                {unviewedCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white shadow-md">
+                    {unviewedCount}
+                  </span>
+                )}
+              </div>
             );
           })()}
         </div>

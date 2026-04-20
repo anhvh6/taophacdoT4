@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut } from 'lucide-react';
+import { Toast } from '../components/UI';
 import { customerService, generateCustomerLink } from '../src/services/customerService';
 import { planService } from '../src/services/planService';
 import { customPlanService } from '../src/services/customPlanService';
@@ -9,6 +10,19 @@ import { ImmersiveChat } from '../components/ImmersiveChat';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
+
+const isFlagEnabled = (value: any, fallback = true) => {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['false', '0', 'off', 'no', 'n', 'f', 'disabled'].includes(normalized)) return false;
+    if (['true', '1', 'on', 'yes', 'y', 't', 'enabled'].includes(normalized)) return true;
+  }
+  return fallback;
+};
 
 export const ClientView: React.FC<{ customerId: string; token?: string; onNavigate?: (page: string, params?: any) => void }> = ({ customerId, token, onNavigate }) => {
   const [customer, setCustomer] = useState<Customer | any>(null);
@@ -22,6 +36,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const [copyToast, setCopyToast] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastLoggedEmail, setLastLoggedEmail] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   
   // Zalo Bypass & Video Auth State
   const [isZalo, setIsZalo] = useState(false);
@@ -271,7 +287,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     
     const hasEmail = customer.email && String(customer.email).trim() !== "";
     const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('localhost');
-    const needsGoogleAuth = customer.require_google_auth !== false && !isPreviewDomain;
+    const needsGoogleAuth = isFlagEnabled(customer.require_google_auth, true) && !isPreviewDomain;
+    const needsDeviceLimit = isFlagEnabled(customer.require_device_limit, true) && !isPreviewDomain;
     
     // Điều kiện để hiện modal: 
     // Chỉ hiện khi bắt buộc có xác thực Google (needsGoogleAuth = true)
@@ -283,7 +300,11 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         setAuthModal({ isOpen: true, link: null });
       }, 300);
     }
-  }, [customer, isVerified, loading]);
+
+    if (!needsGoogleAuth && authModal.isOpen) {
+      setAuthModal({ isOpen: false, link: null });
+    }
+  }, [customer, isVerified, loading, authModal.isOpen]);
 
   // Play Video Logic
   const handlePlayVideo = (link?: string) => {
@@ -297,7 +318,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     }
 
     // 1. Kiểm tra thiết bị (Device Limit)
-    if (customer?.require_device_limit !== false && !deviceAuthorized) {
+    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('localhost');
+    const needsDeviceLimit = isFlagEnabled(customer?.require_device_limit, true) && !isPreviewDomain;
+
+    if (needsDeviceLimit && !deviceAuthorized) {
         setDeviceModal({ isOpen: true });
         return;
     }
@@ -309,8 +333,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       customerEmail: customer?.email
     });
 
-    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('localhost');
-    const needsGoogleAuth = customer?.require_google_auth !== false && !isPreviewDomain;
+    const needsGoogleAuth = isFlagEnabled(customer?.require_google_auth, true) && !isPreviewDomain;
 
     if (needsGoogleAuth && !isVerified) {
        console.log("handlePlayVideo: Authentication required, opening AuthModal");
@@ -994,6 +1017,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                      if (!jwt) return;
                      const decoded = jwtDecode<{email: string}>(jwt);
                      const loggedEmail = decoded.email.toLowerCase().trim();
+                     setLastLoggedEmail(loggedEmail);
                      const existingEmail = (customer.email || "").toLowerCase().trim();
                      
                      if (!existingEmail) {
@@ -1026,18 +1050,26 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         setInfoModal({
                            isOpen: true, 
                            title: "Email không trùng khớp", 
-                           message: `Email của bạn (${loggedEmail}) không trùng khớp với Email bạn đã đăng ký sử dụng (Email đăng ký: ${existingEmail}). Nếu bạn đã đổi Email mới, vui lòng nhấn "Liên hệ" để được Admin duyệt đổi Email mới.`, 
+                           message: `Email của bạn (${loggedEmail}) không trùng khớp với Email bạn đã đăng ký sử dụng (Email đăng ký: ${existingEmail}). Nếu bạn đã đổi Email mới, vui lòng nhấn "Gửi yêu cầu" để được Admin duyệt đổi Email mới.`, 
                            type: "WARNING", 
                            color: "red",
-                           confirmText: "💬 Liên hệ",
+                           confirmText: "💬 Gửi yêu cầu",
                            onConfirm: async () => {
                              setIsRequestingEmail(true);
                              try {
-                               await customerService.requestEmailChange(customer.customer_id, loggedEmail, (customer.token || token || ""));
-                               const msg = `Chào Admin, em là ${customer?.customer_name || ''}, em vừa gửi yêu cầu đổi Email đăng ký cho phác đồ của em (Mã HV: ${customerId}). Email cũ: ${existingEmail}. Email mới: ${loggedEmail}. Nhờ Admin duyệt giúp em ạ!`;
+                               const result = await customerService.requestEmailChange(customer.customer_id, loggedEmail, (customer.token || token || ""));
+                               if (result && (result as any).success === false) {
+                                  throw new Error((result as any).message || 'Unauthorized');
+                               }
+                               setToast("Gửi yêu cầu đổi Email thành công!");
+                               const msg = `Chào Admin, em là ${customer?.customer_name || ''}, em vừa gửi yêu cầu đổi Email đăng ký cho phác đồ của em (Mã HV: ${customerId}).\n- Email cũ: ${existingEmail}\n- Email mới: ${loggedEmail}\nNhờ Admin duyệt giúp em ạ!`;
                                window.open(`https://zalo.me/0966888609?text=${encodeURIComponent(msg)}`, '_blank');
                                setInfoModal(null);
-                             } catch(e) { console.error(e); }
+                               setAuthModal({isOpen: false, link: null});
+                             } catch(e: any) { 
+                               console.error("Email Change Error:", e);
+                               alert(`Gửi yêu cầu thất bại: ${e.message || 'Lỗi hệ thống'}. Vui lòng liên hệ trực tiếp qua Zalo!`);
+                             }
                              finally { setIsRequestingEmail(false); }
                            }
                         });
@@ -1055,32 +1087,44 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                />
             </div>
 
-            <div className="mt-8 text-[11px] text-gray-400 font-medium">
-              Bạn cần hỗ trợ? <a href="https://zalo.me/0966888609" target="_blank" className="text-blue-600 hover:underline">Liên hệ Zalo</a>.
-              {customer?.email && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <p className="mb-2 italic">Nếu bạn muốn đổi Email đăng ký:</p>
-                  <button 
-                    onClick={async () => {
-                      if (confirm("Gửi yêu cầu đổi Email đăng ký tới Admin?")) {
-                        setIsRequestingEmail(true);
-                        try {
-                          // Note: We need a way to know the *target* email. 
-                          // But usually, change request is for the CURRENT logged in email that failed.
-                          // So we might want to trigger this AFTER a failed login.
-                        } catch(e) {}
-                      }
-                    }}
-                    className="text-orange-500 font-bold hover:underline"
-                  >
-                    Yêu cầu đổi Email
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+             <div className="mt-8 text-[11px] text-gray-400 font-medium text-center">
+               Bạn cần hỗ trợ? <a href="https://zalo.me/0966888609" target="_blank" className="text-blue-600 hover:underline font-bold">Liên hệ Zalo</a>.
+               
+               {/* Chỉ hiện nút đổi Email nếu đã từng login và bị mismatch */}
+               {customer?.email && lastLoggedEmail && lastLoggedEmail !== customer.email.toLowerCase().trim() && (
+                 <div className="mt-6 pt-4 border-t border-gray-100">
+                    <p className="mb-2 italic text-[10px] text-red-500">Email vừa đăng nhập không khớp. Bạn muốn đổi sang Email này?</p>
+                    <p className="mb-3 text-[12px] font-black text-blue-900 bg-blue-50 py-2 rounded-xl">{lastLoggedEmail}</p>
+                    <button 
+                      disabled={isRequestingEmail}
+                      onClick={async () => {
+                         const existingEmail = (customer.email || "").toLowerCase().trim();
+                         setIsRequestingEmail(true);
+                         try {
+                           const result = await customerService.requestEmailChange(customer.customer_id, lastLoggedEmail!, (customer.token || token || ""));
+                           if (result && (result as any).success === false) {
+                              throw new Error((result as any).message || 'Unauthorized');
+                           }
+                           setToast("Gửi yêu cầu đổi Email thành công!");
+                           const msg = `Chào Admin, em là ${customer?.customer_name || ''}, em vừa gửi yêu cầu đổi Email đăng ký cho phác đồ của em (Mã HV: ${customerId}).\n- Email cũ: ${existingEmail}\n- Email mới: ${lastLoggedEmail}\nNhờ Admin duyệt giúp em ạ!`;
+                           window.open(`https://zalo.me/0966888609?text=${encodeURIComponent(msg)}`, '_blank');
+                           setAuthModal({isOpen: false, link: null});
+                         } catch(e: any) { 
+                           console.error("Email Change Error (Footer):", e);
+                           alert(`Gửi yêu cầu thất bại: ${e.message || 'Lỗi hệ thống'}. Vui lòng liên hệ trực tiếp qua Zalo!`);
+                         }
+                         finally { setIsRequestingEmail(false); }
+                      }}
+                      className="bg-orange-500 text-white w-full py-3 rounded-full font-black shadow-lg hover:bg-orange-600 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest"
+                    >
+                      {isRequestingEmail ? 'Đang gửi...' : 'Gửi yêu cầu đổi Email'}
+                    </button>
+                 </div>
+               )}
+             </div>
+           </div>
+         </div>
+       )}
 
       {/* 🚀 MÀN HÌNH CHẶN THIẾT BỊ (Device Limit) */}
       {deviceModal?.isOpen && (
@@ -1144,6 +1188,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       )}
       
       <a href="https://zalo.me/0966888609" target="_blank" className="fixed bottom-6 right-6 w-14 h-14 bg-[#0068ff] rounded-full flex items-center justify-center shadow-2xl z-[5000] border-2 border-white"><img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg" alt="Zalo" className="w-8 h-8" /></a>
+      
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   );
 };

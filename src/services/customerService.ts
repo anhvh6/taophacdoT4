@@ -4,6 +4,19 @@ import { Customer } from '../../types';
 import { DEFAULT_SIDEBAR_BLOCKS, DEFAULT_CHEWING_INSTRUCTION } from '../../constants';
 import { parseVNDate, addDays, toISODateKey } from '../../utils/date';
 
+const parseFlag = (value: any, fallback = true): boolean => {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['false', '0', 'off', 'no', 'n', 'f', 'disabled'].includes(normalized)) return false;
+    if (['true', '1', 'on', 'yes', 'y', 't', 'enabled'].includes(normalized)) return true;
+  }
+  return fallback;
+};
+
 export const normalizeCustomer = (item: any): Customer => {
   if (!item) return item;
   
@@ -42,8 +55,8 @@ export const normalizeCustomer = (item: any): Customer => {
     video_date: item.Video_date || item.video_date,
     link: item.link || "",
     token: item.token || "",
-    require_google_auth: item.require_google_auth ?? true,
-    require_device_limit: item.require_device_limit ?? true,
+    require_google_auth: parseFlag(item.require_google_auth, true),
+    require_device_limit: parseFlag(item.require_device_limit, true),
     pending_email: item.pending_email || ""
   };
 };
@@ -67,6 +80,26 @@ export const customerService = {
   normalizeCustomer,
   generateCustomerLink,
 
+  async getClientSecurityFlags(customerId: string, token: string) {
+    const id = String(customerId || '').trim();
+    const tok = String(token || '').trim();
+    if (!id || !tok) return null;
+
+    try {
+      const query = new URLSearchParams({ id, t: tok }).toString();
+      const resp = await fetch(`/api/security?${query}`);
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      if (!data) return null;
+      return {
+        require_google_auth: data.require_google_auth,
+        require_device_limit: data.require_device_limit
+      };
+    } catch {
+      return null;
+    }
+  },
+
   async getCustomerByToken(customerId: string, token: string) {
     const id = String(customerId || '').trim();
     const tok = String(token || '').trim();
@@ -82,7 +115,21 @@ export const customerService = {
     }
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) return null;
-    return normalizeCustomer(row);
+
+    const missingGoogleAuth = !Object.prototype.hasOwnProperty.call(row, 'require_google_auth');
+    const missingDeviceLimit = !Object.prototype.hasOwnProperty.call(row, 'require_device_limit');
+    let enrichedRow: any = row;
+
+    // Some deployed DB RPC versions omit security flags.
+    // In that case, fetch flags from server-side API (service-role guarded) by id + token.
+    if (missingGoogleAuth || missingDeviceLimit) {
+      const securityData = await customerService.getClientSecurityFlags(id, tok);
+      if (securityData) {
+        enrichedRow = { ...row, ...securityData };
+      }
+    }
+
+    return normalizeCustomer(enrichedRow);
   },
 
   async getCustomerById(customerId: string) {
@@ -341,8 +388,8 @@ export const customerService = {
     const { data, error } = await supabase
       .rpc('request_customer_email_change', {
         p_customer_id: customerId,
-        p_token: token,
-        p_new_email: newEmail
+        p_new_email: newEmail,
+        p_token: token
       });
 
     if (error) throw error;
