@@ -85,43 +85,21 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     try {
       setError(null);
       console.log("ClientView: Fetching customer with ID:", customerId, "Token:", token);
-      // 1. Load customer data
-      let customerData = null;
-      if (token) {
-        customerData = await customerService.getCustomerByToken(customerId, token);
-      }
-      
-      // If admin mode and token fetch failed or no token, try admin fetch
-      if (!customerData && onNavigate) {
-        console.log("ClientView: Admin mode, trying direct fetch for ID:", customerId);
-        customerData = await customerService.getCustomerById(customerId);
-      }
-      
+      // 1. Load customer data and custom plan in parallel
+      const [customerData, customTasks] = await Promise.all([
+          token ? customerService.getCustomerByToken(customerId, token) : (onNavigate ? customerService.getCustomerById(customerId) : null),
+          customPlanService.getCustomPlan(customerId || '', token)
+      ]);
+
       if (!customerData) {
         console.warn("ClientView: No customer found for ID:", customerId, "Token:", token);
         if (token) setAccessDenied(true);
         setLoading(false);
         return;
       }
-
-      setCustomer(customerData);
-      console.log("ClientView: Customer data loaded:", {
-        id: customerData.customer_id,
-        email: customerData.email,
-        require_google_auth: customerData.require_google_auth,
-        require_device_limit: customerData.require_device_limit
-      });
-
-      // 2. Load tasks (Custom or Master)
-      let planTasks: ExerciseTask[] = [];
       
-      // Use the actual customer_id from the fetched data for consistency
       const actualId = customerData.customer_id || customerId;
-      console.log("Fetching custom plan for:", actualId);
-      
-      // Try custom plan first - Pass token to use RPC for public access
-      const customTasks = await customPlanService.getCustomPlan(actualId, token);
-      console.log("Custom tasks result count:", customTasks?.length || 0);
+            console.log("Custom tasks result count:", customTasks?.length || 0);
       
       if (customTasks && customTasks.length > 0) {
         planTasks = customTasks;
@@ -325,6 +303,32 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         setDeviceModal({ isOpen: true });
         return;
     }
+
+     if (isFlagEnabled(customer?.require_google_auth, true) && !isPreviewDomain) {
+        // Fetch latest customer data from server to ensure email is still valid
+        let latestCustomer = customer;
+        try {
+           const freshData = await customerService.getCustomerById(customerId!);
+           if (freshData) {
+              latestCustomer = freshData;
+              setCustomer(freshData); // Sync local state
+           }
+        } catch (e) {
+           console.warn("Failed to refresh customer data for security check:", e);
+        }
+
+        const storedEmail = localStorage.getItem(`verified_email_${customerId}`);
+        const dbEmail = (latestCustomer?.email || "").toLowerCase().trim();
+        
+        if (!storedEmail || (dbEmail && storedEmail.toLowerCase().trim() !== dbEmail)) {
+           // Nếu chưa verify HOẶC email đã lưu không còn khớp với DB (Admin vừa đổi email)
+           localStorage.removeItem(`verified_email_${customerId}`);
+           setIsVerified(false);
+           setToast("Email đăng ký đã thay đổi hoặc phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
+           setAuthModal({isOpen: true, link});
+           return;
+        }
+     }
 
     // 2. Kiểm tra xác thực Google (Email matching)
     console.log("handlePlayVideo: Security Check:", {
@@ -1024,7 +1028,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         // Giai đoạn Đăng ký ban đầu (First Login)
                         try {
                            await customerService.updateCustomerEmailByToken(customer.customer_id, (customer.token || token || ""), loggedEmail);
-                           localStorage.setItem(`verified_email_${customerId}`, 'true');
+                           localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
                            setIsVerified(true);
                            setCustomer({ ...customer, email: loggedEmail });
                            setAuthModal({isOpen: false, link: null});
@@ -1038,7 +1042,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         }
                      } else if (loggedEmail === existingEmail) {
                         // Giai đoạn Xác thực (Subsequent Logins) - Khớp
-                        localStorage.setItem(`verified_email_${customerId}`, 'true');
+                        localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
                         setIsVerified(true);
                         setAuthModal({isOpen: false, link: null});
                         if (authModal.link) {
@@ -1047,35 +1051,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         }
                      } else {
                         // Giai đoạn Xác thực - Không khớp
-                        setInfoModal({
-                           isOpen: true, 
-                           title: "Email không trùng khớp", 
-                           message: `Email của bạn (${loggedEmail}) không trùng khớp với Email bạn đã đăng ký sử dụng (Email đăng ký: ${existingEmail}). Nếu bạn đã đổi Email mới, vui lòng nhấn "Gửi yêu cầu" để được Admin duyệt đổi Email mới.`, 
-                           type: "WARNING", 
-                           color: "red",
-                           confirmText: "💬 Gửi yêu cầu",
-                           onConfirm: async () => {
-                             setIsRequestingEmail(true);
-                             try {
-                               const result = await customerService.requestEmailChange(customer.customer_id, loggedEmail, (customer.token || token || ""));
-                               if (result && (result as any).success === false) {
-                                  throw new Error((result as any).message || 'Unauthorized');
-                               }
-                               setToast("Gửi yêu cầu đổi Email thành công!");
-                               const msg = `Chào Admin, em là ${customer?.customer_name || ''}, em vừa gửi yêu cầu đổi Email đăng ký cho phác đồ của em (Mã HV: ${customerId}).\n- Email cũ: ${existingEmail}\n- Email mới: ${loggedEmail}\nNhờ Admin duyệt giúp em ạ!`;
-                               window.open(`https://zalo.me/0966888609?text=${encodeURIComponent(msg)}`, '_blank');
-                               setInfoModal(null);
-                               setAuthModal({isOpen: false, link: null});
-                             } catch(e: any) { 
-                               console.error("Email Change Error:", e);
-                               alert(`Gửi yêu cầu thất bại: ${e.message || 'Lỗi hệ thống'}. Vui lòng liên hệ trực tiếp qua Zalo!`);
-                             }
-                             finally { setIsRequestingEmail(false); }
-                           }
-                        });
-                     }
-                  }}
-                  onError={() => {
+                         setLastLoggedEmail(loggedEmail);
+                      }
+                   }}
+                   onError={() => {
                      setInfoModal({isOpen: true, title: "Lỗi Kết Nối", message: "Kết nối tới máy chủ Google thất bại. Vui lòng thử lại!", type: "WARNING", color: "red"});
                   }}
                   useOneTap

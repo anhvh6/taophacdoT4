@@ -283,8 +283,10 @@ export const Dashboard: React.FC<{
 
   const fetchPending = async () => {
     try {
-      const devices = await customerService.getPendingDeviceRequests();
-      const emails = await customerService.getPendingEmailRequests();
+      const [devices, emails] = await Promise.all([
+        customerService.getPendingDeviceRequests(),
+        customerService.getPendingEmailRequests()
+      ]); customerService.getPendingEmailRequests();
       
       const combined = [
         ...devices.map(d => ({ ...d, type: 'device' })),
@@ -1222,7 +1224,8 @@ export const Dashboard: React.FC<{
                       deviceCount: 0,
                       hasEmail: false,
                       pending_email: '',
-                      email: req.email || ''
+                      email: req.email || '',
+                      lastDate: req.created_at
                     };
                   }
                   if (req.type === 'device') acc[cid].deviceCount++;
@@ -1230,10 +1233,16 @@ export const Dashboard: React.FC<{
                     acc[cid].hasEmail = true;
                     acc[cid].pending_email = req.pending_email;
                   }
+                  // Keep the most recent date
+                  if (new Date(req.created_at) > new Date(acc[cid].lastDate)) {
+                    acc[cid].lastDate = req.created_at;
+                  }
                   return acc;
                 }, {});
 
-                const studentGroups = Object.values(grouped);
+                const studentGroups = Object.values(grouped).sort((a: any, b: any) => 
+                   new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime()
+                );
 
                 if (studentGroups.length === 0) {
                   return <div className="py-10 text-center text-gray-400 italic text-sm">Hiện không có yêu cầu nào chờ duyệt.</div>;
@@ -1260,7 +1269,10 @@ export const Dashboard: React.FC<{
                     }}
                   >
                     <div className="flex flex-col gap-1">
-                      <span className="font-black text-blue-900 uppercase text-sm group-hover:text-blue-600">{group.name}</span>
+                       <div className="flex items-center gap-3">
+                          <span className="font-black text-blue-900 uppercase text-sm group-hover:text-blue-600">{group.name}</span>
+                          <span className="text-[9px] font-bold text-gray-400 font-mono">{formatDDMMYYYY(group.lastDate)}</span>
+                       </div>
                       <div className="flex items-center gap-2">
                         {group.deviceCount > 0 && (
                           <span className="text-[9px] font-black bg-red-100 text-red-600 px-2 py-0.5 rounded-md uppercase">
@@ -1360,7 +1372,10 @@ export const Dashboard: React.FC<{
                     {/* PHẦN EMAIL */}
                     {hasEmailReq && (
                       <div className="bg-orange-50/50 border border-orange-100 rounded-3xl p-5">
-                        <div className="text-[10px] font-black text-orange-600 uppercase mb-3 tracking-widest">YÊU CẦU ĐỔI EMAIL</div>
+                        <div className="flex items-center justify-between mb-3 text-[10px] font-black uppercase tracking-widest">
+                           <div className="text-orange-600">YÊU CẦU ĐỔI EMAIL</div>
+                           <span className="text-orange-400 opacity-60">{formatDDMMYYYY(emailReq.created_at)}</span>
+                         </div>
                         <div className="flex flex-col gap-3">
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex flex-col min-w-0">
