@@ -16,7 +16,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const [loading, setLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedTask, setSelectedTask] = useState<ExerciseTask | null>(null);
-  const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; type?: string; color?: string; onConfirm?: () => void } | null>(null);
+  const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; type?: string; color?: string; confirmText?: string; onConfirm?: () => void } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isImmersiveOpen, setIsImmersiveOpen] = useState(false);
   const [copyToast, setCopyToast] = useState(false);
@@ -954,7 +954,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 ${infoModal.type === 'WARNING' ? 'bg-orange-50 text-orange-500' : 'bg-blue-50 text-blue-600'}`}><AlertTriangle size={32}/></div>
             <h3 className="text-xl font-black mb-3 text-[#1E3A8A] uppercase tracking-tight">{infoModal.title}</h3>
             <p className="text-gray-500 mb-8 font-medium leading-relaxed">{infoModal.message}</p>
-            <button onClick={() => { if (infoModal.onConfirm) infoModal.onConfirm(); else setInfoModal(null); }} className="w-full py-4 bg-[#1E3A8A] text-white font-bold rounded-full uppercase text-xs tracking-widest shadow-lg transition-all active:scale-95">{infoModal.type === 'WARNING' ? 'Tôi đã hiểu' : 'Đã hiểu'}</button>
+            <button onClick={() => { if (infoModal.onConfirm) infoModal.onConfirm(); else setInfoModal(null); }} className="w-full py-4 bg-[#1E3A8A] text-white font-bold rounded-full uppercase text-xs tracking-widest shadow-lg transition-all active:scale-95">{infoModal.confirmText ? infoModal.confirmText : (infoModal.type === 'WARNING' ? 'Tôi đã hiểu' : 'Đã hiểu')}</button>
           </div>
         </div>
       )}
@@ -1029,6 +1029,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                            message: `Email của bạn (${loggedEmail}) không trùng khớp với Email bạn đã đăng ký sử dụng (Email đăng ký: ${existingEmail}). Nếu bạn đã đổi Email mới, vui lòng nhấn "Liên hệ" để được Admin duyệt đổi Email mới.`, 
                            type: "WARNING", 
                            color: "red",
+                           confirmText: "💬 Liên hệ",
                            onConfirm: async () => {
                              setIsRequestingEmail(true);
                              try {
