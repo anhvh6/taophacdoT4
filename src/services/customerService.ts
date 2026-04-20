@@ -93,6 +93,26 @@ export const customerService = {
 
   async getCustomers() {
     const customers = await mockDB.getCustomers();
+    
+    // ĐỒNG BỘ NỀN: Lấy Email xác thực từ Supabase thế chỗ vào MockDB của Admin để Admin thấy Email học viên
+    try {
+      const { data: sbCustomers } = await supabase.from('customers').select('customer_id, email');
+      if (sbCustomers && Array.isArray(sbCustomers)) {
+         let hasUpdates = false;
+         for (const c of customers) {
+            const sbC = sbCustomers.find(sc => sc.customer_id === c.customer_id);
+            if (sbC && sbC.email && sbC.email.trim() !== '' && c.email !== sbC.email) {
+               c.email = sbC.email;
+               hasUpdates = true;
+               // Cập nhật ngầm vào mockDB từng bản ghi
+               await mockDB.upsertCustomer(c);
+            }
+         }
+      }
+    } catch(e) {
+      console.warn("Background email sync failed:", e);
+    }
+
     // Sort descending by created_at conceptually
     customers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     return customers.map(normalizeCustomer);
@@ -269,18 +289,21 @@ export const customerService = {
   async updateCustomerEmailByToken(customerId: string, token: string, newEmail: string) {
     let supabaseResult = { success: false, message: 'Not connected' };
     
+    // Gửi tín hiệu đến API giấu kín (Serverless Function) của Vercel
+    // Api này xài Service Role có quyền Admin tối cao trên Supabase nên sẽ luôn ghi đè thành công
     try {
-      const { data, error } = await supabase
-        .rpc('enroll_customer_email', {
-          p_customer_id: customerId,
-          p_token: token,
-          p_email: newEmail
-        });
-
-      if (error) console.warn("Supabase enroll_email error:", error);
-      else supabaseResult = data;
+      const response = await fetch('/api/enroll_email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId, token, email: newEmail })
+      });
+      if (response.ok) {
+        supabaseResult = await response.json();
+      } else {
+        console.warn("API enroll_email trả về lỗi HTTP:", response.status);
+      }
     } catch (e) {
-      console.warn("Supabase enroll_customer_email failed (RPC missing?):", e);
+      console.warn("Lỗi khi kết nối đến API enroll_email:", e);
     }
 
     // Always fallback to MockDB to ensure student is not blocked
