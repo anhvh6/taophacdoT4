@@ -977,7 +977,16 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setAuthModal({isOpen: false, link: null})}></div>
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 relative z-10 shadow-2xl text-center">
             <button onClick={() => setAuthModal({isOpen: false, link: null})} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-800"><X size={20}/></button>
-            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4"><User size={32}/></div>
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6"><User size={32}/></div>
+            
+            <div className="mb-6">
+              <h3 className="text-lg font-black text-[#1E3A8A] mb-2 uppercase tracking-tight">Xác thực tài khoản</h3>
+              <p className="text-gray-600 text-[13px] font-medium leading-relaxed">
+                Cần đăng nhập tài khoản Google để truy cập phác đồ.
+                <span className="text-red-500 font-bold mt-2 block">Lưu ý: Mỗi học viên chỉ được sử dụng duy nhất một tài khoản Google.</span>
+              </p>
+            </div>
+
             <div className="flex flex-col items-center justify-center w-full min-h-[44px]">
                <GoogleLogin
                   onSuccess={async (credentialResponse) => {
