@@ -1,7 +1,32 @@
 import { mockDB } from '../lib/mockData';
+import { supabase } from '../lib/supabaseClient';
 
 export const customPlanService = {
   async getCustomPlan(customerId: string, token?: string) {
+    const cleanId = String(customerId || '').trim();
+    const tok = token?.trim();
+    if (tok) {
+      const { data, error } = await supabase.rpc('get_client_tasks', {
+        p_customer_id: cleanId,
+        p_token: tok
+      });
+      if (error) {
+        console.error('get_client_tasks RPC:', error);
+        return [];
+      }
+      const rows = data || [];
+      return rows.map((t: any) => ({
+        ...t,
+        day: Number(t.day || 0),
+        link: t.link || '',
+        title: t.title || '',
+        detail: t.detail || '',
+        type: t.type || 'Bài bắt buộc',
+        nhom: t.nhom || '',
+        is_deleted: false
+      }));
+    }
+
     const tasks = await mockDB.getCustomPlan(customerId);
     const mapped = tasks.map(t => ({
       ...t,

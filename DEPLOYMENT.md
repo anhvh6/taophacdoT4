@@ -47,6 +47,30 @@ Quy trình này giúp bạn chuyển toàn bộ dữ liệu từ hệ thống Go
    - `VITE_APP_BASE_URL`: URL chính thức của app trên Vercel (ví dụ: `https://phacdo-megaphuong.vercel.app`).
 4. Deploy!
 
+### Thiết lập nhanh bằng Vercel CLI
+
+Chạy các lệnh sau trong thư mục project:
+
+```bash
+vercel env add VITE_SUPABASE_URL production
+vercel env add VITE_SUPABASE_ANON_KEY production
+vercel env add SUPABASE_SERVICE_ROLE_KEY production
+vercel env add VITE_APP_BASE_URL production
+vercel env add VITE_CLIENT_BASE_URL production
+vercel env add VITE_APP_MODE production
+vercel --prod
+```
+
+Sau khi thêm env, Vercel sẽ hỏi nhập giá trị từng biến. Nhập đúng URL/key của Supabase và URL app trên Vercel.
+
+## 3.1 Checklist kết nối Supabase <-> Vercel
+
+- `supabase_schema.sql` đã chạy thành công trong SQL Editor (không lỗi đỏ).
+- Bảng `customers`, `products`, `master_video_tasks`, `customer_tasks` đã xuất hiện trong Supabase.
+- Có ít nhất 1 bản ghi trong `admin_users` khớp với `auth.users.id` của admin.
+- Biến `VITE_SUPABASE_URL` và `VITE_SUPABASE_ANON_KEY` đã cấu hình trên Vercel Production.
+- Redeploy bằng `vercel --prod` sau khi cập nhật env.
+
 ## 4. Lưu ý quan trọng
 - Link học viên cũ vẫn hoạt động nếu bạn giữ nguyên `customer_id` và `token` khi migrate.
 - Link học viên mới sẽ được tạo dựa trên `VITE_APP_BASE_URL`.

@@ -44,7 +44,7 @@ export const api = {
 
     const products = await productService.getProducts();
     
-    const videoTasks = await mockDB.tasks || [];
+    const videoTasks = await mockDB.getAllMasterTasks();
     
     // Create a unique list of {video_date, nhom}
     const uniqueMap = new Map();
@@ -72,12 +72,12 @@ export const api = {
   },
 
   getVideoDates: async () => {
-    const tasks = mockDB.tasks || [];
+    const tasks = await mockDB.getAllMasterTasks();
     return Array.from(new Set(tasks.map(v => v.video_date).filter(Boolean))).sort().reverse();
   },
 
   getVideoGroups: async (): Promise<VideoGroup[]> => {
-    const tasks = mockDB.tasks || [];
+    const tasks = await mockDB.getAllMasterTasks();
 
     const customers = await mockDB.getCustomers();
     const activeCustomers = customers.filter(c => c.status === 'ACTIVE' && c.video_date);

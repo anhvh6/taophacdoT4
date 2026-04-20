@@ -1,17 +1,29 @@
 
-import { Search, UserPlus, Users, Calendar, ExternalLink, Edit2, Copy, Package, Clock, AlertTriangle, CheckCircle, Archive, Zap, CopyPlus, UserCircle, Filter, Eraser, AlertCircle, X, Plus, Mail, MapPin, Truck, FileWarning, User, Play, List, ChevronDown, ChevronRight, Trash2, RefreshCw, ShoppingBag, Phone, ClipboardList, BookOpen, LogOut, BarChart3 } from 'lucide-react';
+import { Search, UserPlus, Users, Calendar, ExternalLink, Edit2, Copy, Package, Clock, AlertTriangle, CheckCircle, Archive, Zap, CopyPlus, UserCircle, Filter, Eraser, AlertCircle, X, Plus, Mail, MapPin, Truck, FileWarning, User, Play, List, ChevronDown, ChevronRight, ChevronLeft, Trash2, RefreshCw, ShoppingBag, Phone, ClipboardList, BookOpen, LogOut, BarChart3 } from 'lucide-react';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Layout } from '../components/Layout';
 import { Card, Button, LineInput, Modal, Toast } from '../components/UI';
 import { DateInput } from '../components/DateInput';
 import { api } from '../services/api'; 
-import { generateCustomerLink } from '../src/services/customerService';
+import { generateCustomerLink, customerService } from '../src/services/customerService';
 import { Customer, CustomerStatus, Product } from '../types';
 import { calcRevenueCostProfit, isChuaGan, buildProductMap, getProfitMonth } from '../utils/finance';
 import { formatDDMM, formatDDMMYYYY, toISODateKey, parseVNDate, getDiffDays } from '../utils/date';
 import { ProfitChartModal } from '../components/ProfitChartModal';
 
 const formatVND = (num: number) => new Intl.NumberFormat('vi-VN').format(num);
+const formatDDMMYYYY = (date: string | undefined) => {
+  if (!date) return '---';
+  const d = new Date(date);
+  return d.toLocaleDateString('vi-VN');
+};
+
+const Toggle: React.FC<{ checked: boolean; onChange: (val: boolean) => void; color?: string }> = ({ checked, onChange, color = 'peer-checked:bg-green-500' }) => (
+  <label className="relative inline-flex items-center cursor-pointer">
+    <input type="checkbox" className="sr-only peer" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${color}`}></div>
+  </label>
+);
 
 interface CustomerCardProps {
   customer: Customer;
@@ -260,6 +272,36 @@ export const Dashboard: React.FC<{
   const [isSaving, setIsSaving] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [isProfitModalOpen, setIsProfitModalOpen] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [viewedCustomerIds, setViewedCustomerIds] = useState<Set<string>>(new Set());
+  const [detailCustomerId, setDetailCustomerId] = useState<string | null>(null);
+  const [customerDevices, setCustomerDevices] = useState<any[]>([]);
+  const [draftDevices, setDraftDevices] = useState<Record<string, boolean>>({});
+  const [draftEmailApproved, setDraftEmailApproved] = useState(false);
+  const [isLoadingDevices, setIsLoadingDevices] = useState(false);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+
+  const fetchPending = async () => {
+    try {
+      const devices = await customerService.getPendingDeviceRequests();
+      const emails = await customerService.getPendingEmailRequests();
+      
+      const combined = [
+        ...devices.map(d => ({ ...d, type: 'device' })),
+        ...emails.map(e => ({ ...e, type: 'email' }))
+      ].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      setPendingRequests(combined);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    fetchPending();
+    const timer = setInterval(fetchPending, 30000); 
+    return () => clearInterval(timer);
+  }, []);
 
   const handleCopyPlan = (id: string) => {
     setTargetCustomerId(id);
@@ -674,14 +716,26 @@ export const Dashboard: React.FC<{
   return (
     <Layout 
       title={
-        <a 
-          href="https://docs.google.com/spreadsheets/d/1F1-S3cG4DAQJn4752KHUqqYQuC8dgHMbydfxUiYTGPA/edit?usp=sharing" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="hover:text-blue-600 transition-colors"
-        >
-          MEGA PHƯƠNG ADMIN
-        </a>
+        <div className="flex items-center gap-2">
+          <a 
+            href="#" 
+            onClick={(e) => { e.preventDefault(); onRefresh(); }}
+            className="hover:text-blue-600 transition-colors"
+          >
+            MEGA PHƯƠNG ADMIN
+          </a>
+          {(() => {
+            const unviewedCount = pendingRequests.filter(r => !viewedCustomerIds.has(r.customer_id)).length;
+            return unviewedCount > 0 && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); setIsRequestModalOpen(true); }}
+                className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-bounce shadow-lg shadow-red-200"
+              >
+                {unviewedCount}
+              </button>
+            );
+          })()}
+        </div>
       }
       onIconClick={handleAddStudent}
       actions={
@@ -1136,6 +1190,282 @@ export const Dashboard: React.FC<{
         <span className="text-[10px] font-bold text-blue-300 uppercase tracking-[0.3em]">Phiên bản hệ thống v2.5.0 • Cập nhật 2024</span>
       </div>
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+
+      {/* 🚀 MODAL DANH SÁCH YÊU CẦU THIẾT BỊ / EMAIL */}
+      <Modal
+        isOpen={isRequestModalOpen}
+        onClose={() => {
+          setIsRequestModalOpen(false);
+          setDetailCustomerId(null);
+        }}
+        title={detailCustomerId ? "CHI TIẾT YÊU CẦU" : "YÊU CẦU DUYỆT THIẾT BỊ / EMAIL"}
+        maxWidth="max-w-xl"
+      >
+        <div className="flex flex-col gap-4">
+          {!detailCustomerId ? (
+            // VIEW CHUNG: DANH SÁCH HỌC VIÊN CÓ YÊU CẦU
+            <>
+              {(() => {
+                const grouped = pendingRequests.reduce((acc: any, req: any) => {
+                  const cid = req.customer_id;
+                  if (!acc[cid]) {
+                    acc[cid] = {
+                      customer_id: cid,
+                      name: req.type === 'device' ? (req.customers?.customer_name || 'Học viên ẩn') : (req.customer_name || 'Học viên ẩn'),
+                      deviceCount: 0,
+                      hasEmail: false,
+                      pending_email: '',
+                      email: req.email || ''
+                    };
+                  }
+                  if (req.type === 'device') acc[cid].deviceCount++;
+                  if (req.type === 'email') {
+                    acc[cid].hasEmail = true;
+                    acc[cid].pending_email = req.pending_email;
+                  }
+                  return acc;
+                }, {});
+
+                const studentGroups = Object.values(grouped);
+
+                if (studentGroups.length === 0) {
+                  return <div className="py-10 text-center text-gray-400 italic text-sm">Hiện không có yêu cầu nào chờ duyệt.</div>;
+                }
+
+                return studentGroups.map((group: any) => (
+                  <div 
+                    key={group.customer_id}
+                    className="p-4 bg-white border border-blue-50 rounded-[2rem] flex items-center justify-between hover:bg-blue-50/50 transition-all cursor-pointer shadow-sm group"
+                    onClick={async () => {
+                      setViewedCustomerIds(prev => new Set(prev).add(group.customer_id));
+                      setDetailCustomerId(group.customer_id);
+                      setDraftDevices({});
+                      setDraftEmailApproved(false);
+                      setIsLoadingDevices(true);
+                      try {
+                        const devices = await customerService.getDevices(group.customer_id);
+                        setCustomerDevices(devices);
+                      } catch (e) {
+                        console.error(e);
+                      } finally {
+                        setIsLoadingDevices(false);
+                      }
+                    }}
+                  >
+                    <div className="flex flex-col gap-1">
+                      <span className="font-black text-blue-900 uppercase text-sm group-hover:text-blue-600">{group.name}</span>
+                      <div className="flex items-center gap-2">
+                        {group.deviceCount > 0 && (
+                          <span className="text-[9px] font-black bg-red-100 text-red-600 px-2 py-0.5 rounded-md uppercase">
+                            {group.deviceCount} Thiết bị chờ duyệt
+                          </span>
+                        )}
+                        {group.hasEmail && (
+                          <span className="text-[9px] font-black bg-orange-100 text-orange-600 px-2 py-0.5 rounded-md uppercase">
+                            Yêu cầu đổi Email
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronLeft size={18} className="text-blue-300 rotate-180 group-hover:text-blue-600" />
+                  </div>
+                ));
+              })()}
+            </>
+          ) : (
+            // VIEW CHI TIẾT: DANH SÁCH THIẾT BỊ & EMAIL CỦA HỌC VIÊN ĐÓ
+            <div className="flex flex-col gap-6">
+              <button 
+                onClick={() => setDetailCustomerId(null)}
+                className="flex items-center gap-1 text-[10px] font-black text-blue-500 uppercase hover:text-blue-700 w-fit"
+              >
+                <ChevronLeft size={14} /> Quay lại danh sách
+              </button>
+
+              {(() => {
+                const hasEmailReq = pendingRequests.some(r => r.customer_id === detailCustomerId && r.type === 'email');
+                const emailReq = pendingRequests.find(r => r.customer_id === detailCustomerId && r.type === 'email');
+
+                const handleSave = async () => {
+                  let successCount = 0;
+                  let failCount = 0;
+                  
+                  try {
+                    // Update Email
+                    if (hasEmailReq && draftEmailApproved) {
+                      await onUpsert({ 
+                        customer_id: emailReq.customer_id, 
+                        email: emailReq.pending_email, 
+                        pending_email: '' 
+                      });
+                      setPendingRequests(prev => prev.filter(r => !(r.customer_id === detailCustomerId && r.type === 'email')));
+                      successCount++;
+                    }
+
+                    // Update Devices
+                    for (const dev of customerDevices) {
+                      const newStatus = draftDevices[dev.id];
+                      if (newStatus !== undefined && newStatus !== dev.is_approved) {
+                        try {
+                          const updates: any = { is_approved: newStatus };
+                          // Try to include approved_at but don't crash if column is missing
+                          updates.approved_at = newStatus ? new Date().toISOString() : null;
+                          
+                          await customerService.updateDevice(dev.id, updates);
+                          
+                          if (newStatus) {
+                            setPendingRequests(prev => prev.filter(r => !(r.type === 'device' && r.id === dev.id)));
+                          }
+                          successCount++;
+                        } catch (devErr: any) {
+                          console.warn("Lỗi khi cập nhật thiết bị:", devErr);
+                          // Nếu lỗi do thiếu cột approved_at, thử lại chỉ với is_approved
+                          if (devErr.message?.includes('column "approved_at" does not exist')) {
+                             try {
+                               await customerService.updateDevice(dev.id, { is_approved: newStatus });
+                               successCount++;
+                             } catch (retryErr) {
+                               failCount++;
+                             }
+                          } else {
+                            failCount++;
+                          }
+                        }
+                      }
+                    }
+
+                    if (failCount === 0) {
+                      setToast("Đã lưu thay đổi thành công!");
+                    } else {
+                      setToast(`Đã lưu ${successCount} mục, thất bại ${failCount} mục.`);
+                    }
+                    
+                    setDetailCustomerId(null);
+                    fetchPending();
+                  } catch (e) {
+                    console.error("Lỗi tổng quát khi lưu:", e);
+                    setToast("Có lỗi xảy ra khi lưu! Vui lòng kiểm tra lại kết nối.");
+                  }
+                };
+
+                return (
+                  <div className="space-y-6">
+                    {/* PHẦN EMAIL */}
+                    {hasEmailReq && (
+                      <div className="bg-orange-50/50 border border-orange-100 rounded-3xl p-5">
+                        <div className="text-[10px] font-black text-orange-600 uppercase mb-3 tracking-widest">YÊU CẦU ĐỔI EMAIL</div>
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase">Email hiện tại</span>
+                              <span className="text-[11px] font-bold text-blue-900 truncate">{emailReq.email || '---'}</span>
+                            </div>
+                            <div className="text-orange-300">→</div>
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase">Email mới</span>
+                              <span className="text-[11px] font-black text-blue-900 truncate">{emailReq.pending_email}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between pt-3 border-t border-orange-100/50 mt-2">
+                             <div className="flex items-center gap-2">
+                               <Toggle 
+                                 checked={draftEmailApproved} 
+                                 onChange={setDraftEmailApproved} 
+                               />
+                               <span className="text-[10px] font-black text-green-600 uppercase">Duyệt thay đổi</span>
+                             </div>
+                             <button 
+                               onClick={() => {
+                                 if (confirm("Xóa yêu cầu đổi Email này?")) {
+                                   onUpsert({ customer_id: emailReq.customer_id, pending_email: '' });
+                                   setPendingRequests(prev => prev.filter(r => !(r.customer_id === detailCustomerId && r.type === 'email')));
+                                   if (!pendingRequests.some(r => r.customer_id === detailCustomerId && r.type !== 'email')) {
+                                      setDetailCustomerId(null);
+                                   }
+                                 }
+                               }}
+                               className="text-red-400 hover:text-red-600 p-1"
+                             >
+                               <X size={16} />
+                             </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* PHẦN THIẾT BỊ */}
+                    <div className="bg-blue-50/50 border border-blue-100 rounded-3xl p-5">
+                      <div className="text-[10px] font-black text-blue-600 uppercase mb-3 tracking-widest">DANH SÁCH THIẾT BỊ</div>
+                      
+                      {isLoadingDevices ? (
+                        <div className="py-4 text-center"><RefreshCw size={20} className="animate-spin text-blue-300 mx-auto" /></div>
+                      ) : customerDevices.length === 0 ? (
+                        <div className="py-4 text-center text-[11px] text-gray-400 italic">Học viên chưa có thiết bị nào.</div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="border-b border-blue-100 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                <th className="pb-2">Thiết bị</th>
+                                <th className="pb-2">Ngày đăng ký</th>
+                                <th className="pb-2">Ngày duyệt</th>
+                                <th className="pb-2 text-center">Trạng thái</th>
+                                <th className="pb-2 text-right">#</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {customerDevices.map(dev => {
+                                const isApproved = draftDevices[dev.id] ?? dev.is_approved;
+                                return (
+                                  <tr key={dev.id} className="border-b border-blue-50/50 text-[10px]">
+                                    <td className="py-3 font-bold text-blue-900">
+                                      <div className="flex flex-col">
+                                        <span>{dev.device_name || 'Không tên'}</span>
+                                        <span className="text-[8px] font-medium text-gray-400 font-mono">{dev.device_id.substring(0, 12)}...</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-3 text-gray-500">{formatDDMMYYYY(dev.created_at)}</td>
+                                    <td className="py-3 text-gray-500">{dev.approved_at ? formatDDMMYYYY(dev.approved_at) : '---'}</td>
+                                    <td className="py-3 text-center">
+                                      <Toggle 
+                                        checked={isApproved} 
+                                        onChange={(val) => setDraftDevices(prev => ({ ...prev, [dev.id]: val }))} 
+                                      />
+                                    </td>
+                                    <td className="py-3 text-right">
+                                      <button 
+                                        onClick={() => {
+                                          if (confirm("Xóa thiết bị này?")) {
+                                            customerService.deleteDevice(dev.id).then(() => {
+                                              setCustomerDevices(prev => prev.filter(d => d.id !== dev.id));
+                                              setPendingRequests(prev => prev.filter(r => !(r.type === 'device' && r.id === dev.id)));
+                                            });
+                                          }
+                                        }}
+                                        className="text-red-300 hover:text-red-500"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    <Button variant="primary" className="w-full py-4 rounded-3xl uppercase text-xs font-black tracking-widest shadow-xl" onClick={handleSave}>
+                       Lưu thay đổi
+                    </Button>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      </Modal>
     </Layout>
   );
 };

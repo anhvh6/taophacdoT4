@@ -1,17 +1,24 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Save, Trash2, Plus, RefreshCw, Moon, Sun, Info, Copy, CopyPlus, UserPlus, Link as LinkIcon, Sparkles, RotateCcw, Search, Lock, Maximize2, Loader2, ArrowRight, Layout as LayoutIcon, Type, Video, Palette, AlertCircle, FileJson, CheckCircle, MessageSquare, Terminal, ShieldAlert, Bot, Eraser, Play, ChevronDown, X, ShoppingBag } from 'lucide-react';
+import { Save, Trash2, Plus, RefreshCw, Moon, Sun, Info, Copy, CopyPlus, UserPlus, Link as LinkIcon, Sparkles, RotateCcw, Search, Lock, Maximize2, Loader2, ArrowRight, Layout as LayoutIcon, Type, Video, Palette, AlertCircle, FileJson, CheckCircle, MessageSquare, Terminal, ShieldAlert, Bot, Eraser, Play, ChevronDown, ChevronRight, X, ShoppingBag, Clock, Calendar, User } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Card, Button, Modal } from '../components/UI';
 import { LineInput } from '../components/UI';
 import { api } from '../services/api';
 import { customPlanService } from '../src/services/customPlanService';
-import { generateCustomerLink } from '../src/services/customerService';
+import { generateCustomerLink, customerService } from '../src/services/customerService';
 import { Customer, ExerciseTask, ExerciseType, SidebarBlock, CustomerStatus, Product } from '../types';
 import { EXERCISE_TYPES, DEFAULT_SIDEBAR_BLOCKS, DEFAULT_CHEWING_INSTRUCTION } from '../constants';
 import { GoogleGenAI } from "@google/genai";
 import { toInputDateString, formatDDMM, parseVNDate, addDays, formatVNDate } from '../utils/date';
 
 // Separate component for task rows to prevent unnecessary re-renders
+const Toggle: React.FC<{ checked: boolean; onChange: (val: boolean) => void; color?: string }> = ({ checked, onChange, color = 'peer-checked:bg-green-500' }) => (
+  <label className="relative inline-flex items-center cursor-pointer">
+    <input type="checkbox" className="sr-only peer" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${color}`}></div>
+  </label>
+);
+
 const TaskRow = React.memo(({ 
   task, 
   index, 
@@ -1113,6 +1120,47 @@ export const PlanEditor: React.FC<{
                 </div>
               </div>
             </Card>
+
+            <Card className="flex flex-col gap-6 p-6 sm:p-8">
+              <h3 className="text-sm font-bold text-blue-900 uppercase tracking-widest flex items-center gap-2">
+                <ShieldAlert size={16} className="text-blue-600" /> Thanh công cụ Bảo mật
+              </h3>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between p-4 bg-blue-50/50 rounded-2xl border border-blue-100/50 transition-all hover:bg-blue-50">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[12px] font-black text-blue-900 uppercase">Xác thực Google (OAuth2)</span>
+                    <span className="text-[10px] font-bold text-gray-400">Học viên phải đăng nhập Google để xem video</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={customer.require_google_auth !== false} 
+                      onChange={e => setCustomer({...customer, require_google_auth: e.target.checked})}
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-blue-50/50 rounded-2xl border border-blue-100/50 transition-all hover:bg-blue-50">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[12px] font-black text-blue-900 uppercase">Giới hạn thiết bị</span>
+                    <span className="text-[10px] font-bold text-gray-400">Tối đa 2 thiết bị tự động duyệt, chặn từ thiết bị t3</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={customer.require_device_limit !== false} 
+                      onChange={e => setCustomer({...customer, require_device_limit: e.target.checked})}
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+              </div>
+            </Card>
+
+            {isEditMode && <DeviceManagementCard customerId={customerId!} />}
           </section>
 
           <section>
@@ -1342,5 +1390,155 @@ export const PlanEditor: React.FC<{
         </div>
       </Modal>
     </Layout>
+  );
+};
+
+const DeviceManagementCard: React.FC<{ customerId: string }> = ({ customerId }) => {
+  const [devices, setDevices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
+
+  const fetchDevices = async () => {
+    if (!customerId) return;
+    setLoading(true);
+    try {
+      const data = await customerService.getDevices(customerId);
+      setDevices(data);
+      // Auto expand if there are pending devices
+      if (data.some((d: any) => !d.is_approved)) {
+        setIsCollapsed(false);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDevices();
+  }, [customerId]);
+
+
+
+  const handleToggleApprove = async (device: any) => {
+    try {
+      await customerService.updateDevice(device.id, { is_approved: !device.is_approved });
+      fetchDevices();
+    } catch (e) { console.error(e); }
+  };
+
+  const handleDelete = async (deviceId: string) => {
+    if (!confirm("Bạn có chắc chắn muốn XÓA VĨNH VIỄN thiết bị này? Học viên sẽ được giải phóng 1 lượt đăng ký.")) return;
+    try {
+      await customerService.deleteDevice(deviceId);
+      fetchDevices();
+      setSelectedIds(prev => prev.filter(id => id !== deviceId));
+    } catch (e) { console.error(e); }
+  };
+
+  return (
+    <Card className={`flex flex-col overflow-hidden transition-all duration-300 ${isCollapsed ? 'p-0 h-auto' : 'p-6 sm:p-8'}`}>
+      <div 
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className={`flex items-center justify-between cursor-pointer transition-all ${isCollapsed ? 'p-6 sm:p-8 hover:bg-slate-50' : 'mb-6'}`}
+      >
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-xl border transition-colors ${isCollapsed ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-blue-100 border-blue-200 text-blue-600'}`}>
+            <Maximize2 size={18} />
+          </div>
+          <div className="flex flex-col">
+            <h3 className="text-sm font-black text-blue-900 uppercase tracking-widest flex items-center gap-2">
+              Quản lý thiết bị
+              {devices.length > 0 && (
+                <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black">
+                  {devices.length}
+                </span>
+              )}
+            </h3>
+            {isCollapsed && devices.some(d => !d.is_approved) && (
+              <span className="text-[9px] font-black text-red-500 animate-pulse uppercase mt-0.5">Yêu cầu chờ duyệt!</span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+
+          {isCollapsed ? <ChevronRight size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-blue-400" />}
+        </div>
+      </div>
+      
+      {!isCollapsed && (
+        <div className="animate-in slide-in-from-top-2 duration-300">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={28} className="animate-spin text-blue-300" />
+            </div>
+          ) : devices.length === 0 ? (
+            <div className="text-center py-10 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
+              <p className="text-slate-400 italic text-[11px] font-bold">Chưa có thiết bị nào đăng ký cho học viên này.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="hidden sm:grid grid-cols-12 gap-4 px-4 py-2 text-[10px] font-black text-blue-300 uppercase tracking-widest border-b border-blue-50 mb-2">
+                <div className="col-span-1 flex justify-center">Duyệt</div>
+                <div className="col-span-6">Tên thiết bị / ID</div>
+                <div className="col-span-3">Ngày đăng ký</div>
+                <div className="col-span-2 text-right">Thao tác</div>
+              </div>
+              
+              {devices.map(d => (
+                <div 
+                  key={d.id} 
+                  className={`relative grid grid-cols-12 items-center gap-3 p-4 rounded-2xl border transition-all ${d.is_approved ? 'bg-white border-blue-50 hover:border-blue-100 hover:shadow-sm' : 'bg-red-50/30 border-red-100 ring-1 ring-red-500/10'} `}
+                >
+                  <div className="col-span-1 flex justify-center">
+                      <Toggle 
+                        checked={d.is_approved}
+                        onChange={() => handleToggleApprove(d)}
+                        color="peer-checked:bg-emerald-500"
+                      />
+                  </div>
+
+                  <div className="col-span-11 sm:col-span-6 flex flex-col gap-0.5 overflow-hidden">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[13px] font-black uppercase truncate ${d.is_approved ? 'text-blue-900' : 'text-red-900'}`}>
+                        {d.device_name || 'Thiết bị lạ'}
+                      </span>
+                      {!d.is_approved && (
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-500 text-white text-[8px] font-black rounded-md animate-pulse">
+                          <AlertCircle size={10} /> CHỜ DUYỆT
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[9px] font-bold text-slate-400 font-mono tracking-tight truncate">{d.device_id}</span>
+                  </div>
+
+                  <div className="col-span-12 sm:col-span-3 flex flex-col sm:items-start pl-8 sm:pl-0 mt-2 sm:mt-0">
+                    <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5">
+                      <Clock size={12} className="text-slate-300" />
+                      {new Date(d.last_used_at || d.created_at).toLocaleDateString('vi-VN')}
+                    </span>
+                    <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter">
+                      {new Date(d.last_used_at || d.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+
+                  <div className="col-span-12 sm:col-span-2 text-right flex justify-end gap-1 mt-2 sm:mt-0">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDelete(d.id); }}
+                      className="w-10 h-10 flex items-center justify-center rounded-xl bg-red-50 text-red-200 hover:text-red-500 hover:bg-red-100 transition-all border border-transparent hover:border-red-100"
+                      title="Xóa vĩnh viễn"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   );
 };

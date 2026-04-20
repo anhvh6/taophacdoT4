@@ -92,8 +92,21 @@ export interface Customer {
   is_customized?: boolean;
   expire_warning?: boolean;
   Video_date?: string;
+  require_google_auth?: boolean;
+  require_device_limit?: boolean;
+  pending_email?: string;
   // Fix: Added missing optional properties used in ClientView logic to satisfy TypeScript
   allowed_day?: number;
   access_state?: string;
   blocks?: SidebarBlock[];
+}
+
+export interface CustomerDevice {
+  id?: string;
+  customer_id: string;
+  device_id: string;
+  device_name: string;
+  is_approved: boolean;
+  last_used_at?: string;
+  created_at?: string;
 }

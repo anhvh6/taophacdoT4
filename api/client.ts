@@ -14,7 +14,7 @@ export default async function handler(req: any, res: any) {
     try {
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
       const { data, error } = await supabase
-        .from('Customers')
+        .from('customers')
         .select('customer_name')
         .eq('customer_id', id)
         .eq('token', t)

@@ -1,4 +1,5 @@
 import { mockDB } from '../lib/mockData';
+import { supabase } from '../lib/supabaseClient';
 import { Customer } from '../../types';
 import { DEFAULT_SIDEBAR_BLOCKS, DEFAULT_CHEWING_INSTRUCTION } from '../../constants';
 import { parseVNDate, addDays, toISODateKey } from '../../utils/date';
@@ -40,16 +41,26 @@ export const normalizeCustomer = (item: any): Customer => {
     app_slogan: item.app_slogan || "Hành trình đánh thức vẻ đẹp tự nhiên, gìn giữ thanh xuân.",
     video_date: item.Video_date || item.video_date,
     link: item.link || "",
-    token: item.token || ""
+    token: item.token || "",
+    require_google_auth: item.require_google_auth ?? true,
+    require_device_limit: item.require_device_limit ?? true,
+    pending_email: item.pending_email || ""
   };
 };
 
+/** Domain public cho học viên (tách khỏi admin). Mặc định phacdo4.vercel.app */
+export const getClientPublicOrigin = () => {
+  const env = (import.meta as any).env?.VITE_CLIENT_PUBLIC_URL as string | undefined;
+  const fallback = 'https://phacdo4.vercel.app';
+  return (env && env.trim() ? env.trim() : fallback).replace(/\/$/, '');
+};
+
 export const generateCustomerLink = (customerId: string, token: string) => {
-  // Tự động nhận diện môi trường localhost hoặc production
   const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-  const baseUrl = isLocalhost ? window.location.origin + '/#' : "https://phacdo.vercel.app/#";
-  
-  return `${baseUrl}/client/${customerId}?t=${token}`;
+  // Local dev: mở cùng origin để test; production: luôn dùng domain học viên
+  const base = isLocalhost ? window.location.origin : getClientPublicOrigin();
+  const t = encodeURIComponent(token);
+  return `${base}/client/${encodeURIComponent(customerId)}?t=${t}`;
 };
 
 export const customerService = {
@@ -57,10 +68,21 @@ export const customerService = {
   generateCustomerLink,
 
   async getCustomerByToken(customerId: string, token: string) {
-    const customers = await mockDB.getCustomers();
-    const data = customers.filter(c => c.customer_id === customerId && c.token === token);
-    if (!data || data.length === 0) return null;
-    return normalizeCustomer(data[0]);
+    const id = String(customerId || '').trim();
+    const tok = String(token || '').trim();
+    if (!id || !tok) return null;
+
+    const { data, error } = await supabase.rpc('get_client_customer', {
+      p_customer_id: id,
+      p_token: tok
+    });
+    if (error) {
+      console.error('get_client_customer RPC:', error);
+      return null;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return null;
+    return normalizeCustomer(row);
   },
 
   async getCustomerById(customerId: string) {
@@ -79,63 +101,71 @@ export const customerService = {
   async upsertCustomer(payload: Partial<Customer>, tasks?: any[] | null) {
     const customerId = String(payload.customer_id || ('C' + Date.now() + Math.random().toString(36).substring(2, 7).toUpperCase())).trim();
     
-    const customers = await mockDB.getCustomers();
-    const existingCustomer = customers.find(c => c.customer_id === customerId);
-    const isNew = !existingCustomer;
+    // Fetch existing data for merging
+    const { data: existingData, error: fetchError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('customer_id', customerId)
+      .maybeSingle();
+      
+    const isNew = !existingData;
     
     // Preserve or generate token
-    let token = payload.token;
+    let token = payload.token || existingData?.token;
     if (!token) {
-      if (!isNew && existingCustomer?.token) {
-        token = existingCustomer.token;
-      } else {
-        token = (Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15));
-      }
+      token = (Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15));
     }
     
-    // Calculate end_date
-    let endDate = payload.end_date;
-    const start = parseVNDate(payload.start_date);
-    const duration = Number(payload.duration_days || 0);
+    // Calculate end_date based on current (merged) start_date and duration_days
+    const startDate = payload.start_date !== undefined ? payload.start_date : existingData?.start_date;
+    const durationCount = payload.duration_days !== undefined ? Number(payload.duration_days) : Number(existingData?.duration_days || 30);
     
-    if (start && duration > 0) {
-      const end = addDays(start, duration);
-      endDate = toISODateKey(end);
+    let endDate = payload.end_date;
+    const start = parseVNDate(startDate);
+    if (start && durationCount > 0) {
+      endDate = toISODateKey(addDays(start, durationCount));
     }
 
     const link = generateCustomerLink(customerId, token);
 
+    // Build DB payload by merging existing and new (only if defined)
     const dbPayload: any = {
+      ...(existingData || {}),
       customer_id: customerId,
-      customer_name: payload.customer_name,
-      sdt: payload.sdt,
-      email: payload.email,
-      dia_chi: payload.dia_chi,
-      san_pham: payload.san_pham || [],
-      gia_tien: payload.gia_tien || 0,
-      trang_thai_gan: payload.is_customized ? 1 : 0, 
-      is_customized: payload.is_customized || false,
-      trang_thai: payload.trang_thai ?? 0,
-      ma_vd: payload.ma_vd || 0,
-      note: payload.note || "",
-      chewing_status: payload.chewing_status || "",
-      start_date: payload.start_date || null,
-      end_date: endDate || null,
-      duration_days: duration || 30,
-      Video_date: payload.video_date || payload.Video_date || null,
-      status: payload.status || 'ACTIVE',
-      sidebar_blocks_json: payload.sidebar_blocks_json || DEFAULT_SIDEBAR_BLOCKS,
-      link: link,
       token: token,
-      app_title: payload.app_title || "PHÁC ĐỒ 30 NGÀY THAY ĐỔI KHUÔN MẶT",
-      app_slogan: payload.app_slogan || "Hành trình đánh thức vẻ đẹp tự nhiên, gìn giữ thanh xuân bằng sự hiểu biết và tình yêu bản thân.",
+      link: link,
       updated_at: new Date().toISOString()
     };
 
+    // Only update fields that are present in the payload
+    const fields = [
+      'customer_name', 'sdt', 'email', 'dia_chi', 'san_pham', 'gia_tien', 
+      'trang_thai', 'ma_vd', 'note', 'chewing_status', 'start_date', 
+      'status', 'sidebar_blocks_json', 'app_title', 'app_slogan',
+      'require_google_auth', 'require_device_limit', 'pending_email', 'video_date'
+    ];
+
+    fields.forEach(field => {
+      if (payload[field as keyof Customer] !== undefined) {
+        dbPayload[field] = payload[field as keyof Customer];
+      }
+    });
+
+    // Special handling for legacy/derived fields
+    if (payload.is_customized !== undefined) {
+      dbPayload.is_customized = !!payload.is_customized;
+      dbPayload.trang_thai_gan = payload.is_customized ? 1 : 0;
+    }
+    if (durationCount !== undefined) {
+      dbPayload.duration_days = durationCount;
+      dbPayload.end_date = endDate;
+    }
+    if (payload.Video_date !== undefined) {
+      dbPayload.video_date = payload.Video_date;
+    }
+
     if (isNew) {
       dbPayload.created_at = new Date().toISOString();
-    } else {
-      dbPayload.created_at = existingCustomer.created_at || new Date().toISOString();
     }
 
     const savedCustomerResult = await mockDB.upsertCustomer(dbPayload);
@@ -170,5 +200,126 @@ export const customerService = {
       await mockDB.upsertCustomer({ ...existing, status: CustomerStatus.DELETED, updated_at: new Date().toISOString() } as Partial<Customer>);
     }
     return true;
+  },
+
+  async getDevices(customerId: string) {
+    const { data, error } = await supabase
+      .from('customer_devices')
+      .select('*')
+      .eq('customer_id', customerId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async updateDevice(deviceId: string, updates: any) {
+    const { error } = await supabase
+      .from('customer_devices')
+      .update(updates)
+      .eq('id', deviceId);
+    if (error) throw error;
+    return true;
+  },
+
+  async deleteDevice(deviceId: string) {
+    const { error } = await supabase
+      .from('customer_devices')
+      .delete()
+      .eq('id', deviceId);
+    if (error) throw error;
+    return true;
+  },
+
+  async authorizeDevice(customerId: string, token: string, deviceId: string, deviceName: string) {
+    const { data, error } = await supabase.rpc('authorize_device', {
+      p_customer_id: customerId,
+      p_token: token,
+      p_device_id: deviceId,
+      p_device_name: deviceName
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async requestDeviceApproval(customerId: string, token: string, deviceId: string, deviceName: string) {
+    const { data, error } = await supabase.rpc('request_device_approval', {
+      p_customer_id: customerId,
+      p_token: token,
+      p_device_id: deviceId,
+      p_device_name: deviceName
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async getPendingDeviceRequests() {
+    const { data, error } = await supabase
+      .from('customer_devices')
+      .select('id, customer_id, device_name, created_at, customers(customer_name)')
+      .eq('is_approved', false)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('getPendingDeviceRequests:', error);
+      return [];
+    }
+    return data || [];
+  },
+
+  async updateCustomerEmailByToken(customerId: string, token: string, newEmail: string) {
+    const { data, error } = await supabase
+      .rpc('enroll_customer_email', {
+        p_customer_id: customerId,
+        p_token: token,
+        p_email: newEmail
+      });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async requestEmailChange(customerId: string, newEmail: string, token?: string) {
+    if (!token) {
+       // Old legacy behavior (admin)
+       const { error } = await supabase
+        .from('customers')
+        .update({ pending_email: newEmail })
+        .eq('customer_id', customerId);
+       if (error) throw error;
+       return true;
+    }
+
+    const { data, error } = await supabase
+      .rpc('request_customer_email_change', {
+        p_customer_id: customerId,
+        p_token: token,
+        p_new_email: newEmail
+      });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getPendingEmailRequests() {
+    // Try to get from Supabase
+    const { data, error } = await supabase
+      .from('customers')
+      .select('customer_id, customer_name, pending_email, updated_at')
+      .not('pending_email', 'is', null)
+      .neq('pending_email', '');
+    
+    if (error) {
+      console.warn('getPendingEmailRequests failed, trying mock:', error);
+      const customers = await mockDB.getCustomers();
+      return customers
+        .filter(c => c.pending_email && c.pending_email.trim() !== '')
+        .map(c => ({
+          customer_id: c.customer_id,
+          customer_name: c.customer_name,
+          pending_email: c.pending_email,
+          created_at: c.updated_at
+        }));
+    }
+    return data || [];
   }
 };

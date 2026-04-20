@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, ArrowRight, Layout as LayoutIcon, MessageSquare, ChevronLeft, RefreshCw, CheckCircle, ArrowDownToLine, Share2 } from 'lucide-react';
+import { Play, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut } from 'lucide-react';
 import { customerService, generateCustomerLink } from '../src/services/customerService';
 import { planService } from '../src/services/planService';
 import { customPlanService } from '../src/services/customPlanService';
@@ -8,6 +8,7 @@ import { toVnZeroHour, formatDDMMYYYY, getDiffDays, addDays, parseVNDate } from 
 import { ImmersiveChat } from '../components/ImmersiveChat';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
+import FingerprintJS from '@fingerprintjs/fingerprintjs';
 
 export const ClientView: React.FC<{ customerId: string; token?: string; onNavigate?: (page: string, params?: any) => void }> = ({ customerId, token, onNavigate }) => {
   const [customer, setCustomer] = useState<Customer | any>(null);
@@ -27,6 +28,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const [isVerified, setIsVerified] = useState(false);
   const [authModal, setAuthModal] = useState<{isOpen: boolean, link: string | null}>({isOpen: false, link: null});
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
+
+  // Device & Security State
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [deviceAuthorized, setDeviceAuthorized] = useState(false);
+  const [deviceModal, setDeviceModal] = useState<{ isOpen: boolean, message?: string } | null>(null);
+  const [isRequestingApproval, setIsRequestingApproval] = useState(false);
+  const [isRequestingEmail, setIsRequestingEmail] = useState(false);
 
   const refreshInFlight = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -81,8 +89,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       }
 
       setCustomer(customerData);
-      console.log("Fetched customer data in ClientView:", customerData);
-      console.log("Customer Note:", customerData.note);
+      console.log("ClientView: Customer data loaded:", {
+        id: customerData.customer_id,
+        email: customerData.email,
+        require_google_auth: customerData.require_google_auth,
+        require_device_limit: customerData.require_device_limit
+      });
 
       // 2. Load tasks (Custom or Master)
       let planTasks: ExerciseTask[] = [];
@@ -194,8 +206,42 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     fetchData(!shouldSkipCache); 
   }, [customerId, token]);
 
-  // Zalo Browser Detector & Auth Restoration
+  // Device & OAuth Initialization
   useEffect(() => {
+    const initDevice = async () => {
+      try {
+        const fp = await FingerprintJS.load();
+        const result = await fp.get();
+        const fpId = result.visitorId;
+        setDeviceId(fpId);
+
+        // If in admin mode, always authorized
+        if (onNavigate) {
+          setDeviceAuthorized(true);
+          return;
+        }
+
+        // Authorize device via backend
+        if (token && customerId) {
+          // Gửi thêm thông tin OS, Screen để nhận diện sâu hơn (Heuristic)
+          const deviceName = `${navigator.platform} - ${window.screen.width}x${window.screen.height}`;
+          const authResult = await customerService.authorizeDevice(customerId, token, fpId, deviceName);
+          if (authResult?.success) {
+            setDeviceAuthorized(true);
+          } else {
+            console.warn("Device not authorized:", authResult?.message);
+            setDeviceAuthorized(false);
+          }
+        }
+      } catch (e) {
+        console.error("Device init error:", e);
+        // Nếu lỗi fingerprint thì cho phép admin xem, nhưng khóa học viên nếu cần cực kỳ bảo mật
+        if (onNavigate) setDeviceAuthorized(true);
+      }
+    };
+
+    initDevice();
+
     const ua = navigator.userAgent || navigator.vendor;
     const isZaloBrowser = /Zalo/i.test(ua) || /FB_IAB/i.test(ua) || /Messenger/i.test(ua);
     
@@ -213,20 +259,61 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     if (localStorage.getItem(`verified_email_${customerId}`)) {
        setIsVerified(true);
     }
-  }, [customerId]);
+  }, [customerId, token, onNavigate]);
+
+  const hasAutoPrompted = useRef(false);
+
+  // Tự động bật Modal đăng nhập Google nếu chưa xác thực hoặc chưa có email
+  useEffect(() => {
+    // Không làm gì nếu đang tải chưa xong hoặc không có khách hàng
+    if (loading || !customer) return;
+    
+    const hasEmail = customer.email && String(customer.email).trim() !== "";
+    const needsGoogleAuth = customer.require_google_auth !== false;
+    
+    // Điều kiện để hiện modal: 
+    // 1. Chưa có email đăng ký (Đăng ký lần đầu)
+    // 2. Có email rồi nhưng yêu cầu xác thực Google và chưa được xác thực (isVerified = false)
+    if ((!hasEmail || (needsGoogleAuth && !isVerified)) && !hasAutoPrompted.current) {
+      hasAutoPrompted.current = true; // Đảm bảo chỉ tự động chớp lên 1 lần
+      setTimeout(() => {
+        console.log("ClientView: Tự động kích hoạt kiểm tra bảo mật...");
+        setAuthModal({ isOpen: true, link: null });
+      }, 300);
+    }
+  }, [customer, isVerified, loading]);
 
   // Play Video Logic
   const handlePlayVideo = (link?: string) => {
     if (!link) return;
     
-    // Admin thì cho xem thoải mái
+    // Admin thực thụ (có session) thì cho xem thoải mái
     if (onNavigate) {
       if (link.includes('mediadelivery.net')) setPlayingVideo(link);
       else window.open(link, '_blank');
       return;
     }
 
-    // Kiểm tra hết hạn khóa học
+    // 1. Kiểm tra thiết bị (Device Limit)
+    if (customer?.require_device_limit !== false && !deviceAuthorized) {
+        setDeviceModal({ isOpen: true });
+        return;
+    }
+
+    // 2. Kiểm tra xác thực Google (Email matching)
+    console.log("handlePlayVideo: Security Check:", {
+      require_google_auth: customer?.require_google_auth,
+      isVerified: isVerified,
+      customerEmail: customer?.email
+    });
+
+    if (customer?.require_google_auth !== false && !isVerified) {
+       console.log("handlePlayVideo: Authentication required, opening AuthModal");
+       setAuthModal({isOpen: true, link: link});
+       return;
+    }
+
+    // 3. Kiểm tra hết hạn khóa học
     if (customer?.end_date) {
       const today = toVnZeroHour();
       const end = parseVNDate(customer.end_date);
@@ -242,13 +329,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       }
     }
 
-    // Học viên chưa đăng nhập? Khóa và yêu cầu nhập mail
-    if (!isVerified) {
-      setAuthModal({ isOpen: true, link });
-      return;
-    }
-
-    // Đã xác thực, mở video
     if (link.includes('mediadelivery.net')) {
       setPlayingVideo(link);
     } else {
@@ -389,7 +469,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
        return;
     }
 
-    // Always regenerate to ensure correct domain (phacdo.vercel.app)
+    // Luôn dùng domain học viên (VITE_CLIENT_PUBLIC_URL / phacdo4)
     let linkToCopy = generateCustomerLink(dbCustomerId, dbToken);
     
     const doCopy = (text: string) => {
@@ -516,26 +596,89 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   }
 
   const isBlocked = accessState === "DELETED" || accessState === "EXPIRED";
-  const isStudentDomain = window.location.hostname === 'phacdo.netlify.app';
-  const showAdminUI = onNavigate && !isStudentDomain;
+  const showAdminUI = !!onNavigate;
+
+  const handleDownloadPhacdoInfo = () => {
+    const dbToken = (customer?.token || token || '').trim();
+    const dbCustomerId = customer?.customer_id || customerId;
+    const link = generateCustomerLink(dbCustomerId, dbToken);
+    const text = [
+      `Học viên: ${customer?.customer_name || ''}`,
+      `ID: ${dbCustomerId}`,
+      `Link phác đồ (học viên): ${link}`,
+      `Xuất lúc: ${new Date().toLocaleString('vi-VN')}`
+    ].join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `phac-do-${dbCustomerId}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   const renderAdminHeader = () => {
     if (!showAdminUI) return null;
 
     return (
-      <div className="fixed top-0 left-0 right-0 z-[5000] bg-white border-b border-blue-50 px-6 py-3 shadow-lg flex items-center justify-center">
-        <div className="w-full max-w-[1200px] flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={() => onNavigate('dashboard')} className="p-2 hover:bg-blue-50 rounded-full text-blue-600 transition-colors"><ChevronLeft size={24} /></button>
-            <h2 className="text-lg font-black text-blue-900 tracking-tight uppercase">{customer?.customer_name || "QUẢN TRỊ"}</h2>
+      <div className="fixed top-0 left-0 right-0 z-[99999] bg-white border-b-2 border-blue-100 px-4 py-3 shadow-xl flex items-center justify-center">
+        <div className="w-full max-w-[1200px] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <button type="button" onClick={() => onNavigate!('dashboard')} className="p-2 hover:bg-slate-100 rounded-full text-blue-600 shrink-0" aria-label="Quay lại">
+              <ChevronLeft size={22} />
+            </button>
+            <h2 className="text-sm sm:text-base font-black text-[#1E3A8A] tracking-tight uppercase truncate">
+              {customer
+                ? `${customer.customer_name || ''}${customer.start_date ? ` – ${formatDDMMYYYY(customer.start_date)}` : ''}`.trim() || 'Xem trước phác đồ'
+                : 'Xem trước phác đồ'}
+            </h2>
           </div>
-          <div className="flex items-center gap-3 relative">
-            {copyToast && <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-green-500 text-white text-[10px] font-black py-1.5 px-4 rounded-lg shadow-lg animate-in fade-in slide-in-from-bottom-2">ĐÃ LẤY LINK!</div>}
-            <button onClick={() => fetchData(false, true)} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-all active:scale-90" title="Làm mới dữ liệu"><ArrowRight className="rotate-90" size={18} /></button>
-            <button onClick={handleCopyLink} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-all active:scale-90" title="Sao chép link"><Copy size={18} /></button>
-            <button onClick={handleDuplicate} className="p-3 bg-orange-50 text-orange-600 rounded-2xl hover:bg-orange-100 transition-all active:scale-90" title="Nhân bản học viên"><CopyPlus size={18} /></button>
-            <button onClick={() => onNavigate('plan-editor', { customerId: customer.customer_id })} className="p-3 bg-green-50 text-green-600 rounded-2xl hover:bg-green-100 transition-all active:scale-90" title="Chỉnh sửa"><Pencil size={18} /></button>
-            <button onClick={() => onNavigate('dashboard')} className="p-3 bg-gray-50 text-gray-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition-all active:scale-90" title="Đóng"><X size={18} /></button>
+          <div className="flex items-center gap-2 sm:gap-2.5 relative shrink-0">
+            {copyToast && (
+              <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[10px] font-black py-1 px-3 rounded-lg shadow-lg whitespace-nowrap">
+                ĐÃ COPY LINK!
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleDownloadPhacdoInfo}
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-50 text-blue-600 border border-blue-100/80 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95"
+              title="Tải thông tin / link (file .txt)"
+            >
+              <ArrowDownToLine size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-50 text-blue-600 border border-blue-100/80 flex items-center justify-center hover:bg-blue-100 transition-all active:scale-95"
+              title="Sao chép link gửi học viên (domain phacdo4)"
+            >
+              <Copy size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={handleDuplicate}
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-orange-50 text-orange-600 border border-orange-100/80 flex items-center justify-center hover:bg-orange-100 transition-all active:scale-95"
+              title="Nhân bản / tạo từ mẫu"
+            >
+              <CopyPlus size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => customer && onNavigate!('plan-editor', { customerId: customer.customer_id })}
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-green-50 text-green-600 border border-green-100/80 flex items-center justify-center hover:bg-green-100 transition-all active:scale-95 disabled:opacity-40"
+              disabled={!customer}
+              title="Chỉnh sửa phác đồ"
+            >
+              <Pencil size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate!('dashboard')}
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-50 text-slate-500 border border-slate-100 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all active:scale-95"
+              title="Đóng xem trước"
+            >
+              <X size={18} />
+            </button>
           </div>
         </div>
       </div>
@@ -591,7 +734,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     );
   }
 
-  if (isBlocked) {
+  if (isBlocked && !onNavigate) {
     return (
       <div className="min-h-screen bg-[#F8FBFF] flex flex-col items-center justify-center p-6 text-center">
         {renderAdminHeader()}
@@ -633,11 +776,20 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       
       {/* Cảnh báo sắp hết hạn */}
       {(() => {
-        if (isBlocked || !endDate) return null;
+        if (!endDate) return null;
         const diffTime = endDate.getTime() - today.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
-        if (diffDays > 0 && diffDays <= 7) {
+        if (isBlocked) {
+          return (
+            <div className="bg-red-600 text-white px-4 py-3 text-center font-bold text-sm sticky top-0 z-[4000] shadow-md flex items-center justify-center gap-2">
+              <AlertTriangle size={18} />
+              CẢNH BÁO: PHÁC ĐỒ NÀY ĐÃ HẾT HẠN SỬ DỤNG ({formatDDMMYYYY(endDate)})
+            </div>
+          );
+        }
+
+        if (diffDays > 0 && diffDays <= 5) {
           return (
             <div className="bg-orange-500 text-white px-4 py-3 text-center font-bold text-sm animate-pulse sticky top-0 z-[4000] shadow-md flex items-center justify-center gap-2">
               <AlertTriangle size={18} />
@@ -707,7 +859,24 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
           <section className="flex-1">
              <div className="bg-white rounded-[2.5rem] p-8 md:p-12 border border-blue-50 shadow-sm">
-                <h2 className="text-2xl font-black text-center mb-10 uppercase tracking-tight text-[#1E3A8A]">Lịch học chi tiết</h2>
+                <h2 className="text-2xl font-black text-center mb-10 uppercase tracking-tight text-[#1E3A8A] flex items-center justify-center gap-2">
+                   Lịch học chi tiết
+                   {isVerified && (
+                     <button 
+                       onClick={() => {
+                         if(confirm("Bạn muốn đăng xuất khỏi Email hiện tại để xác thực lại?")) {
+                           localStorage.removeItem(`verified_email_${customerId}`);
+                           setIsVerified(false);
+                           setToast("Đã đăng xuất! Vui lòng đăng nhập lại để xem video.");
+                         }
+                       }}
+                       className="p-1.5 hover:bg-slate-50 rounded-full text-slate-300 hover:text-red-500 transition-all"
+                       title="Đăng xuất / Thay đổi Email"
+                     >
+                       <LogOut size={20} />
+                     </button>
+                   )}
+                </h2>
                 <div className="flex flex-wrap gap-x-6 gap-y-3 justify-center mb-10">
                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tight text-[#2563EB]"><div className="w-2.5 h-2.5 rounded-full bg-[#2563EB]"></div> Bài bắt buộc</div>
                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tight text-[#10B981]"><div className="w-2.5 h-2.5 rounded-full bg-[#10B981]"></div> Bài bổ trợ</div>
@@ -786,7 +955,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       )}
       
       {/* 🚀 MÀN HÌNH CHẶN ZALO IOS */}
-      {isZalo && (
+      {isZalo && !onNavigate && (
         <div className="fixed inset-0 z-[9999] bg-[#1E3A8A] flex flex-col items-center justify-center p-6 text-white text-center">
           <div className="text-6xl mb-6 animate-bounce">↗️</div>
           <h2 className="text-2xl font-black mb-4 uppercase">Mở Trình Duyệt Để Tiếp Tục</h2>
@@ -804,17 +973,33 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 relative z-10 shadow-2xl text-center">
             <button onClick={() => setAuthModal({isOpen: false, link: null})} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-800"><X size={20}/></button>
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4"><User size={32}/></div>
-            <h3 className="text-xl font-black mb-2 text-[#1E3A8A]">CHỨNG THỰC BẢO MẬT</h3>
-            <p className="text-gray-500 mb-6 text-[13px] font-medium leading-relaxed">Để mở khóa nội dung, bạn hãy ủy quyền bằng tài khoản Google có chứa Email mà bạn đã cung cấp khi mua khóa học.</p>
-            
             <div className="flex flex-col items-center justify-center w-full min-h-[44px]">
                <GoogleLogin
-                  onSuccess={credentialResponse => {
-                     const token = credentialResponse.credential;
-                     if (!token) return;
-                     const decoded = jwtDecode<{email: string}>(token);
+                  onSuccess={async (credentialResponse) => {
+                     const jwt = credentialResponse.credential;
+                     if (!jwt) return;
+                     const decoded = jwtDecode<{email: string}>(jwt);
+                     const loggedEmail = decoded.email.toLowerCase().trim();
+                     const existingEmail = (customer.email || "").toLowerCase().trim();
                      
-                     if (decoded.email.toLowerCase().trim() === customer.email?.toLowerCase().trim()) {
+                     if (!existingEmail) {
+                        // Giai đoạn Đăng ký ban đầu (First Login)
+                        try {
+                           await customerService.updateCustomerEmailByToken(customer.customer_id, (customer.token || token || ""), loggedEmail);
+                           localStorage.setItem(`verified_email_${customerId}`, 'true');
+                           setIsVerified(true);
+                           setCustomer({ ...customer, email: loggedEmail });
+                           setAuthModal({isOpen: false, link: null});
+                           if (authModal.link) {
+                              if (authModal.link.includes('mediadelivery.net')) setPlayingVideo(authModal.link);
+                              else window.open(authModal.link, '_blank');
+                           }
+                        } catch (e) {
+                           console.error("Auto enrollment failed:", e);
+                           setInfoModal({isOpen: true, title: "Lỗi Hệ Thống", message: "Không thể tự động lưu Email. Vui lòng liên hệ Admin!", type: "WARNING", color: "red"});
+                        }
+                     } else if (loggedEmail === existingEmail) {
+                        // Giai đoạn Xác thực (Subsequent Logins) - Khớp
                         localStorage.setItem(`verified_email_${customerId}`, 'true');
                         setIsVerified(true);
                         setAuthModal({isOpen: false, link: null});
@@ -823,7 +1008,24 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                            else window.open(authModal.link, '_blank');
                         }
                      } else {
-                        setInfoModal({isOpen: true, title: "Sai Tài Khoản", message: `Tài khoản Google (${decoded.email}) không khớp với Email ghi danh trong hệ thống. Vui lòng đăng nhập bằng đúng tài khoản đã cung cấp!`, type: "WARNING", color: "red"});
+                        // Giai đoạn Xác thực - Không khớp
+                        setInfoModal({
+                           isOpen: true, 
+                           title: "Email không trùng khớp", 
+                           message: `Email của bạn (${loggedEmail}) không trùng khớp với Email bạn đã đăng ký sử dụng (Email đăng ký: ${existingEmail}). Nếu bạn đã đổi Email mới, vui lòng nhấn "Liên hệ" để được Admin duyệt đổi Email mới.`, 
+                           type: "WARNING", 
+                           color: "red",
+                           onConfirm: async () => {
+                             setIsRequestingEmail(true);
+                             try {
+                               await customerService.requestEmailChange(customer.customer_id, loggedEmail, (customer.token || token || ""));
+                               const msg = `Chào Admin, em là ${customer?.customer_name || ''}, em vừa gửi yêu cầu đổi Email đăng ký cho phác đồ của em (Mã HV: ${customerId}). Email cũ: ${existingEmail}. Email mới: ${loggedEmail}. Nhờ Admin duyệt giúp em ạ!`;
+                               window.open(`https://zalo.me/0966888609?text=${encodeURIComponent(msg)}`, '_blank');
+                               setInfoModal(null);
+                             } catch(e) { console.error(e); }
+                             finally { setIsRequestingEmail(false); }
+                           }
+                        });
                      }
                   }}
                   onError={() => {
@@ -838,7 +1040,72 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                />
             </div>
 
-            <div className="mt-8 text-[11px] text-gray-400 font-medium">Bạn cần hỗ trợ? <a href="https://zalo.me/0966888609" target="_blank" className="text-blue-600 hover:underline">Liên hệ Zalo</a>.</div>
+            <div className="mt-8 text-[11px] text-gray-400 font-medium">
+              Bạn cần hỗ trợ? <a href="https://zalo.me/0966888609" target="_blank" className="text-blue-600 hover:underline">Liên hệ Zalo</a>.
+              {customer?.email && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="mb-2 italic">Nếu bạn muốn đổi Email đăng ký:</p>
+                  <button 
+                    onClick={async () => {
+                      if (confirm("Gửi yêu cầu đổi Email đăng ký tới Admin?")) {
+                        setIsRequestingEmail(true);
+                        try {
+                          // Note: We need a way to know the *target* email. 
+                          // But usually, change request is for the CURRENT logged in email that failed.
+                          // So we might want to trigger this AFTER a failed login.
+                        } catch(e) {}
+                      }
+                    }}
+                    className="text-orange-500 font-bold hover:underline"
+                  >
+                    Yêu cầu đổi Email
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚀 MÀN HÌNH CHẶN THIẾT BỊ (Device Limit) */}
+      {deviceModal?.isOpen && (
+        <div className="fixed inset-0 z-[8500] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDeviceModal(null)}></div>
+          <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 relative z-10 shadow-2xl text-center">
+            <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">🚫</div>
+            <h3 className="text-xl font-black mb-3 text-[#1E3A8A] uppercase italic">Thiết bị không được phép</h3>
+            <p className="text-gray-500 mb-8 text-[14px] font-medium leading-relaxed">
+              Thiết bị này của bạn không được phép truy cập, bạn chỉ được mở bài học trên các thiết bị trước đó.<br/><br/>
+              Nếu muốn mở trên thiết bị mới, hãy ấn nút <b>'Liên hệ'</b> để đăng ký sử dụng.
+            </p>
+            
+            <div className="flex gap-3">
+               <button 
+                  onClick={() => setDeviceModal(null)} 
+                  className="flex-1 py-4 bg-gray-100 text-gray-600 font-bold rounded-full uppercase text-xs tracking-widest shadow-lg transition-all active:scale-95"
+               >
+                 Đóng
+               </button>
+               <button 
+                  onClick={async () => {
+                    if (customerId && token && deviceId) {
+                       setIsRequestingApproval(true);
+                       try {
+                          const deviceName = `${navigator.platform} - ${window.screen.width}x${window.screen.height}`;
+                          await customerService.requestDeviceApproval(customerId, token, deviceId, deviceName);
+                          // Mở Zalo với tin nhắn mẫu giúp Admin dễ duyệt
+                          const msg = `Chào Admin, em là ${customer?.customer_name || ''}, em vừa gửi yêu cầu duyệt thiết bị mới cho phác đồ của em (Mã HV: ${customerId}). Nhờ Admin duyệt giúp em ạ!`;
+                          window.open(`https://zalo.me/0966888609?text=${encodeURIComponent(msg)}`, '_blank');
+                       } catch(e) { console.error(e); }
+                       finally { setIsRequestingApproval(false); }
+                    }
+                  }} 
+                  disabled={isRequestingApproval}
+                  className="flex-[2] py-4 bg-blue-600 text-white font-bold rounded-full uppercase text-xs tracking-widest shadow-lg transition-all hover:bg-blue-700 active:scale-95 disabled:bg-blue-300"
+               >
+                 {isRequestingApproval ? 'Đang gửi...' : 'Liên hệ'}
+               </button>
+            </div>
           </div>
         </div>
       )}

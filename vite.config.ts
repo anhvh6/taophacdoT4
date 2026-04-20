@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
         'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
         'process.env.VITE_APP_BASE_URL': JSON.stringify(env.VITE_APP_BASE_URL),
         'process.env.VITE_CLIENT_BASE_URL': JSON.stringify(env.VITE_CLIENT_BASE_URL),
+        'process.env.VITE_CLIENT_PUBLIC_URL': JSON.stringify(env.VITE_CLIENT_PUBLIC_URL),
         'process.env.VITE_APP_MODE': JSON.stringify(env.VITE_APP_MODE)
       },
       resolve: {

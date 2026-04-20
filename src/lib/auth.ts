@@ -1,18 +1,25 @@
+import { supabase } from './supabaseClient';
+
 export const auth = {
   signIn: async (email: string, password: string) => {
-    return { data: { session: { user: { id: 'mock-admin', email } } }, error: null };
+    return supabase.auth.signInWithPassword({ email, password });
   },
   signOut: async () => {
-    return { error: null };
+    return supabase.auth.signOut();
   },
   getSession: async () => {
-    return { data: { session: { user: { id: 'mock-admin' } } }, error: null };
+    return supabase.auth.getSession();
   },
   onAuthStateChange: (callback: (session: any) => void) => {
-    // Return a dummy subscription
-    return { data: { subscription: { unsubscribe: () => {} } } };
+    return supabase.auth.onAuthStateChange((_event, session) => callback(session));
   },
   isAdmin: async (userId: string) => {
-    return true;
+    const { data, error } = await supabase
+      .from('admin_users')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) return false;
+    return !!data;
   }
 };

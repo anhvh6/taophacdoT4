@@ -416,7 +416,31 @@ export const CustomerManagement: React.FC<{
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
                   <LineInput label="TÊN HỌC VIÊN" name="customer_name" value={formData.customer_name} onChange={e => setFormData({...formData, customer_name: e.target.value.toUpperCase()})} />
                   <LineInput label="SỐ ĐIỆN THOẠI" name="sdt" value={formData.sdt} onChange={e => setFormData({...formData, sdt: e.target.value})} />
-                  <LineInput label="EMAIL" name="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                  <div className="flex flex-col gap-1 relative">
+                    <LineInput label="EMAIL" name="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                    {customer.pending_email && (
+                      <div className="absolute -bottom-14 left-0 right-0 bg-orange-50 border border-orange-100 p-2 rounded-xl z-10 flex flex-col gap-1 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-black text-orange-600 uppercase">Yêu cầu đổi sang:</span>
+                          <button 
+                            onClick={async () => {
+                              if (confirm(`Phê duyệt đổi Email từ ${customer.email} sang ${customer.pending_email}?`)) {
+                                try {
+                                  await onUpsert({ customer_id: customer.customer_id, email: customer.pending_email, pending_email: '' });
+                                  setFormData({ ...formData, email: customer.pending_email, pending_email: '' });
+                                  setToast("Đã duyệt đổi Email thành công!");
+                                } catch(e) { console.error(e); }
+                              }
+                            }}
+                            className="bg-orange-500 text-white text-[9px] font-black px-2 py-1 rounded-md hover:bg-orange-600 transition-all uppercase"
+                          >
+                            Duyệt ngay
+                          </button>
+                        </div>
+                        <span className="text-[10px] font-bold text-blue-900 truncate">{customer.pending_email}</span>
+                      </div>
+                    )}
+                  </div>
                   <LineInput label="MÃ VẬN ĐƠN" name="ma_vd" value={formData.ma_vd} onChange={e => setFormData({...formData, ma_vd: e.target.value})} />
                   
                   <div className="flex flex-col gap-1">

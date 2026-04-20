@@ -1,4 +1,5 @@
 import { mockDB } from '../lib/mockData';
+import { supabase } from '../lib/supabaseClient';
 import { toISODateKey } from '../../utils/date';
 
 const mapTask = (t: any) => {
@@ -34,7 +35,15 @@ export const planService = {
   async getMasterPlan(videoDate: string) {
     if (!videoDate) return [];
     const dateKey = toISODateKey(videoDate);
-    const tasks = await mockDB.getPlan(dateKey);
-    return tasks.map(mapTask).filter(t => t.day >= 0).sort((a, b) => a.day - b.day);
+    const { data, error } = await supabase.rpc('get_master_tasks', {
+      p_video_date: dateKey
+    });
+    if (error) {
+      console.error('get_master_tasks RPC:', error);
+      const tasks = await mockDB.getPlan(dateKey);
+      return tasks.map(mapTask).filter(t => t.day >= 0).sort((a, b) => a.day - b.day);
+    }
+    const rows = data || [];
+    return rows.map(mapTask).filter(t => t.day >= 0).sort((a, b) => a.day - b.day);
   }
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Dashboard } from './pages/Dashboard';
 import { CustomerManagement } from './pages/CustomerManagement';
 import { PlanEditor } from './pages/PlanEditor';
@@ -19,7 +19,15 @@ type Page = 'dashboard' | 'management' | 'plan-editor' | 'products' | 'preview' 
 
 const APP_MODE = import.meta.env.VITE_APP_MODE || 'admin';
 
+/** Site chỉ dành cho học viên mở link phác đồ — không phải admin */
 const App: React.FC = () => {
+  useLayoutEffect(() => {
+    if (APP_MODE !== 'client') return;
+    const { pathname, hash } = window.location;
+    const hasClientHash = hash.startsWith('#/client/');
+    if (pathname.startsWith('/client/') || hasClientHash) return;
+    window.location.replace('https://30ngaythaydoi.vercel.app/');
+  }, []);
   const getInitialPage = (): Page => {
     const hash = window.location.hash;
     const pathname = window.location.pathname;
@@ -48,14 +56,16 @@ const App: React.FC = () => {
     // Handle Pathname routing (SEO friendly)
     if (pathname.startsWith('/client/')) {
       const searchParams = new URLSearchParams(search);
-      return { customerId: pathname.replace('/client/', ''), token: searchParams.get('t') || undefined };
+      const rawId = pathname.replace(/^\/client\//, '').split('/')[0];
+      return { customerId: decodeURIComponent(rawId), token: searchParams.get('t') || undefined };
     }
 
     // Handle Hash routing (Legacy)
     const [path, query] = hash.split('?');
     const searchParams = new URLSearchParams(query);
     if (path.startsWith('#/client/')) {
-      return { customerId: path.replace('#/client/', ''), token: searchParams.get('t') || undefined };
+      const rawId = path.replace('#/client/', '').split('/')[0];
+      return { customerId: decodeURIComponent(rawId), token: searchParams.get('t') || undefined };
     }
     if (path === '#/plan-editor') {
       return { 
@@ -74,9 +84,9 @@ const App: React.FC = () => {
   });
   
   // Auth State
-  const [session, setSession] = useState<any>({ user: { id: 'mock-admin' } }); // MOCK: Auto bypassed login
-  const [isAdmin, setIsAdmin] = useState(true); // MOCK: Always admin
-  const [authLoading, setAuthLoading] = useState(false); // MOCK: Don't wait for auth
+  const [session, setSession] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -101,8 +111,6 @@ const App: React.FC = () => {
 
   // Auth Initialization
   useEffect(() => {
-    // MOCK: Bypassing auth checks locally
-    /*
     const initAuth = async () => {
       try {
         const { data: { session } } = await auth.getSession();
@@ -129,7 +137,6 @@ const App: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-    */
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -232,7 +239,7 @@ const App: React.FC = () => {
   }, [session, currentPage]);
 
   const handleUpsertCustomer = async (payload: Partial<Customer>, tasks?: any) => {
-    // if (!session) throw new Error('Unauthorized'); // MOCK: Bypassed
+    if (!session) throw new Error('Unauthorized');
     lastMutationTime.current = Date.now();
     const existingIdx = customers.findIndex(c => c.customer_id === payload.customer_id);
     const isNew = existingIdx === -1;
@@ -272,7 +279,7 @@ const App: React.FC = () => {
   };
 
   const handleDeleteCustomer = async (id: string) => {
-    // if (!session) throw new Error('Unauthorized'); // MOCK: Bypassed
+    if (!session) throw new Error('Unauthorized');
     lastMutationTime.current = Date.now();
     setCustomers(prev => {
       const next = prev.filter(c => c.customer_id !== id);
@@ -298,7 +305,13 @@ const App: React.FC = () => {
       // Redirect root domain to main site as requested
       // Only redirect if the hostname is exactly phacdo.vercel.app or phacdo.netlify.app
       // This prevents redirecting admin subdomains like taophacdo.vercel.app
-      const isTargetDomain = hostname === 'phacdo.vercel.app' || hostname === 'phacdo.netlify.app' || hostname.endsWith('.phacdo.vercel.app') || hostname.endsWith('.phacdo.netlify.app');
+      const isTargetDomain =
+        hostname === 'phacdo.vercel.app' ||
+        hostname === 'phacdo4.vercel.app' ||
+        hostname === 'phacdo.netlify.app' ||
+        hostname.endsWith('.phacdo.vercel.app') ||
+        hostname.endsWith('.phacdo4.vercel.app') ||
+        hostname.endsWith('.phacdo.netlify.app');
       const pathname = window.location.pathname;
       const isRootPath = (!hash || hash === '' || hash === '#' || hash === '#/') && (pathname === '/' || pathname === '');
       
@@ -312,9 +325,9 @@ const App: React.FC = () => {
         let token = searchParams.get('t') || undefined;
 
         if (pathname.startsWith('/client/')) {
-          idPart = pathname.replace('/client/', '');
+          idPart = decodeURIComponent(pathname.replace(/^\/client\//, '').split('/')[0]);
         } else {
-          idPart = path.replace('#/client/', '');
+          idPart = decodeURIComponent(path.replace('#/client/', '').split('/')[0]);
         }
 
         setCurrentPage('preview');
@@ -428,7 +441,7 @@ const App: React.FC = () => {
     }
   }, [currentPage]);
 
-  if (authLoading) {
+  if (APP_MODE !== 'client' && authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50">
         <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
@@ -508,8 +521,13 @@ const App: React.FC = () => {
   }
 
   if (currentPage === 'preview') {
-    const isPreviewContext = window.location.hash.includes('preview=true') || window.location.search.includes('preview=true');
-    return <ClientView customerId={pageParams.customerId} token={pageParams.token} onNavigate={APP_MODE === 'admin' && isPreviewContext ? navigate : undefined} />;
+    return (
+      <ClientView
+        customerId={pageParams.customerId}
+        token={pageParams.token}
+        onNavigate={isAdmin ? navigate : undefined}
+      />
+    );
   }
 
   if (APP_MODE === 'client') {
