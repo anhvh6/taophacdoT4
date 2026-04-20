@@ -274,9 +274,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     const needsGoogleAuth = customer.require_google_auth !== false && !isPreviewDomain;
     
     // Điều kiện để hiện modal: 
-    // 1. Chưa có email đăng ký (Đăng ký lần đầu)
-    // 2. Có email rồi nhưng yêu cầu xác thực Google và chưa được xác thực (isVerified = false)
-    if ((!hasEmail || (needsGoogleAuth && !isVerified)) && !hasAutoPrompted.current) {
+    // Chỉ hiện khi bắt buộc có xác thực Google (needsGoogleAuth = true)
+    // VÀ (Chưa có email đăng ký HOẶC Chưa được xác thực)
+    if (needsGoogleAuth && (!hasEmail || !isVerified) && !hasAutoPrompted.current) {
       hasAutoPrompted.current = true; // Đảm bảo chỉ tự động chớp lên 1 lần
       setTimeout(() => {
         console.log("ClientView: Tự động kích hoạt kiểm tra bảo mật...");
