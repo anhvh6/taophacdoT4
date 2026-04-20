@@ -12,11 +12,7 @@ import { formatDDMM, formatDDMMYYYY, toISODateKey, parseVNDate, getDiffDays } fr
 import { ProfitChartModal } from '../components/ProfitChartModal';
 
 const formatVND = (num: number) => new Intl.NumberFormat('vi-VN').format(num);
-const formatDDMMYYYY = (date: string | undefined) => {
-  if (!date) return '---';
-  const d = new Date(date);
-  return d.toLocaleDateString('vi-VN');
-};
+
 
 const Toggle: React.FC<{ checked: boolean; onChange: (val: boolean) => void; color?: string }> = ({ checked, onChange, color = 'peer-checked:bg-green-500' }) => (
   <label className="relative inline-flex items-center cursor-pointer">

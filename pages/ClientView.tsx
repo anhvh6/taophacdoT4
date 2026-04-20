@@ -285,7 +285,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   }, [customer, isVerified, loading, authModal.isOpen]);
 
   // Play Video Logic
-  const handlePlayVideo = (link?: string) => {
+  const handlePlayVideo = async (link?: string) => {
     if (!link) return;
     
     // Admin thực thụ (có session) thì cho xem thoải mái
