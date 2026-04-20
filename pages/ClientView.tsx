@@ -215,8 +215,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         const fpId = result.visitorId;
         setDeviceId(fpId);
 
-        // If in admin mode, always authorized
-        if (onNavigate) {
+        // If in admin mode or preview domain, always authorized
+        const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('localhost');
+        if (onNavigate || isPreviewDomain) {
           setDeviceAuthorized(true);
           return;
         }
@@ -269,7 +270,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     if (loading || !customer) return;
     
     const hasEmail = customer.email && String(customer.email).trim() !== "";
-    const needsGoogleAuth = customer.require_google_auth !== false;
+    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('localhost');
+    const needsGoogleAuth = customer.require_google_auth !== false && !isPreviewDomain;
     
     // Điều kiện để hiện modal: 
     // 1. Chưa có email đăng ký (Đăng ký lần đầu)
@@ -307,7 +309,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       customerEmail: customer?.email
     });
 
-    if (customer?.require_google_auth !== false && !isVerified) {
+    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('localhost');
+    const needsGoogleAuth = customer?.require_google_auth !== false && !isPreviewDomain;
+
+    if (needsGoogleAuth && !isVerified) {
        console.log("handlePlayVideo: Authentication required, opening AuthModal");
        setAuthModal({isOpen: true, link: link});
        return;
