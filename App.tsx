@@ -223,8 +223,8 @@ const App: React.FC = () => {
       setProducts(validProd);
       
       try {
-        localStorage.removeItem('mega_customers_cache');
-        localStorage.removeItem('mega_products_cache');
+        localStorage.setItem('mega_customers_cache', JSON.stringify(uniqueCust));
+        localStorage.setItem('mega_products_cache', JSON.stringify(validProd));
       } catch (e) {}
     } catch (e: any) {
       console.error("Failed to fetch data:", e);

@@ -53,7 +53,7 @@ const getCategory = (c: Customer, products: Product[], productMap?: Map<string, 
   return null;
 };
 
-const CustomerCard: React.FC<CustomerCardProps> = ({ customer, products, productMap, onEdit, onPreview, onDuplicate, onCopyPlan, onDetail, onCopyLink, onCopyName, groupColor, groupIcon: GroupIcon }) => {
+const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, productMap, onEdit, onPreview, onDuplicate, onCopyPlan, onDetail, onCopyLink, onCopyName, groupColor, groupIcon: GroupIcon }) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
@@ -219,6 +219,11 @@ const CustomerCard: React.FC<CustomerCardProps> = ({ customer, products, product
     </div>
   );
 };
+
+
+const CustomerCard = React.memo(CustomerCardBase, (prev, next) => {
+  return prev.customer === next.customer && prev.productMap === next.productMap;
+});
 
 const GroupHeader: React.FC<{ icon: any; title: string; count: number; colorClass: string; isCollapsed: boolean; onToggle: () => void }> = ({ icon: Icon, title, count, colorClass, isCollapsed, onToggle }) => (
   <div 
