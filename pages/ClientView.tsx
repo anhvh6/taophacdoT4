@@ -63,9 +63,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       return;
     }
 
-    // Thử lấy từ cache trước để hiển thị ngay lập tức
-    // Bỏ cache cho public client (có token) để luôn lấy dữ liệu mới nhất
-    if (useCache && !token) {
+    // Thử lấy từ cache trước để hiển thị ngay lập tức (Stale-While-Revalidate)
+    if (useCache) {
       const cached = localStorage.getItem(`phacdo_cache_${customerId}`);
       if (cached) {
         try {
@@ -73,7 +72,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           if (parsed.customer) {
             setCustomer(parsed.customer);
             if (parsed.tasks) setTasks(parsed.tasks);
-            // Hiển thị dữ liệu cũ trong khi tải dữ liệu mới
+            // Hiển thị dữ liệu cũ TRƯỚC khi tải dữ liệu mới (UX nhanh tức thì)
             setLoading(false);
           }
         } catch (e) {
@@ -116,23 +115,23 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       }
 
       // CRITICAL: Tự động cập nhật nội dung mới nhất từ Lich phac do khi vào ngày chia hết cho 3
+      // CHÚ Ý: Chuyển lên trên hoặc chạy song song để tối ưu tốc độ render ban đầu
       const videoDate = customerData.video_date || customerData.Video_date;
       let syncOccurred = false;
       if (videoDate && planTasks.length > 0) {
-        // Tính toán ngày hiện tại để kiểm tra điều kiện sync
         const todayDate = toVnZeroHour();
         const start = toVnZeroHour(customerData.start_date);
         const currentAllowedDay = customerData.allowed_day || getDiffDays(start, todayDate) + 1;
         
         // Nếu ngày hiện tại chia hết cho 3, đồng bộ toàn bộ phác đồ từ master
         if (currentAllowedDay > 0 && currentAllowedDay % 3 === 0) {
-          console.log(`ClientView: Day ${currentAllowedDay} is divisible by 3. Auto-syncing ENTIRE plan from master...`);
+           // Ở đây ta có thể chọn await hoặc không. Để chắc chắn dữ liệu mới nhất, ta await, 
+           // nhưng vì đã có Stale UI phía trên nên cảm giác vẫn nhanh.
           try {
             const masterTasks = await planService.getMasterPlan(videoDate);
             if (masterTasks && masterTasks.length > 0) {
               planTasks = masterTasks;
               syncOccurred = true;
-              console.log("Entire plan replaced with latest master tasks");
             }
           } catch (e) {
             console.warn("Failed to auto-sync master tasks on load", e);
