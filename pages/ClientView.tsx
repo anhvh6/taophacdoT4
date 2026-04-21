@@ -98,6 +98,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         return;
       }
       
+      setCustomer(customerData);
       let planTasks: any[] = [];
       const actualId = customerData.customer_id || customerId;
             console.log("Custom tasks result count:", customTasks?.length || 0);
