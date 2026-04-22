@@ -1007,101 +1007,157 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             <button onClick={() => setAuthModal({isOpen: false, link: null})} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-800"><X size={20}/></button>
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6"><User size={32}/></div>
             
-            <div className="mb-6">
-              <h3 className="text-lg font-black text-[#1E3A8A] mb-2 uppercase tracking-tight">Xác thực tài khoản</h3>
-              <p className="text-gray-600 text-[13px] font-medium leading-relaxed">
-                Cần đăng nhập tài khoản Google để truy cập phác đồ.
-                <span className="text-red-500 font-bold mt-2 block">Lưu ý: Mỗi học viên chỉ được sử dụng duy nhất một tài khoản Google.</span>
-              </p>
-            </div>
+            {customer?.email && lastLoggedEmail && lastLoggedEmail !== customer.email.toLowerCase().trim() ? (
+              /* ❌ TRƯỜNG HỢP EMAIL KHÔNG KHỚP */
+              <>
+                <div className="mb-6">
+                  <h3 className="text-lg font-black text-red-600 mb-2 uppercase tracking-tight">EMAIL ĐĂNG NHẬP KHÔNG KHỚP</h3>
+                  <div className="text-gray-600 text-[13px] font-medium leading-relaxed space-y-4">
+                    <div>
+                      <p>Tài khoản đã đăng ký mở phác đồ của bạn là:</p>
+                      <p className="font-black text-blue-900 bg-blue-50 py-2 px-4 rounded-xl mt-1 break-all">{customer.email}</p>
+                    </div>
+                    <p>Vui lòng đăng nhập lại bằng đúng email.</p>
+                  </div>
+                </div>
 
-            <div className="flex flex-col items-center justify-center w-full min-h-[44px]">
-               <GoogleLogin
-                  onSuccess={async (credentialResponse) => {
-                     const jwt = credentialResponse.credential;
-                     if (!jwt) return;
-                     const decoded = jwtDecode<{email: string}>(jwt);
-                     const loggedEmail = decoded.email.toLowerCase().trim();
-                     setLastLoggedEmail(loggedEmail);
-                     const existingEmail = (customer.email || "").toLowerCase().trim();
-                     
-                     if (!existingEmail) {
-                        // Giai đoạn Đăng ký ban đầu (First Login)
-                        try {
-                           await customerService.updateCustomerEmailByToken(customer.customer_id, (customer.token || token || ""), loggedEmail);
-                           localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
-                           setIsVerified(true);
-                           setCustomer({ ...customer, email: loggedEmail });
-                           setAuthModal({isOpen: false, link: null});
-                           if (authModal.link) {
-                              if (authModal.link.includes('mediadelivery.net')) setPlayingVideo(authModal.link);
-                              else window.open(authModal.link, '_blank');
-                           }
-                        } catch (e) {
-                           console.error("Auto enrollment failed:", e);
-                           setInfoModal({isOpen: true, title: "Lỗi Hệ Thống", message: "Không thể tự động lưu Email. Vui lòng liên hệ Admin!", type: "WARNING", color: "red"});
+                <div className="flex flex-col items-center justify-center w-full min-h-[44px]">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-lg">👉</span>
+                    <GoogleLogin
+                      onSuccess={async (credentialResponse) => {
+                        const jwt = credentialResponse.credential;
+                        if (!jwt) return;
+                        const decoded = jwtDecode<{email: string}>(jwt);
+                        const loggedEmail = decoded.email.toLowerCase().trim();
+                        const existingEmail = (customer.email || "").toLowerCase().trim();
+                        
+                        if (loggedEmail === existingEmail) {
+                          localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
+                          setIsVerified(true);
+                          setAuthModal({isOpen: false, link: null});
+                          if (authModal.link) {
+                            if (authModal.link.includes('mediadelivery.net')) setPlayingVideo(authModal.link);
+                            else window.open(authModal.link, '_blank');
+                          }
+                        } else {
+                          setLastLoggedEmail(loggedEmail);
                         }
-                     } else if (loggedEmail === existingEmail) {
-                        // Giai đoạn Xác thực (Subsequent Logins) - Khớp
-                        localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
-                        setIsVerified(true);
-                        setAuthModal({isOpen: false, link: null});
-                        if (authModal.link) {
-                           if (authModal.link.includes('mediadelivery.net')) setPlayingVideo(authModal.link);
-                           else window.open(authModal.link, '_blank');
-                        }
-                     } else {
-                        // Giai đoạn Xác thực - Không khớp
-                         setLastLoggedEmail(loggedEmail);
-                      }
-                   }}
-                   onError={() => {
-                     setInfoModal({isOpen: true, title: "Lỗi Kết Nối", message: "Kết nối tới máy chủ Google thất bại. Vui lòng thử lại!", type: "WARNING", color: "red"});
-                  }}
-                  useOneTap
-                  theme="outline"
-                  shape="rectangular"
-                  size="large"
-                  text="continue_with"
-                  width="100%"
-               />
-            </div>
-
-             <div className="mt-8 text-[11px] text-gray-400 font-medium text-center">
-               Bạn cần hỗ trợ? <a href="https://zalo.me/0966888609" target="_blank" className="text-blue-600 hover:underline font-bold">Liên hệ Zalo</a>.
-               
-               {/* Chỉ hiện nút đổi Email nếu đã từng login và bị mismatch */}
-               {customer?.email && lastLoggedEmail && lastLoggedEmail !== customer.email.toLowerCase().trim() && (
-                 <div className="mt-6 pt-4 border-t border-gray-100">
-                    <p className="mb-2 italic text-[10px] text-red-500">Email vừa đăng nhập không khớp. Bạn muốn đổi sang Email này?</p>
-                    <p className="mb-3 text-[12px] font-black text-blue-900 bg-blue-50 py-2 rounded-xl">{lastLoggedEmail}</p>
-                    <button 
-                      disabled={isRequestingEmail}
-                      onClick={async () => {
-                         const existingEmail = (customer.email || "").toLowerCase().trim();
-                         setIsRequestingEmail(true);
-                         try {
-                           const result = await customerService.requestEmailChange(customer.customer_id, lastLoggedEmail!, (customer.token || token || ""));
-                           if (result && (result as any).success === false) {
-                              throw new Error((result as any).message || 'Unauthorized');
-                           }
-                           setToast("Gửi yêu cầu đổi Email thành công!");
-                           const msg = `Chào Admin, em là ${customer?.customer_name || ''}, em vừa gửi yêu cầu đổi Email đăng ký cho phác đồ của em (Mã HV: ${customerId}).\n- Email cũ: ${existingEmail}\n- Email mới: ${lastLoggedEmail}\nNhờ Admin duyệt giúp em ạ!`;
-                           window.open(`https://zalo.me/0966888609?text=${encodeURIComponent(msg)}`, '_blank');
-                           setAuthModal({isOpen: false, link: null});
-                         } catch(e: any) { 
-                           console.error("Email Change Error (Footer):", e);
-                           alert(`Gửi yêu cầu thất bại: ${e.message || 'Lỗi hệ thống'}. Vui lòng liên hệ trực tiếp qua Zalo!`);
-                         }
-                         finally { setIsRequestingEmail(false); }
                       }}
-                      className="bg-orange-500 text-white w-full py-3 rounded-full font-black shadow-lg hover:bg-orange-600 transition-all disabled:opacity-50 text-[11px] uppercase tracking-widest"
-                    >
-                      {isRequestingEmail ? 'Đang gửi...' : 'Gửi yêu cầu đổi Email'}
-                    </button>
-                 </div>
-               )}
-             </div>
+                      onError={() => {
+                        setInfoModal({isOpen: true, title: "Lỗi Kết Nối", message: "Kết nối tới máy chủ Google thất bại. Vui lòng thử lại!", type: "WARNING", color: "red"});
+                      }}
+                      theme="outline"
+                      shape="rectangular"
+                      size="large"
+                      text="continue_with"
+                      width="100%"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-gray-100">
+                  <div className="text-gray-600 text-[13px] font-medium leading-relaxed mb-4">
+                    <p>Hoặc bạn muốn đổi sang email này?</p>
+                    <p className="font-black text-orange-600 bg-orange-50 py-2 px-4 rounded-xl mt-1 break-all">{lastLoggedEmail}</p>
+                  </div>
+                  <button 
+                    disabled={isRequestingEmail}
+                    onClick={async () => {
+                      const existingEmail = (customer.email || "").toLowerCase().trim();
+                      setIsRequestingEmail(true);
+                      try {
+                        const result = await customerService.requestEmailChange(customer.customer_id, lastLoggedEmail!, (customer.token || token || ""));
+                        if (result && (result as any).success === false) {
+                          throw new Error((result as any).message || 'Unauthorized');
+                        }
+                        setToast("Gửi yêu cầu đổi Email thành công!");
+                        const msg = `Chào Admin, em là ${customer?.customer_name || ''}, em vừa gửi yêu cầu đổi Email đăng ký cho phác đồ của em (Mã HV: ${customerId}).\n- Email cũ: ${existingEmail}\n- Email mới: ${lastLoggedEmail}\nNhờ Admin duyệt giúp em ạ!`;
+                        window.open(`https://zalo.me/0966888609?text=${encodeURIComponent(msg)}`, '_blank');
+                        setAuthModal({isOpen: false, link: null});
+                      } catch(e: any) { 
+                        console.error("Email Change Error:", e);
+                        alert(`Gửi yêu cầu thất bại: ${e.message || 'Lỗi hệ thống'}. Vui lòng liên hệ trực tiếp qua Zalo!`);
+                      }
+                      finally { setIsRequestingEmail(false); }
+                    }}
+                    className="bg-orange-500 text-white w-full py-4 rounded-full font-black shadow-lg hover:bg-orange-600 transition-all disabled:opacity-50 text-[12px] uppercase tracking-widest flex items-center justify-center gap-2"
+                  >
+                    <span>👉</span> GỬI YÊU CẦU ĐỔI EMAIL
+                  </button>
+                </div>
+              </>
+            ) : (
+              /* ✅ TRƯỜNG HỢP XÁC THỰC BAN ĐẦU */
+              <>
+                <div className="mb-6">
+                  <h3 className="text-lg font-black text-[#1E3A8A] mb-2 uppercase tracking-tight">XÁC THỰC TÀI KHOẢN</h3>
+                  <p className="text-gray-600 text-[14px] font-bold">
+                    Nhấn “Tiếp tục” để truy cập phác đồ.
+                  </p>
+                </div>
+
+                <div className="flex flex-col items-center justify-center w-full min-h-[44px] mb-4">
+                  <div className="flex items-center gap-2 w-full">
+                    <span className="text-lg">👉</span>
+                    <GoogleLogin
+                      onSuccess={async (credentialResponse) => {
+                        const jwt = credentialResponse.credential;
+                        if (!jwt) return;
+                        const decoded = jwtDecode<{email: string}>(jwt);
+                        const loggedEmail = decoded.email.toLowerCase().trim();
+                        const existingEmail = (customer.email || "").toLowerCase().trim();
+                        
+                        if (!existingEmail) {
+                          // Giai đoạn Đăng ký ban đầu
+                          try {
+                            await customerService.updateCustomerEmailByToken(customer.customer_id, (customer.token || token || ""), loggedEmail);
+                            localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
+                            setIsVerified(true);
+                            setCustomer({ ...customer, email: loggedEmail });
+                            setAuthModal({isOpen: false, link: null});
+                            if (authModal.link) {
+                                if (authModal.link.includes('mediadelivery.net')) setPlayingVideo(authModal.link);
+                                else window.open(authModal.link, '_blank');
+                            }
+                          } catch (e) {
+                            console.error("Auto enrollment failed:", e);
+                            setInfoModal({isOpen: true, title: "Lỗi Hệ Thống", message: "Không thể tự động lưu Email. Vui lòng liên hệ Admin!", type: "WARNING", color: "red"});
+                          }
+                        } else if (loggedEmail === existingEmail) {
+                          localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
+                          setIsVerified(true);
+                          setAuthModal({isOpen: false, link: null});
+                          if (authModal.link) {
+                            if (authModal.link.includes('mediadelivery.net')) setPlayingVideo(authModal.link);
+                            else window.open(authModal.link, '_blank');
+                          }
+                        } else {
+                          setLastLoggedEmail(loggedEmail);
+                        }
+                      }}
+                      onError={() => {
+                        setInfoModal({isOpen: true, title: "Lỗi Kết Nối", message: "Kết nối tới máy chủ Google thất bại. Vui lòng thử lại!", type: "WARNING", color: "red"});
+                      }}
+                      theme="outline"
+                      shape="rectangular"
+                      size="large"
+                      text="continue_with"
+                      width="100%"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-gray-500 text-[12px] font-medium leading-relaxed mb-8">
+                  Mỗi học viên chỉ sử dụng 1 tài khoản Google cho 1 phác đồ
+                </p>
+
+                <div className="text-[11px] text-gray-400 font-medium text-center border-t border-gray-100 pt-6">
+                  Bạn cần hỗ trợ? <a href="https://zalo.me/0966888609" target="_blank" className="text-blue-600 hover:underline font-bold">Liên hệ Zalo</a>.
+                </div>
+              </>
+            )}
+
            </div>
          </div>
        )}

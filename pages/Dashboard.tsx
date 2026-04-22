@@ -281,20 +281,21 @@ export const Dashboard: React.FC<{
   const [draftEmailApproved, setDraftEmailApproved] = useState(false);
   const [isLoadingDevices, setIsLoadingDevices] = useState(false);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [handledCustomerIds, setHandledCustomerIds] = useState<Set<string>>(new Set());
+
 
   const fetchPending = async () => {
     try {
       const [devices, emails] = await Promise.all([
         customerService.getPendingDeviceRequests(),
         customerService.getPendingEmailRequests()
-      ]); customerService.getPendingEmailRequests();
+      ]);
       
       const combined = [
         ...devices.map(d => ({ ...d, type: 'device' })),
         ...emails.map(e => ({ ...e, type: 'email' }))
       ].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
-      setPendingRequests(combined);
+
     } catch (e) {
       console.error(e);
     }
@@ -1212,7 +1213,13 @@ export const Dashboard: React.FC<{
         maxWidth="max-w-xl"
       >
         <div className="flex flex-col gap-4">
-          {!detailCustomerId ? (
+          {(() => {
+            const detailCustomerReq = detailCustomerId ? pendingRequests.find(r => r.customer_id === detailCustomerId) : null;
+            const detailCustomerName = detailCustomerReq ? (detailCustomerReq.type === 'device' ? (detailCustomerReq.customers?.customer_name || 'Học viên ẩn') : (detailCustomerReq.customer_name || 'Học viên ẩn')) : 'Học viên ẩn';
+
+            return (
+              <>
+          { !detailCustomerId ? (
             // VIEW CHUNG: DANH SÁCH HỌC VIÊN CÓ YÊU CẦU
             <>
               {(() => {
@@ -1241,18 +1248,20 @@ export const Dashboard: React.FC<{
                   return acc;
                 }, {});
 
-                const studentGroups = Object.values(grouped).sort((a: any, b: any) => 
-                   new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime()
-                );
+                const studentGroups = Object.values(grouped)
+                  .filter((group: any) => !handledCustomerIds.has(group.customer_id))
+                  .sort((a: any, b: any) => new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime());
 
                 if (studentGroups.length === 0) {
                   return <div className="py-10 text-center text-gray-400 italic text-sm">Hiện không có yêu cầu nào chờ duyệt.</div>;
                 }
 
-                return studentGroups.map((group: any) => (
+                return studentGroups.map((group: any) => {
+                  const isRead = viewedCustomerIds.has(group.customer_id);
+                  return (
                   <div 
                     key={group.customer_id}
-                    className="p-4 bg-white border border-blue-50 rounded-[2rem] flex items-center justify-between hover:bg-blue-50/50 transition-all cursor-pointer shadow-sm group"
+                    className={`p-4 border rounded-[2rem] flex items-center justify-between hover:bg-blue-50/70 transition-all cursor-pointer shadow-sm group ${isRead ? 'bg-white border-blue-50 opacity-80' : 'bg-blue-50 border-blue-200'}`}
                     onClick={async () => {
                       setViewedCustomerIds(prev => new Set(prev).add(group.customer_id));
                       setDetailCustomerId(group.customer_id);
@@ -1269,10 +1278,10 @@ export const Dashboard: React.FC<{
                       }
                     }}
                   >
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-2">
                        <div className="flex items-center gap-3">
-                          <span className="font-black text-blue-900 uppercase text-sm group-hover:text-blue-600">{group.name}</span>
-                          <span className="text-[9px] font-bold text-gray-400 font-mono">{formatDDMMYYYY(group.lastDate)}</span>
+                          <span className={`uppercase group-hover:text-blue-600 ${isRead ? 'font-bold text-gray-700 text-[13px]' : 'font-black text-blue-900 text-[14px]'}`}>{group.name}</span>
+                          <span className="text-[10px] font-bold text-gray-400 font-mono mt-0.5">{formatDDMMYYYY(group.lastDate)}</span>
                        </div>
                       <div className="flex items-center gap-2">
                         {group.deviceCount > 0 && (
@@ -1287,20 +1296,27 @@ export const Dashboard: React.FC<{
                         )}
                       </div>
                     </div>
-                    <ChevronLeft size={18} className="text-blue-300 rotate-180 group-hover:text-blue-600" />
+                    <ChevronLeft size={18} className={`${isRead ? 'text-gray-300' : 'text-blue-400'} rotate-180 group-hover:text-blue-600`} />
                   </div>
-                ));
+                  );
+                });
               })()}
             </>
           ) : (
             // VIEW CHI TIẾT: DANH SÁCH THIẾT BỊ & EMAIL CỦA HỌC VIÊN ĐÓ
             <div className="flex flex-col gap-6">
-              <button 
-                onClick={() => setDetailCustomerId(null)}
-                className="flex items-center gap-1 text-[10px] font-black text-blue-500 uppercase hover:text-blue-700 w-fit"
-              >
-                <ChevronLeft size={14} /> Quay lại danh sách
-              </button>
+              <div className="flex flex-col gap-4">
+                <button 
+                  onClick={() => setDetailCustomerId(null)}
+                  className="flex items-center gap-1 text-[10px] font-black text-blue-500 uppercase hover:text-blue-700 w-fit"
+                >
+                  <ChevronLeft size={14} /> Quay lại danh sách
+                </button>
+                <div className="flex items-center gap-2 px-1">
+                  <User size={18} className="text-blue-500" />
+                  <span className="text-[15px] font-black text-blue-900 uppercase">{detailCustomerName}</span>
+                </div>
+              </div>
 
               {(() => {
                 const hasEmailReq = pendingRequests.some(r => r.customer_id === detailCustomerId && r.type === 'email');
@@ -1360,6 +1376,7 @@ export const Dashboard: React.FC<{
                       setToast(`Đã lưu ${successCount} mục, thất bại ${failCount} mục.`);
                     }
                     
+                    setHandledCustomerIds(prev => new Set(prev).add(detailCustomerId as string));
                     setDetailCustomerId(null);
                     fetchPending();
                   } catch (e) {
@@ -1487,6 +1504,9 @@ export const Dashboard: React.FC<{
               })()}
             </div>
           )}
+              </>
+            );
+          })()}
         </div>
       </Modal>
     </Layout>
