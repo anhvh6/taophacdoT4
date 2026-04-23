@@ -55,7 +55,27 @@ class SupabaseDatabase {
   }
 
   async saveProducts(prods: Product[]) {
-    const { error } = await supabase.from('products').upsert(prods, { onConflict: 'id_sp' });
+    // Remove deleted products
+    const { data: existingProds } = await supabase.from('products').select('id_sp');
+    const existingIds = (existingProds || []).map(p => p.id_sp);
+    const newIds = prods.map(p => p.id_sp);
+    const toDelete = existingIds.filter(id => !newIds.includes(id));
+    
+    if (toDelete.length > 0) {
+      await supabase.from('products').delete().in('id_sp', toDelete);
+    }
+
+    if (prods.length === 0) return true;
+
+    const cleanProds = prods.map(p => ({
+      id_sp: p.id_sp,
+      ten_sp: p.ten_sp || '',
+      gia_nhap: p.gia_nhap || 0,
+      gia_ban: p.gia_ban || 0,
+      trang_thai: p.trang_thai || 0
+    }));
+
+    const { error } = await supabase.from('products').upsert(cleanProds, { onConflict: 'id_sp' });
     if (error) throw error;
     return true;
   }
