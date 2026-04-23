@@ -400,7 +400,7 @@ export const customerService = {
     // Try to get from Supabase
     const { data, error } = await supabase
       .from('customers')
-      .select('customer_id, customer_name, pending_email, updated_at')
+      .select('customer_id, customer_name, email, pending_email, updated_at')
       .not('pending_email', 'is', null)
       .neq('pending_email', '');
     
@@ -412,10 +412,18 @@ export const customerService = {
         .map(c => ({
           customer_id: c.customer_id,
           customer_name: c.customer_name,
+          email: c.email,
           pending_email: c.pending_email,
           created_at: c.updated_at
         }));
     }
-    return data || [];
+    
+    return (data || []).map((c: any) => ({
+       customer_id: c.customer_id,
+       customer_name: c.customer_name,
+       email: c.email,
+       pending_email: c.pending_email,
+       created_at: c.updated_at
+    }));
   }
 };
