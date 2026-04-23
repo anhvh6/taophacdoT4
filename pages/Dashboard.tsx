@@ -1251,7 +1251,12 @@ export const Dashboard: React.FC<{
 
                 const studentGroups = Object.values(grouped)
                   .filter((group: any) => !handledCustomerIds.has(group.customer_id))
-                  .sort((a: any, b: any) => new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime());
+                  .sort((a: any, b: any) => {
+                    const aRead = viewedCustomerIds.has(a.customer_id) ? 1 : 0;
+                    const bRead = viewedCustomerIds.has(b.customer_id) ? 1 : 0;
+                    if (aRead !== bRead) return aRead - bRead;
+                    return new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime();
+                  });
 
                 if (studentGroups.length === 0) {
                   return <div className="py-10 text-center text-gray-400 italic text-sm">Hiện không có yêu cầu nào chờ duyệt.</div>;
@@ -1271,7 +1276,7 @@ export const Dashboard: React.FC<{
                       setIsLoadingDevices(true);
                       try {
                         const devices = await customerService.getDevices(group.customer_id);
-                        setCustomerDevices(devices);
+                        setCustomerDevices(devices.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
                       } catch (e) {
                         console.error(e);
                       } finally {
@@ -1399,7 +1404,9 @@ export const Dashboard: React.FC<{
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex flex-col min-w-0">
                               <span className="text-[10px] font-bold text-gray-400 uppercase">Email hiện tại</span>
-                              <span className="text-[11px] font-bold text-blue-900 truncate">{emailReq.email || '---'}</span>
+                              <span className="text-[11px] font-bold text-blue-900 truncate">
+                                {customers.find(c => c.customer_id === detailCustomerId)?.email || '---'}
+                              </span>
                             </div>
                             <div className="text-orange-300">→</div>
                             <div className="flex flex-col min-w-0 flex-1">

@@ -54,6 +54,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
   const refreshInFlight = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
+  const hasScrolledRef = useRef(false);
 
   const fetchData = async (useCache = true, forceRefresh = false) => {
     // Nếu không có token và không có onNavigate (không phải admin), từ chối ngay
@@ -395,17 +396,18 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
   // Cuộn đến ngày đang học sau khi render xong
   useEffect(() => {
-    if (!loading && customer) {
+    if (!loading && customer && !hasScrolledRef.current) {
       // Giảm delay xuống để cảm giác nhanh hơn
       const timer = setTimeout(() => {
         const activeCard = document.querySelector('.day-card-active');
         if (activeCard) {
           activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          hasScrolledRef.current = true;
         }
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [loading, isExpanded]);
+  }, [loading, isExpanded, customer]);
 
   const triggerBackgroundRefresh = async (currentTask?: ExerciseTask) => {
     if (refreshInFlight.current) return;
