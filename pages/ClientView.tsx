@@ -1035,11 +1035,14 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         if (loggedEmail === existingEmail) {
                           localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
                           setIsVerified(true);
-                          setAuthModal({isOpen: false, link: null});
-                          if (authModal.link) {
-                            if (authModal.link.includes('mediadelivery.net')) setPlayingVideo(authModal.link);
-                            else window.open(authModal.link, '_blank');
-                          }
+                          setLastLoggedEmail(null);
+                          setAuthModal(prev => {
+                            if (prev.link) {
+                              if (prev.link.includes('mediadelivery.net')) setPlayingVideo(prev.link);
+                              else window.open(prev.link, '_blank');
+                            }
+                            return {isOpen: false, link: null};
+                          });
                         } else {
                           setLastLoggedEmail(loggedEmail);
                         }
@@ -1113,25 +1116,31 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                           try {
                             await customerService.updateCustomerEmailByToken(customer.customer_id, (customer.token || token || ""), loggedEmail);
                             localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
-                            setIsVerified(true);
-                            setCustomer({ ...customer, email: loggedEmail });
-                            setAuthModal({isOpen: false, link: null});
-                            if (authModal.link) {
-                                if (authModal.link.includes('mediadelivery.net')) setPlayingVideo(authModal.link);
-                                else window.open(authModal.link, '_blank');
-                            }
-                          } catch (e) {
-                            console.error("Auto enrollment failed:", e);
-                            setInfoModal({isOpen: true, title: "Lỗi Hệ Thống", message: "Không thể tự động lưu Email. Vui lòng liên hệ Admin!", type: "WARNING", color: "red"});
-                          }
-                        } else if (loggedEmail === existingEmail) {
-                          localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
                           setIsVerified(true);
-                          setAuthModal({isOpen: false, link: null});
-                          if (authModal.link) {
-                            if (authModal.link.includes('mediadelivery.net')) setPlayingVideo(authModal.link);
-                            else window.open(authModal.link, '_blank');
+                          setCustomer({ ...customer, email: loggedEmail });
+                          setLastLoggedEmail(null);
+                          setAuthModal(prev => {
+                            if (prev.link) {
+                                if (prev.link.includes('mediadelivery.net')) setPlayingVideo(prev.link);
+                                else window.open(prev.link, '_blank');
+                            }
+                            return {isOpen: false, link: null};
+                          });
+                        } catch (e) {
+                          console.error("Auto enrollment failed:", e);
+                          setInfoModal({isOpen: true, title: "Lỗi Hệ Thống", message: "Không thể tự động lưu Email. Vui lòng liên hệ Admin!", type: "WARNING", color: "red"});
+                        }
+                      } else if (loggedEmail === existingEmail) {
+                        localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
+                        setIsVerified(true);
+                        setLastLoggedEmail(null);
+                        setAuthModal(prev => {
+                          if (prev.link) {
+                            if (prev.link.includes('mediadelivery.net')) setPlayingVideo(prev.link);
+                            else window.open(prev.link, '_blank');
                           }
+                          return {isOpen: false, link: null};
+                        });
                         } else {
                           setLastLoggedEmail(loggedEmail);
                         }
