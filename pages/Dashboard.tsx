@@ -296,6 +296,7 @@ export const Dashboard: React.FC<{
         ...emails.map(e => ({ ...e, type: 'email' }))
       ].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+      setPendingRequests(combined);
     } catch (e) {
       console.error(e);
     }
