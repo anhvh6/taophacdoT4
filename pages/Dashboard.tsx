@@ -723,8 +723,9 @@ export const Dashboard: React.FC<{
       title={
         <div className="flex items-center gap-2">
           <a 
-            href="#" 
-            onClick={(e) => { e.preventDefault(); onRefresh(); }}
+            href="https://docs.google.com/spreadsheets/d/193-BwKDTSLZdgwfQSo-0N3ueREo0HeJ2Ta9gLbI3oc8/edit?usp=sharing" 
+            target="_blank"
+            rel="noopener noreferrer"
             className="hover:text-blue-600 transition-colors"
           >
             MEGA PHƯƠNG ADMIN
