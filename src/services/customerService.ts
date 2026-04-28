@@ -425,5 +425,20 @@ export const customerService = {
        pending_email: c.pending_email,
        created_at: c.updated_at
     }));
+  },
+
+  async verifySelfApprovalCode(payload: { customer_id: string; type: "email" | "device"; code: string; old_email?: string; new_email?: string; device_id?: string; device_name?: string; token: string }) {
+    try {
+      const response = await fetch('/api/self_approval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      return data;
+    } catch (e: any) {
+      console.error("verifySelfApprovalCode Error:", e);
+      return { success: false, message: e.message || "Lỗi kết nối mạng" };
+    }
   }
 };

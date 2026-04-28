@@ -201,10 +201,10 @@ export const PlanEditor: React.FC<{
   
   const [customer, setCustomer] = useState<Partial<Customer>>({
     customer_name: draftCustomer?.customer_name || "",
-    app_title: "PHÁC ĐỒ 30 NGÀY THAY ĐỔI KHUÔN MẶT",
+    app_title: "PHÁC ĐỒ 65 NGÀY THAY ĐỔI KHUÔN MẶT",
     app_slogan: "Hành trình đánh thức vẻ đẹp tự nhiên, gìn giữ thanh xuân bằng sự hiểu biết và tình yêu bản thân.",
     start_date: toInputDateString(new Date()),
-    duration_days: draftCustomer?.duration_days || 30,
+    duration_days: draftCustomer?.duration_days || 65,
     video_date: null,
     sidebar_blocks_json: [...DEFAULT_SIDEBAR_BLOCKS],
     note: draftCustomer?.note || "",
@@ -458,7 +458,7 @@ export const PlanEditor: React.FC<{
           ...draftCustomer,
           trang_thai: 0,
           trang_thai_gan: "0",
-          duration_days: draftCustomer?.duration_days || 30,
+          duration_days: draftCustomer?.duration_days || 65,
           san_pham: draftCustomer?.san_pham || defaultProducts,
           gia_tien: draftCustomer?.gia_tien || defaultTotal
         };

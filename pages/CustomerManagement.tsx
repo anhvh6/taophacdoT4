@@ -162,7 +162,7 @@ export const CustomerManagement: React.FC<{
       trang_thai_gan: 'Chưa gán',
       trang_thai: 0,
       start_date: toISODateKey(new Date()),
-      duration_days: 30,
+      duration_days: 65,
       san_pham: defaultProducts,
       gia_tien: defaultTotal,
       status: CustomerStatus.ACTIVE,

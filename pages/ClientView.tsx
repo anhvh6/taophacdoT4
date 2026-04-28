@@ -4,6 +4,7 @@ import { Toast } from '../components/UI';
 import { customerService, generateCustomerLink } from '../src/services/customerService';
 import { planService } from '../src/services/planService';
 import { customPlanService } from '../src/services/customPlanService';
+import { supabase } from '../src/lib/supabaseClient';
 import { Customer, ExerciseTask, CustomerStatus, ExerciseType } from '../types';
 import { toVnZeroHour, formatDDMMYYYY, getDiffDays, addDays, parseVNDate } from '../utils/date';
 import { ImmersiveChat } from '../components/ImmersiveChat';
@@ -51,6 +52,11 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const [deviceModal, setDeviceModal] = useState<{ isOpen: boolean, message?: string } | null>(null);
   const [isRequestingApproval, setIsRequestingApproval] = useState(false);
   const [isRequestingEmail, setIsRequestingEmail] = useState(false);
+
+  // Self Approval State
+  const [selfApprovalCode, setSelfApprovalCode] = useState('');
+  const [selfApprovalLoading, setSelfApprovalLoading] = useState(false);
+  const [selfApprovalError, setSelfApprovalError] = useState('');
 
   const refreshInFlight = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -363,8 +369,53 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       }
     }
 
-    if (link.includes('mediadelivery.net')) {
-      setPlayingVideo(link);
+    // Helper functions for Bunny Stream
+    function isExternalUrl(value: string) {
+       return typeof value === "string" && /^https?:\/\//i.test(value.trim());
+    }
+
+    function isBunnyVideoId(value: string) {
+       return typeof value === "string" && value.trim() !== "" && !/^https?:\/\//i.test(value.trim());
+    }
+
+    const trimmedLink = link.trim();
+
+    if (isBunnyVideoId(trimmedLink)) {
+        try {
+            const { data, error } = await supabase.functions.invoke('get-bunny-video-token', {
+                body: { video_id: trimmedLink }
+            });
+
+            if (error) {
+              throw new Error(error.message);
+            }
+
+            if (data?.error) {
+                setInfoModal({
+                    isOpen: true,
+                    title: "THÔNG BÁO",
+                    message: data.error,
+                    type: "WARNING",
+                    color: "red"
+                });
+                return;
+            }
+
+            if (data?.signed_embed_url) {
+                setPlayingVideo(data.signed_embed_url);
+            }
+        } catch (err: any) {
+            console.error("Bunny API Error:", err);
+            setInfoModal({
+                isOpen: true,
+                title: "Lỗi phát video",
+                message: "Tài khoản của bạn đã hết thời hạn xem video này. Vui lòng liên hệ quản trị viên để gia hạn.",
+                type: "WARNING",
+                color: "red"
+            });
+        }
+    } else if (trimmedLink.includes('mediadelivery.net')) {
+      setPlayingVideo(trimmedLink);
     } else {
       window.open(link, '_blank');
     }
@@ -739,7 +790,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           >
             <RefreshCw size={16} /> Thử lại ngay
           </button>
-          <a href="https://zalo.me/0966888609" target="_blank" className="bg-[#0068ff] text-white font-bold py-4 px-12 rounded-full shadow-lg uppercase text-[12px] tracking-widest transition-all active:scale-95 text-center">
+          <a href="https://zalo.me/0378243131" target="_blank" className="bg-[#0068ff] text-white font-bold py-4 px-12 rounded-full shadow-lg uppercase text-[12px] tracking-widest transition-all active:scale-95 text-center">
             💬 Hỗ trợ qua Zalo
           </a>
         </div>
@@ -785,7 +836,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
               ? "Tài khoản hiện đang tạm khóa, vui lòng liên hệ với MeGa Phương để được hỗ trợ nhé!" 
               : `Phác đồ cá nhân của bạn đã hết thời hạn sử dụng. Hãy liên hệ với MeGa Phương để gia hạn và tiếp tục hành trình trẻ hóa nhé! (Ngày hết hạn: ${formatDDMMYYYY(customer?.end_date)})`}
           </p>
-          <a href="https://zalo.me/0966888609" target="_blank" className="bg-[#0068ff] text-white font-bold py-4 px-10 rounded-full shadow-lg uppercase text-[12px] tracking-widest">
+          <a href="https://zalo.me/0378243131" target="_blank" className="bg-[#0068ff] text-white font-bold py-4 px-10 rounded-full shadow-lg uppercase text-[12px] tracking-widest">
             💬 Liên hệ qua Zalo
           </a>
         </div>
@@ -1004,9 +1055,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       {/* 🚀 MODAL XÁC THỰC EMAIL 1 LẦN DUY NHẤT */}
       {authModal.isOpen && (
         <div className="fixed inset-0 z-[8000] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setAuthModal({isOpen: false, link: null})}></div>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setAuthModal({isOpen: false, link: null}); setSelfApprovalCode(''); setSelfApprovalError(''); }}></div>
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 relative z-10 shadow-2xl text-center">
-            <button onClick={() => setAuthModal({isOpen: false, link: null})} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-800"><X size={20}/></button>
+            <button onClick={() => { setAuthModal({isOpen: false, link: null}); setSelfApprovalCode(''); setSelfApprovalError(''); }} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-800"><X size={20}/></button>
             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6"><User size={32}/></div>
             
             {customer?.email && lastLoggedEmail && lastLoggedEmail !== customer.email.toLowerCase().trim() ? (
@@ -1078,8 +1129,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         }
                         setToast("Gửi yêu cầu đổi Email thành công!");
                         const msg = `Chào Admin, em là ${customer?.customer_name || ''}, em vừa gửi yêu cầu đổi Email đăng ký cho phác đồ của em (Mã HV: ${customerId}).\n- Email cũ: ${existingEmail}\n- Email mới: ${lastLoggedEmail}\nNhờ Admin duyệt giúp em ạ!`;
-                        window.open(`https://zalo.me/0966888609?text=${encodeURIComponent(msg)}`, '_blank');
+                        window.open(`https://zalo.me/0378243131?text=${encodeURIComponent(msg)}`, '_blank');
                         setAuthModal({isOpen: false, link: null});
+                        setSelfApprovalCode(''); setSelfApprovalError('');
                       } catch(e: any) { 
                         console.error("Email Change Error:", e);
                         alert(`Gửi yêu cầu thất bại: ${e.message || 'Lỗi hệ thống'}. Vui lòng liên hệ trực tiếp qua Zalo!`);
@@ -1090,6 +1142,66 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                   >
                     <span>👉</span> GỬI YÊU CẦU ĐỔI EMAIL
                   </button>
+
+                  {/* THÊM TỰ PHÊ DUYỆT BẰNG MÃ XÁC THỰC - EMAIL */}
+                  <div className="mt-4 pt-4 border-t border-gray-100/50">
+                    <p className="text-[12px] font-bold text-gray-700 mb-2">Nhập mã xác thực</p>
+                    <div className="flex gap-2">
+                       <input 
+                         type="text" 
+                         value={selfApprovalCode}
+                         onChange={(e) => setSelfApprovalCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                         placeholder="XXXX"
+                         className="flex-1 bg-gray-50 border border-gray-200 text-center text-lg font-bold rounded-xl tracking-[0.2em] outline-none focus:border-blue-500 focus:bg-blue-50 transition-all text-[#1E3A8A]"
+                         disabled={selfApprovalLoading}
+                       />
+                       <button
+                         disabled={selfApprovalCode.length < 4 || selfApprovalLoading}
+                         onClick={async () => {
+                            setSelfApprovalLoading(true);
+                            setSelfApprovalError('');
+                            const res = await customerService.verifySelfApprovalCode({
+                               customer_id: customer.customer_id,
+                               type: 'email',
+                               code: selfApprovalCode,
+                               old_email: (customer.email || "").toLowerCase().trim(),
+                               new_email: lastLoggedEmail!,
+                               token: (customer.token || token || "")
+                            });
+                            setSelfApprovalLoading(false);
+                            if (res.success) {
+                               setToast('Duyệt email thành công!');
+                               localStorage.setItem(`verified_email_${customerId}`, lastLoggedEmail!);
+                               setIsVerified(true);
+                               setCustomer({ ...customer, email: lastLoggedEmail! });
+                               setLastLoggedEmail(null);
+                               setAuthModal(prev => {
+                                  if (prev.link) {
+                                     if (prev.link.includes('mediadelivery.net')) setPlayingVideo(prev.link);
+                                     else window.open(prev.link, '_blank');
+                                  }
+                                  return {isOpen: false, link: null};
+                               });
+                               setSelfApprovalCode(''); setSelfApprovalError('');
+                            } else {
+                               setSelfApprovalError(res.message || 'Mã xác thực của bạn không đúng, hãy liên hệ để được trợ giúp.');
+                               setSelfApprovalCode('');
+                            }
+                         }}
+                         className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl uppercase tracking-wider text-xs shadow-md disabled:bg-blue-200 transition-all hover:bg-blue-700 active:scale-95"
+                       >
+                         {selfApprovalLoading ? '...' : 'Gửi'}
+                       </button>
+                    </div>
+                    {selfApprovalError && (
+                      <div className="mt-3 flex flex-col gap-2">
+                         <p className="text-red-500 text-[11px] font-medium leading-tight">{selfApprovalError}</p>
+                         <a href="https://zalo.me/0378243131" target="_blank" className="mx-auto mt-1 bg-[#0068ff] text-white text-[11px] font-bold py-2 px-6 rounded-lg flex items-center justify-center shadow-sm w-max">
+                            💬 Liên hệ Zalo
+                         </a>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </>
             ) : (
@@ -1164,7 +1276,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                 </p>
 
                 <div className="text-[11px] text-gray-400 font-medium text-center border-t border-gray-100 pt-6">
-                  Bạn cần hỗ trợ? <a href="https://zalo.me/0966888609" target="_blank" className="text-blue-600 hover:underline font-bold">Liên hệ Zalo</a>.
+                  Bạn cần hỗ trợ? <a href="https://zalo.me/0378243131" target="_blank" className="text-blue-600 hover:underline font-bold">Liên hệ Zalo</a>.
                 </div>
               </>
             )}
@@ -1176,7 +1288,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       {/* 🚀 MÀN HÌNH CHẶN THIẾT BỊ (Device Limit) */}
       {deviceModal?.isOpen && (
         <div className="fixed inset-0 z-[8500] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDeviceModal(null)}></div>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setDeviceModal(null); setSelfApprovalCode(''); setSelfApprovalError(''); }}></div>
           <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-8 relative z-10 shadow-2xl text-center">
             <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">🚫</div>
             <h3 className="text-xl font-black mb-3 text-[#1E3A8A] uppercase italic">Thiết bị không được phép</h3>
@@ -1187,7 +1299,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             
             <div className="flex gap-3">
                <button 
-                  onClick={() => setDeviceModal(null)} 
+                  onClick={() => { setDeviceModal(null); setSelfApprovalCode(''); setSelfApprovalError(''); }} 
                   className="flex-1 py-4 bg-gray-100 text-gray-600 font-bold rounded-full uppercase text-xs tracking-widest shadow-lg transition-all active:scale-95"
                >
                  Đóng
@@ -1201,7 +1313,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                           await customerService.requestDeviceApproval(customerId, token, deviceId, deviceName);
                           // Mở Zalo với tin nhắn mẫu giúp Admin dễ duyệt
                           const msg = `Chào Admin, em là ${customer?.customer_name || ''}, em vừa gửi yêu cầu duyệt thiết bị mới cho phác đồ của em (Mã HV: ${customerId}). Nhờ Admin duyệt giúp em ạ!`;
-                          window.open(`https://zalo.me/0966888609?text=${encodeURIComponent(msg)}`, '_blank');
+                          window.open(`https://zalo.me/0378243131?text=${encodeURIComponent(msg)}`, '_blank');
                        } catch(e) { console.error(e); }
                        finally { setIsRequestingApproval(false); }
                     }
@@ -1212,6 +1324,60 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                  {isRequestingApproval ? 'Đang gửi...' : 'Liên hệ'}
                </button>
             </div>
+
+            {/* THÊM TỰ PHÊ DUYỆT BẰNG MÃ XÁC THỰC - THIẾT BỊ */}
+            <div className="mt-5 pt-5 border-t border-gray-100">
+               <p className="text-[12px] font-bold text-gray-700 mb-2">Nhập mã xác thực</p>
+               <div className="flex gap-2">
+                  <input 
+                     type="text" 
+                     value={selfApprovalCode}
+                     onChange={(e) => setSelfApprovalCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                     placeholder="XXXX"
+                     className="flex-1 bg-gray-50 border border-gray-200 text-center text-lg font-bold rounded-xl tracking-[0.2em] outline-none focus:border-blue-500 focus:bg-blue-50 transition-all text-[#1E3A8A]"
+                     disabled={selfApprovalLoading}
+                  />
+                  <button
+                     disabled={selfApprovalCode.length < 4 || selfApprovalLoading}
+                     onClick={async () => {
+                        if (!customerId || !token || !deviceId) return;
+                        setSelfApprovalLoading(true);
+                        setSelfApprovalError('');
+                        const deviceName = `${navigator.platform} - ${window.screen.width}x${window.screen.height}`;
+                        const res = await customerService.verifySelfApprovalCode({
+                           customer_id: customerId,
+                           type: 'device',
+                           code: selfApprovalCode,
+                           device_id: deviceId,
+                           device_name: deviceName,
+                           token: token
+                        });
+                        setSelfApprovalLoading(false);
+                        if (res.success) {
+                           setToast('Duyệt thiết bị thành công!');
+                           setDeviceAuthorized(true);
+                           setDeviceModal(null);
+                           setSelfApprovalCode(''); setSelfApprovalError('');
+                        } else {
+                           setSelfApprovalError(res.message || 'Mã xác thực của bạn không đúng, hãy liên hệ để được trợ giúp.');
+                           setSelfApprovalCode('');
+                        }
+                     }}
+                     className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl uppercase tracking-wider text-xs shadow-md disabled:bg-blue-200 transition-all hover:bg-blue-700 active:scale-95"
+                  >
+                     {selfApprovalLoading ? '...' : 'Gửi'}
+                  </button>
+               </div>
+               {selfApprovalError && (
+                 <div className="mt-3 flex flex-col gap-2">
+                    <p className="text-red-500 text-[11px] font-medium leading-tight">{selfApprovalError}</p>
+                    <a href="https://zalo.me/0378243131" target="_blank" className="mx-auto mt-1 bg-[#0068ff] text-white text-[11px] font-bold py-2 px-6 rounded-lg flex items-center justify-center shadow-sm w-max">
+                       💬 Liên hệ Zalo
+                    </a>
+                 </div>
+               )}
+            </div>
+
           </div>
         </div>
       )}
@@ -1219,12 +1385,22 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       {/* 🚀 THE BUNNY FULLSCREEN VIDEO MODAL */}
       {playingVideo && (
          <div className="fixed inset-0 z-[9000] bg-black flex flex-col animate-in fade-in duration-300">
-           <div className="absolute top-6 right-6 z-10">
+           <div className="absolute top-6 right-6 z-10 flex gap-4">
+             <button onClick={() => {
+                // Determine if it was a bunny link by finding it in tasks
+                const task = tasks.find(t => playingVideo.includes(t.link) || t.link === playingVideo);
+                if (task) handlePlayVideo(task.link);
+                else {
+                  // Fallback for direct playing
+                  setPlayingVideo(null);
+                  setTimeout(() => handlePlayVideo(playingVideo), 100);
+                }
+             }} className="bg-blue-600 hover:bg-blue-700 font-bold px-4 py-2 rounded-full text-white shadow-xl flex items-center gap-2">🔄 Tải lại video</button>
              <button onClick={() => setPlayingVideo(null)} className="bg-white/20 hover:bg-white/40 p-4 rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-xl"><X size={20}/></button>
            </div>
            <div className="flex-1 flex items-center justify-center p-0 md:p-10 w-full h-full">
               <iframe 
-                 src={playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/')}
+                 src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
                  className="w-full h-full max-w-[1400px] mx-auto md:rounded-[2rem] shadow-2xl border-none outline-none bg-black"
                  loading="lazy" 
                  allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
@@ -1234,7 +1410,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
          </div>
       )}
       
-      <a href="https://zalo.me/0966888609" target="_blank" className="fixed bottom-6 right-6 w-14 h-14 bg-[#0068ff] rounded-full flex items-center justify-center shadow-2xl z-[5000] border-2 border-white"><img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg" alt="Zalo" className="w-8 h-8" /></a>
+      <a href="https://zalo.me/0378243131" target="_blank" className="fixed bottom-6 right-6 w-14 h-14 bg-[#0068ff] rounded-full flex items-center justify-center shadow-2xl z-[5000] border-2 border-white"><img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg" alt="Zalo" className="w-8 h-8" /></a>
       
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
