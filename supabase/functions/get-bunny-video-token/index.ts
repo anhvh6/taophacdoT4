@@ -1,7 +1,5 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
-import { encodeHex } from "https://deno.land/std@0.168.0/encoding/hex.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,58 +7,44 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+async function sha256(message: string) {
+  const msgUint8 = new TextEncoder().encode(message)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 serve(async (req) => {
-  // Handle CORS options
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') || '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
     )
 
-    const { video_id, task_id, customer_id, token } = await req.json()
+    const body = await req.json()
+    const { video_id, customer_id, token, task_id } = body
 
     if (!video_id) {
-      return new Response(JSON.stringify({ error: 'video_id is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      return new Response(JSON.stringify({ error: 'Thiếu video_id' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    // Xác thực user (Hỗ trợ cả Admin qua JWT và Học viên qua customer_id + token)
-    let authUser = null;
-    let isStudentValid = false;
+    let hasAccess = false;
     let end_date = null;
     let status = null;
 
-    // Admin: Xác thực thông qua Bearer token
     const authHeader = req.headers.get('Authorization');
     if (authHeader && authHeader.startsWith('Bearer ')) {
-       const { data: { user } } = await supabaseClient.auth.getUser();
-       if (user) {
-         authUser = user;
-       }
+       const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
+       if (user) hasAccess = true;
     }
 
-    // Client/Student: Xác thực thông qua customer_id và token
-    // Để truy vấn không bị chặn bởi RLS, dùng service_role key
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
-    if (!authUser) {
-       if (!customer_id || !token) {
-           return new Response(JSON.stringify({ error: 'Unauthorized: Missing credentials' }), {
-               status: 401,
-               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-           });
-       }
-
+    if (!hasAccess && customer_id && token) {
        const { data: customer } = await supabaseAdmin
            .from('customers')
            .select('end_date, status')
@@ -68,84 +52,56 @@ serve(async (req) => {
            .eq('token', token)
            .maybeSingle();
 
-       if (!customer) {
-           return new Response(JSON.stringify({ error: 'Tài khoản không hợp lệ hoặc sai Token' }), {
-               status: 403,
-               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-           });
+       if (customer) {
+          hasAccess = true;
+          end_date = customer.end_date;
+          status = customer.status;
        }
-       
-       isStudentValid = true;
-       end_date = customer.end_date;
-       status = customer.status;
-    } else {
-       // Nếu là admin, có thể cho vượt quyền hoặc kiểm tra nếu cần (ở đây mặc định Admin đc xem)
-       isStudentValid = true;
-       // Optional: you can query customers by auth_user_id if you want Admin to have expiration as well.
     }
 
-    if (isStudentValid && !authUser) {
-        // Kiểm tra hạn dùng
+    if (!hasAccess) {
+       return new Response(JSON.stringify({ error: 'Truy cập không hợp lệ hoặc sai Token' }), {
+         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+       })
+    }
+
+    if (end_date || status) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        let isExpired = false;
-        
-        if (end_date) {
-            const end = new Date(end_date);
-            if (today > end) isExpired = true;
-        }
-        if (status === 'DELETED') isExpired = true;
-        
-        if (isExpired) {
-           return new Response(JSON.stringify({ error: 'Tài khoản đã hết thời hạn xem video này' }), {
-              status: 403,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-           });
+        if (status === 'DELETED' || (end_date && today > new Date(end_date))) {
+          return new Response(JSON.stringify({ error: 'Tài khoản đã hết thời hạn xem video này' }), {
+            status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          })
         }
     }
 
-    // 5. Tạo Bunny token theo công thức Bunny Stream Embed Token Authentication
-    const BUNNY_LIBRARY_ID = Deno.env.get('BUNNY_LIBRARY_ID') ?? '644769';
-    const BUNNY_STREAM_TOKEN_AUTH_KEY = Deno.env.get('BUNNY_STREAM_TOKEN_AUTH_KEY') ?? '';
-
-    // expires = current unix timestamp + 300 giây
+    const libraryId = Deno.env.get('BUNNY_LIBRARY_ID') || '644769';
+    const securityKey = Deno.env.get('BUNNY_STREAM_TOKEN_AUTH_KEY') || '';
     const expires = Math.floor(Date.now() / 1000) + 300;
-
-    // token = SHA256(BUNNY_STREAM_TOKEN_AUTH_KEY + video_id + expires)
-    const textToHash = `${BUNNY_STREAM_TOKEN_AUTH_KEY}${video_id}${expires}`;
     
-    const msgUint8 = new TextEncoder().encode(textToHash);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
-    const tokenStr = encodeHex(hashBuffer);
+    const tokenStr = await sha256(securityKey + video_id + expires);
+    const signed_embed_url = `https://iframe.mediadelivery.net/embed/${libraryId}/${video_id}?token=${tokenStr}&expires=${expires}&autoplay=false&responsive=true`;
 
-    const signed_embed_url = `https://iframe.mediadelivery.net/embed/${BUNNY_LIBRARY_ID}/${video_id}?token=${tokenStr}&expires=${expires}&autoplay=false&responsive=true`;
-
-    // 6. Ghi log
-    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || '';
-    const userAgent = req.headers.get('user-agent') || '';
-
-    // Insert log
-    const { error: logError } = await supabaseAdmin.from('video_view_logs').insert({
-        user_id: authUser ? authUser.id : null,
-        task_id: task_id || null,
-        bunny_video_id: video_id,
-        ip: ip,
-        user_agent: userAgent
-    });
-
-    if (logError) {
-        console.error('Log error:', logError);
+    // Ghi log (Sử dụng try-catch riêng để không làm ảnh hưởng đến việc xem video nếu log lỗi)
+    try {
+      await supabaseAdmin.from('video_view_logs').insert({
+          bunny_video_id: video_id,
+          task_id: task_id || null,
+          ip: req.headers.get('x-forwarded-for') || '',
+          user_agent: req.headers.get('user-agent') || ''
+      });
+    } catch (logErr) {
+      console.error('Lỗi khi ghi log:', logErr);
     }
 
     return new Response(JSON.stringify({ signed_embed_url }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
-  } catch (err: any) {
-    console.error('Error:', err);
+
+  } catch (err) {
+    console.error('Lỗi hệ thống:', err);
     return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
 })

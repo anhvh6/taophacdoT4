@@ -87,8 +87,7 @@ export default async function handler(req: any, res: any) {
           device_name: device_name || 'Thiết bị tự phê duyệt',
           is_approved: true,
           approved_at: new Date().toISOString(),
-          last_used_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          last_used_at: new Date().toISOString()
         }, { onConflict: 'customer_id,device_id' });
 
       if (deviceError) throw deviceError;

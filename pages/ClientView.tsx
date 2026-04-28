@@ -1394,16 +1394,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       {playingVideo && (
          <div className="fixed inset-0 z-[9000] bg-black flex flex-col animate-in fade-in duration-300">
            <div className="absolute top-6 right-6 z-10 flex gap-4">
-             <button onClick={() => {
-                // Determine if it was a bunny link by finding it in tasks
-                const task = tasks.find(t => playingVideo.includes(t.link) || t.link === playingVideo);
-                if (task) handlePlayVideo(task.link);
-                else {
-                  // Fallback for direct playing
-                  setPlayingVideo(null);
-                  setTimeout(() => handlePlayVideo(playingVideo), 100);
-                }
-             }} className="bg-blue-600 hover:bg-blue-700 font-bold px-4 py-2 rounded-full text-white shadow-xl flex items-center gap-2">🔄 Tải lại video</button>
+
              <button onClick={() => setPlayingVideo(null)} className="bg-white/20 hover:bg-white/40 p-4 rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-xl"><X size={20}/></button>
            </div>
            <div className="flex-1 flex items-center justify-center p-0 md:p-10 w-full h-full">
