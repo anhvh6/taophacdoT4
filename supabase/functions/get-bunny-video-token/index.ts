@@ -5,6 +5,7 @@ import { encodeHex } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
@@ -21,20 +22,7 @@ serve(async (req) => {
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
 
-    // 1. & 2. Xác thực user từ Supabase Auth bằng Authorization Bearer token
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser()
-
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized', details: userError }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const { video_id, task_id } = await req.json()
+    const { video_id, task_id, customer_id, token } = await req.json()
 
     if (!video_id) {
       return new Response(JSON.stringify({ error: 'video_id is required' }), {
@@ -43,33 +31,71 @@ serve(async (req) => {
       })
     }
 
-    // 3. Kiểm tra kiểm tra quyền xem/hạn xem của user theo logic hiện tại
-    // Chú ý: trong code hiện tại, admin quản lý học viên qua bảng customers, user auth id có thể là admin_id
-    // Tuy nhiên theo prompt, ta cần kiểm tra hạn dùng đối với user đăng nhập.
-    // Nếu hệ thống dùng user(id) để lưu khách hàng, thì access `customers` table:
-    const { data: customer, error: customerError } = await supabaseClient
-      .from('customers')
-      .select('end_date, status, access_state')
-      .eq('auth_user_id', user.id) // Assuming there is an auth_user_id or similar. Or maybe customer_id? 
-      // If the email matches:
-      .or(`email.eq.${user.email},id.eq.${user.id}`)
-      .maybeSingle()
+    // Xác thực user (Hỗ trợ cả Admin qua JWT và Học viên qua customer_id + token)
+    let authUser = null;
+    let isStudentValid = false;
+    let end_date = null;
+    let status = null;
 
-    // Since the prompt doesn't strictly specify how `customers` ties to `auth.users`, we assume if customer is bound to auth user or we just check if admin.
-    // Wait, the user said: "Nếu trong code hiện có hàm kiểm tra hạn dùng, hãy tái sử dụng đúng logic đó"
-    // Hạn dùng trong customer là `end_date`.
-    // Nếu không tìm thấy customer trong bảng khách hàng, có thể đây là admin user.
-    if (customer) {
+    // Admin: Xác thực thông qua Bearer token
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+       const { data: { user } } = await supabaseClient.auth.getUser();
+       if (user) {
+         authUser = user;
+       }
+    }
+
+    // Client/Student: Xác thực thông qua customer_id và token
+    // Để truy vấn không bị chặn bởi RLS, dùng service_role key
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    if (!authUser) {
+       if (!customer_id || !token) {
+           return new Response(JSON.stringify({ error: 'Unauthorized: Missing credentials' }), {
+               status: 401,
+               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+           });
+       }
+
+       const { data: customer } = await supabaseAdmin
+           .from('customers')
+           .select('end_date, status')
+           .eq('customer_id', customer_id)
+           .eq('token', token)
+           .maybeSingle();
+
+       if (!customer) {
+           return new Response(JSON.stringify({ error: 'Tài khoản không hợp lệ hoặc sai Token' }), {
+               status: 403,
+               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+           });
+       }
+       
+       isStudentValid = true;
+       end_date = customer.end_date;
+       status = customer.status;
+    } else {
+       // Nếu là admin, có thể cho vượt quyền hoặc kiểm tra nếu cần (ở đây mặc định Admin đc xem)
+       isStudentValid = true;
+       // Optional: you can query customers by auth_user_id if you want Admin to have expiration as well.
+    }
+
+    if (isStudentValid && !authUser) {
+        // Kiểm tra hạn dùng
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         let isExpired = false;
-        if (customer.end_date) {
-            const end = new Date(customer.end_date);
+        
+        if (end_date) {
+            const end = new Date(end_date);
             if (today > end) isExpired = true;
         }
-        if (customer.status === 'DELETED') isExpired = true;
+        if (status === 'DELETED') isExpired = true;
         
-        // 4. Trả lỗi 403 nếu đã hết hạn
         if (isExpired) {
            return new Response(JSON.stringify({ error: 'Tài khoản đã hết thời hạn xem video này' }), {
               status: 403,
@@ -99,8 +125,8 @@ serve(async (req) => {
     const userAgent = req.headers.get('user-agent') || '';
 
     // Insert log
-    const { error: logError } = await supabaseClient.from('video_view_logs').insert({
-        user_id: user.id,
+    const { error: logError } = await supabaseAdmin.from('video_view_logs').insert({
+        user_id: authUser ? authUser.id : null,
         task_id: task_id || null,
         bunny_video_id: video_id,
         ip: ip,

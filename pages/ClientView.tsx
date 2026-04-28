@@ -382,8 +382,14 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
     if (isBunnyVideoId(trimmedLink)) {
         try {
+            const dbToken = (customer?.token || token || "").trim();
+            const dbCustomerId = customer?.customer_id || customerId;
             const { data, error } = await supabase.functions.invoke('get-bunny-video-token', {
-                body: { video_id: trimmedLink }
+                body: { 
+                   video_id: trimmedLink,
+                   customer_id: dbCustomerId,
+                   token: dbToken
+                }
             });
 
             if (error) {
@@ -403,13 +409,15 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
             if (data?.signed_embed_url) {
                 setPlayingVideo(data.signed_embed_url);
+            } else if (!data?.error) {
+                throw new Error("Không nhận được token từ server");
             }
         } catch (err: any) {
             console.error("Bunny API Error:", err);
             setInfoModal({
                 isOpen: true,
                 title: "Lỗi phát video",
-                message: "Tài khoản của bạn đã hết thời hạn xem video này. Vui lòng liên hệ quản trị viên để gia hạn.",
+                message: err.message || "Không thể kết nối đến máy chủ bảo mật. Vui lòng thử lại sau.",
                 type: "WARNING",
                 color: "red"
             });
