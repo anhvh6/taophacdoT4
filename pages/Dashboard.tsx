@@ -298,6 +298,7 @@ export const Dashboard: React.FC<{
   });
 
   const prevPendingRef = React.useRef<string[]>([]);
+  const isFirstLoadRef = React.useRef(true);
 
   const fetchPending = async () => {
     try {
@@ -311,10 +312,10 @@ export const Dashboard: React.FC<{
         ...emails.map(e => ({ ...e, type: 'email' }))
       ].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      const currentIds = combined.map(r => `${r.type}_${r.id || r.customer_id}`);
-      const newItems = combined.filter(r => !prevPendingRef.current.includes(`${r.type}_${r.id || r.customer_id}`));
+      const currentIds = combined.map(r => `${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}_${r.pending_email || ''}`);
+      const newItems = combined.filter(r => !prevPendingRef.current.includes(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}_${r.pending_email || ''}`));
 
-      if (prevPendingRef.current.length > 0 && newItems.length > 0) {
+      if (!isFirstLoadRef.current && newItems.length > 0) {
         setToast(`🔔 Có ${newItems.length} yêu cầu duyệt mới!`);
         
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
@@ -329,6 +330,7 @@ export const Dashboard: React.FC<{
         }
       }
 
+      isFirstLoadRef.current = false;
       prevPendingRef.current = currentIds;
       setPendingRequests(combined);
     } catch (e) {
