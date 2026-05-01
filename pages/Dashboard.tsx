@@ -646,7 +646,7 @@ export const Dashboard: React.FC<{
       const hasPlan = !!c.video_date && String(c.video_date).trim() !== "";
       
       const createdAtISO = toISODateKey(c.created_at);
-      const matchDate = isSearching || ((!dateFrom || createdAtISO >= dateFrom) && (!dateTo || createdAtISO <= dateTo));
+      const matchDate = isSearching || videoOpenFilter || ((!dateFrom || createdAtISO >= dateFrom) && (!dateTo || createdAtISO <= dateTo));
 
       if (isNewToday) newToday.push(c);
 
@@ -678,7 +678,7 @@ export const Dashboard: React.FC<{
     expired.sort((a, b) => (calcInfo(b).start.getTime() + (b.duration_days || 0) * 86400000) - (calcInfo(a).start.getTime() + (a.duration_days || 0) * 86400000));
 
     return { newToday, noPlan, expiring, active, notStarted, expired, deleted };
-  }, [filteredBySearch, todayStr, dateFrom, dateTo, searchTerm]);
+  }, [filteredBySearch, todayStr, dateFrom, dateTo, searchTerm, videoOpenFilter]);
 
   const summaryStats = useMemo(() => {
     // Calculate "Hoạt động" count independent of date filter
@@ -706,11 +706,6 @@ export const Dashboard: React.FC<{
     const todayVn = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
     
     customers.filter(c => c.status !== CustomerStatus.DELETED).forEach(c => {
-      const createdAtISO = toISODateKey(c.created_at);
-      const matchDate = isSearching || ((!dateFrom || createdAtISO >= dateFrom) && (!dateTo || createdAtISO <= dateTo));
-      
-      if (!matchDate) return;
-
       if (c.raw_backup && c.raw_backup.last_video_open_time) {
          const openTime = new Date(c.raw_backup.last_video_open_time);
          const vnTime = new Date(openTime.toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
@@ -723,7 +718,7 @@ export const Dashboard: React.FC<{
       }
     });
     return count;
-  }, [customers, dateFrom, dateTo, isSearching]);
+  }, [customers]);
   
   const handleCopyLink = (link: string, customer?: Customer) => {
     const dbToken = customer?.token && String(customer.token).trim() !== "" ? String(customer.token).trim() : "";
@@ -898,7 +893,7 @@ export const Dashboard: React.FC<{
                     const def = getDefaultDateRange();
                     setDateFrom(def.from); 
                     setDateTo(def.to); 
-                    setColorFilter(null); 
+                    setVideoOpenFilter(false); 
                   }} 
                   className="text-gray-400 hover:text-red-500 transition-all active:scale-90" 
                   title="Xóa bộ lọc"
