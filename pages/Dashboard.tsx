@@ -1331,7 +1331,7 @@ export const Dashboard: React.FC<{
                   >
                     <div className="flex flex-col gap-2">
                        <div className="flex items-center gap-3">
-                          <span className={`uppercase group-hover:text-blue-600 ${isRead ? 'font-bold text-gray-700 text-[13px]' : 'font-black text-blue-900 text-[14px]'}`}>{group.name}</span>
+                          <span className="uppercase group-hover:text-blue-600 font-black text-blue-900 text-[14px]">{group.name}</span>
                           <span className="text-[10px] font-bold text-gray-400 font-mono mt-0.5">{formatDDMMYYYY(group.lastDate)}</span>
                        </div>
                       <div className="flex items-center gap-2">
@@ -1347,7 +1347,7 @@ export const Dashboard: React.FC<{
                         )}
                       </div>
                     </div>
-                    <ChevronLeft size={18} className={`${isRead ? 'text-gray-300' : 'text-blue-400'} rotate-180 group-hover:text-blue-600`} />
+                    <ChevronLeft size={18} className="text-blue-400 rotate-180 group-hover:text-blue-600" />
                   </div>
                   );
                 });
