@@ -440,5 +440,19 @@ export const customerService = {
       console.error("verifySelfApprovalCode Error:", e);
       return { success: false, message: e.message || "Lỗi kết nối mạng" };
     }
+  },
+
+  async logVideoOpen(customerId: string, token: string) {
+    try {
+      const response = await fetch('/api/log_video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_id: customerId, token })
+      });
+      return await response.json();
+    } catch (e) {
+      console.error('Failed to log video open:', e);
+      return { success: false };
+    }
   }
 };
