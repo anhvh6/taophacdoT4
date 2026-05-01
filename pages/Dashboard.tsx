@@ -781,7 +781,7 @@ export const Dashboard: React.FC<{
             MEGA PHƯƠNG ADMIN
           </a>
           {(() => {
-            const unviewedCount = pendingRequests.filter(r => !viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}`)).length;
+            const unviewedCount = pendingRequests.length;
             return (
               <div 
                 className="relative cursor-pointer group"
@@ -1303,30 +1303,18 @@ export const Dashboard: React.FC<{
                 }, {});
 
                 const studentGroups = Object.values(grouped)
-                  .sort((a: any, b: any) => {
-                    const aRead = a.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}`)) ? 1 : 0;
-                    const bRead = b.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}`)) ? 1 : 0;
-                    if (aRead !== bRead) return aRead - bRead;
-                    return new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime();
-                  });
+                  .sort((a: any, b: any) => new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime());
 
                 if (studentGroups.length === 0) {
                   return <div className="py-10 text-center text-gray-400 italic text-sm">Hiện không có yêu cầu nào chờ duyệt.</div>;
                 }
 
                 return studentGroups.map((group: any) => {
-                  const isRead = group.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}`));
                   return (
                   <div 
                     key={group.customer_id}
-                    className={`p-4 border rounded-[2rem] flex items-center justify-between hover:bg-blue-50/70 transition-all cursor-pointer shadow-sm group ${isRead ? 'bg-white border-blue-50 opacity-80' : 'bg-blue-50 border-blue-200'}`}
+                    className="p-4 border rounded-[2rem] flex items-center justify-between hover:bg-blue-50/70 transition-all cursor-pointer shadow-sm group bg-blue-50 border-blue-200"
                     onClick={async () => {
-                      setViewedCustomerIds(prev => {
-                        const next = new Set(prev);
-                        group.requests.forEach((r: any) => next.add(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}`));
-                        localStorage.setItem('admin_viewed_notifications', JSON.stringify(Array.from(next)));
-                        return next;
-                      });
                       setDetailCustomerId(group.customer_id);
                       setDraftDevices({});
                       setDraftEmailApproved(false);
