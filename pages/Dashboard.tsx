@@ -133,7 +133,7 @@ const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, pro
   return (
     <div 
       onClick={handleCardClick}
-      className={`relative flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 ${cardGradientClass} border ${cardBorderClass} rounded-[1.5rem] transition-all hover:shadow-xl hover:-translate-y-1 group cursor-pointer shadow-sm overflow-hidden`}
+      className={`relative flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 ${cardGradientClass} rounded-[1.5rem] transition-all hover:shadow-xl hover:-translate-y-1 group cursor-pointer shadow-sm overflow-hidden`}
     >
       <div className="absolute inset-0 bg-white/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
       <div className="flex items-center gap-4 w-full sm:w-auto">
