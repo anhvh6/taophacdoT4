@@ -524,6 +524,7 @@ const App: React.FC = () => {
         customerId={pageParams.customerId}
         token={pageParams.token}
         onNavigate={isAdmin ? navigate : undefined}
+        isAdmin={isAdmin}
       />
     );
   }

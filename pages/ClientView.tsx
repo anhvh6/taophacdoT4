@@ -26,7 +26,7 @@ const isFlagEnabled = (value: any, fallback = true) => {
   return fallback;
 };
 
-export const ClientView: React.FC<{ customerId: string; token?: string; onNavigate?: (page: string, params?: any) => void }> = ({ customerId, token, onNavigate }) => {
+export const ClientView: React.FC<{ customerId: string; token?: string; onNavigate?: (page: string, params?: any) => void; isAdmin?: boolean }> = ({ customerId, token, onNavigate, isAdmin }) => {
   const [customer, setCustomer] = useState<Customer | any>(null);
   const [tasks, setTasks] = useState<ExerciseTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,7 +65,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
   const fetchData = async (useCache = true, forceRefresh = false) => {
     // Nếu không có token và không có onNavigate (không phải admin), từ chối ngay
-    if (!token && !onNavigate) {
+    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
+    if (!token && !onNavigate && !isAdmin && !isPreviewDomain) {
       setAccessDenied(true);
       setLoading(false);
       return;
@@ -225,8 +226,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         setDeviceId(fpId);
 
         // If in admin mode or preview domain, always authorized
-        const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('localhost');
-        if (onNavigate || isPreviewDomain) {
+        const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
+        if (onNavigate || isAdmin || isPreviewDomain) {
           setDeviceAuthorized(true);
           return;
         }
@@ -310,9 +311,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     if (loading || !customer) return;
     
     const hasEmail = customer.email && String(customer.email).trim() !== "";
-    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('localhost');
-    const needsGoogleAuth = isFlagEnabled(customer.require_google_auth, true) && !isPreviewDomain;
-    const needsDeviceLimit = isFlagEnabled(customer.require_device_limit, true) && !isPreviewDomain;
+    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
+    const isSkipAuth = onNavigate || isAdmin || isPreviewDomain;
+    const needsGoogleAuth = isFlagEnabled(customer.require_google_auth, true) && !isSkipAuth;
+    const needsDeviceLimit = isFlagEnabled(customer.require_device_limit, true) && !isSkipAuth;
     
     // Điều kiện để hiện modal: 
     // Chỉ hiện khi bắt buộc có xác thực Google (needsGoogleAuth = true)
@@ -363,7 +365,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     }
 
     // Admin thực thụ (có session) thì cho xem thoải mái
-    if (onNavigate) {
+    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
+    if (onNavigate || isAdmin || isPreviewDomain) {
       if (isBunnyVidId) {
          // Nếu là Admin thì lấy token luôn cho nhanh chứ ko mở tab mới
          const dbToken = (customer?.token || token || "").trim();
@@ -382,7 +385,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     }
 
     // 1. Kiểm tra thiết bị (Device Limit)
-    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('localhost');
     const needsDeviceLimit = isFlagEnabled(customer?.require_device_limit, true) && !isPreviewDomain;
 
     if (!skipAuthCheck && needsDeviceLimit && !deviceAuthorized) {
