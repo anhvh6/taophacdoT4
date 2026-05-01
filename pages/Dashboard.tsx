@@ -315,21 +315,17 @@ export const Dashboard: React.FC<{
       const newItems = combined.filter(r => !prevPendingRef.current.includes(`${r.type}_${r.id || r.customer_id}`));
 
       if (prevPendingRef.current.length > 0 && newItems.length > 0) {
-        const unviewedNewItems = newItems.filter(r => !viewedCustomerIds.has(r.customer_id) && !handledCustomerIds.has(r.customer_id));
+        setToast(`🔔 Có ${newItems.length} yêu cầu duyệt mới!`);
         
-        if (unviewedNewItems.length > 0) {
-          setToast(`🔔 Có ${unviewedNewItems.length} yêu cầu duyệt mới!`);
-          
-          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-            unviewedNewItems.forEach(item => {
-              const name = item.type === 'device' ? (item.customers?.customer_name || 'Học viên ẩn') : (item.customer_name || 'Học viên ẩn');
-              const msg = item.type === 'device' ? 'Yêu cầu duyệt thiết bị mới' : `Yêu cầu đổi sang email: ${item.pending_email}`;
-              new Notification(`🔔 Yêu cầu mới từ ${name}`, {
-                body: msg,
-                icon: 'https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg'
-              });
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          newItems.forEach(item => {
+            const name = item.type === 'device' ? (item.customers?.customer_name || 'Học viên ẩn') : (item.customer_name || 'Học viên ẩn');
+            const msg = item.type === 'device' ? 'Yêu cầu duyệt thiết bị mới' : `Yêu cầu đổi sang email: ${item.pending_email}`;
+            new Notification(`🔔 Yêu cầu mới từ ${name}`, {
+              body: msg,
+              icon: 'https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg'
             });
-          }
+          });
         }
       }
 

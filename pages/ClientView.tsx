@@ -384,6 +384,21 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       return;
     }
 
+    // 0. Kiểm tra yêu cầu đổi email đang chờ phê duyệt
+    const isStudent = !onNavigate && !isAdmin && !isPreviewDomain;
+    if (isStudent && customer?.pending_email && customer.pending_email.trim() !== '') {
+       setToast("Tài khoản của bạn đang có yêu cầu đổi email chờ phê duyệt.");
+       setInfoModal({
+          isOpen: true,
+          title: "CHỜ DUYỆT EMAIL",
+          message: "Yêu cầu đổi email đăng ký của bạn đang chờ Admin phê duyệt. Vui lòng quay lại sau!",
+          type: "WARNING",
+          color: "red"
+       });
+       if (newTab) newTab.close();
+       return;
+    }
+
     // 1. Kiểm tra thiết bị (Device Limit)
     const needsDeviceLimit = isFlagEnabled(customer?.require_device_limit, true) && !isPreviewDomain;
 
@@ -1218,6 +1233,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         if (result && (result as any).success === false) {
                           throw new Error((result as any).message || 'Unauthorized');
                         }
+                        localStorage.removeItem(`verified_email_${customerId}`);
+                        setIsVerified(false);
+                        setCustomer((prev: any) => ({ ...prev, pending_email: lastLoggedEmail }));
                         setToast("Gửi yêu cầu đổi Email thành công!");
                         const msg = `Chào Admin, em là ${customer?.customer_name || ''}, em vừa gửi yêu cầu đổi Email đăng ký cho phác đồ của em (Mã HV: ${customerId}).\n- Email cũ: ${existingEmail}\n- Email mới: ${lastLoggedEmail}\nNhờ Admin duyệt giúp em ạ!`;
                         window.open(`https://zalo.me/0378243131?text=${encodeURIComponent(msg)}`, '_blank');
