@@ -779,7 +779,7 @@ export const Dashboard: React.FC<{
             MEGA PHƯƠNG ADMIN
           </a>
           {(() => {
-            const unviewedCount = pendingRequests.filter(r => !viewedCustomerIds.has(r.customer_id) && !handledCustomerIds.has(r.customer_id)).length;
+            const unviewedCount = pendingRequests.filter(r => !viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}`)).length;
             return (
               <div 
                 className="relative cursor-pointer group"
@@ -1283,9 +1283,11 @@ export const Dashboard: React.FC<{
                       hasEmail: false,
                       pending_email: '',
                       email: req.email || '',
-                      lastDate: req.created_at
+                      lastDate: req.created_at,
+                      requests: []
                     };
                   }
+                  acc[cid].requests.push(req);
                   if (req.type === 'device') acc[cid].deviceCount++;
                   if (req.type === 'email') {
                     acc[cid].hasEmail = true;
@@ -1299,10 +1301,9 @@ export const Dashboard: React.FC<{
                 }, {});
 
                 const studentGroups = Object.values(grouped)
-                  .filter((group: any) => !handledCustomerIds.has(group.customer_id))
                   .sort((a: any, b: any) => {
-                    const aRead = viewedCustomerIds.has(a.customer_id) ? 1 : 0;
-                    const bRead = viewedCustomerIds.has(b.customer_id) ? 1 : 0;
+                    const aRead = a.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}`)) ? 1 : 0;
+                    const bRead = b.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}`)) ? 1 : 0;
                     if (aRead !== bRead) return aRead - bRead;
                     return new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime();
                   });
@@ -1312,14 +1313,15 @@ export const Dashboard: React.FC<{
                 }
 
                 return studentGroups.map((group: any) => {
-                  const isRead = viewedCustomerIds.has(group.customer_id);
+                  const isRead = group.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}`));
                   return (
                   <div 
                     key={group.customer_id}
                     className={`p-4 border rounded-[2rem] flex items-center justify-between hover:bg-blue-50/70 transition-all cursor-pointer shadow-sm group ${isRead ? 'bg-white border-blue-50 opacity-80' : 'bg-blue-50 border-blue-200'}`}
                     onClick={async () => {
                       setViewedCustomerIds(prev => {
-                        const next = new Set(prev).add(group.customer_id);
+                        const next = new Set(prev);
+                        group.requests.forEach((r: any) => next.add(`${r.type}_${r.id || r.customer_id}`));
                         localStorage.setItem('admin_viewed_notifications', JSON.stringify(Array.from(next)));
                         return next;
                       });
