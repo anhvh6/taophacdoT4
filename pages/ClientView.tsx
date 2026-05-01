@@ -7,6 +7,7 @@ import { customPlanService } from '../src/services/customPlanService';
 import { supabase } from '../src/lib/supabaseClient';
 import { Customer, ExerciseTask, CustomerStatus, ExerciseType } from '../types';
 import { toVnZeroHour, formatDDMMYYYY, getDiffDays, addDays, parseVNDate } from '../utils/date';
+import { safeSetLocalStorage } from '../src/utils/storage';
 import { ImmersiveChat } from '../components/ImmersiveChat';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
@@ -99,7 +100,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
       if (!customerData) {
         console.warn("ClientView: No customer found for ID:", customerId, "Token:", token);
-        if (token) setAccessDenied(true);
+        if (token && !onNavigate) {
+          setAccessDenied(true);
+          // Tự động chuyển hướng đến trang chủ nếu không tìm thấy phác đồ hợp lệ
+          setTimeout(() => {
+            window.location.replace('https://30ngaythaydoi.vercel.app/');
+          }, 1500);
+        }
         setLoading(false);
         return;
       }
@@ -165,7 +172,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       }
 
       // Lưu vào cache cho lần sau
-      localStorage.setItem(`phacdo_cache_${customerId}`, JSON.stringify({
+      safeSetLocalStorage(`phacdo_cache_${customerId}`, JSON.stringify({
         customer: customerData,
         tasks: cleanTasks,
         timestamp: Date.now()
@@ -266,6 +273,37 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
   const hasAutoPrompted = useRef(false);
 
+  // Anti-tamper: Ngăn chuột phải và F12 (chỉ đối với học viên)
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      if (!onNavigate) {
+        e.preventDefault();
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (onNavigate) return; // Cho phép Admin
+
+      if (
+        e.key === 'F12' || 
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i')) ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'J' || e.key === 'j')) ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) ||
+        (e.ctrlKey && (e.key === 'U' || e.key === 'u'))
+      ) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onNavigate]);
+
   // Tự động bật Modal đăng nhập Google nếu chưa xác thực hoặc chưa có email
   useEffect(() => {
     // Không làm gì nếu đang tải chưa xong hoặc không có khách hàng
@@ -293,13 +331,53 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   }, [customer, isVerified, loading, authModal.isOpen]);
 
   // Play Video Logic
-  const handlePlayVideo = async (link?: string) => {
+  const handlePlayVideo = async (link?: string, skipAuthCheck: boolean = false) => {
     if (!link) return;
     
+    const trimmedLink = link.trim();
+    const isBunnyVidId = typeof trimmedLink === "string" && trimmedLink !== "" && !/^https?:\/\//i.test(trimmedLink);
+    const isExternalUrl = typeof trimmedLink === "string" && /^https?:\/\//i.test(trimmedLink) && !trimmedLink.includes('mediadelivery.net');
+    
+    let newTab: Window | null = null;
+    if (isExternalUrl && !onNavigate && !skipAuthCheck) {
+      try {
+        newTab = window.open('about:blank', '_blank');
+        if (newTab) {
+          newTab.document.title = "Đang chuyển hướng...";
+          newTab.document.body.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8FBFF; color: #1E3A8A; margin: 0; text-align: center; padding: 20px;">
+              <div style="font-size: 24px; font-weight: bold; margin-bottom: 12px; letter-spacing: -0.025em; text-transform: uppercase;">ĐANG CHUYỂN HƯỚNG</div>
+              <div style="font-size: 14px; opacity: 0.8; margin-bottom: 24px; font-weight: 500;">Vui lòng đợi trong giây lát khi chúng tôi xác thực quyền truy cập của bạn...</div>
+              <div style="width: 40px; height: 40px; border: 4px solid #E2E8F0; border-top-color: #2563EB; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+              <style>
+                @keyframes spin {
+                  to { transform: rotate(360deg); }
+                }
+              </style>
+            </div>
+          `;
+        }
+      } catch (e) {
+        console.error("Failed to open blank tab synchronously:", e);
+      }
+    }
+
     // Admin thực thụ (có session) thì cho xem thoải mái
     if (onNavigate) {
-      if (link.includes('mediadelivery.net')) setPlayingVideo(link);
-      else window.open(link, '_blank');
+      if (isBunnyVidId) {
+         // Nếu là Admin thì lấy token luôn cho nhanh chứ ko mở tab mới
+         const dbToken = (customer?.token || token || "").trim();
+         const dbCustomerId = customer?.customer_id || customerId;
+         try {
+             const { data } = await supabase.functions.invoke('get-bunny-video-token', {
+                 body: { video_id: trimmedLink, customer_id: dbCustomerId, token: dbToken }
+             });
+             if (data?.signed_embed_url) setPlayingVideo(data.signed_embed_url);
+         } catch(e) {}
+         return;
+      }
+      if (trimmedLink.includes('mediadelivery.net')) setPlayingVideo(trimmedLink);
+      else window.open(trimmedLink, '_blank');
       return;
     }
 
@@ -307,12 +385,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('localhost');
     const needsDeviceLimit = isFlagEnabled(customer?.require_device_limit, true) && !isPreviewDomain;
 
-    if (needsDeviceLimit && !deviceAuthorized) {
+    if (!skipAuthCheck && needsDeviceLimit && !deviceAuthorized) {
         setDeviceModal({ isOpen: true });
+        if (newTab) newTab.close();
         return;
     }
 
-     if (isFlagEnabled(customer?.require_google_auth, true) && !isPreviewDomain) {
+     if (!skipAuthCheck && isFlagEnabled(customer?.require_google_auth, true) && !isPreviewDomain) {
         // Fetch latest customer data from server to ensure email is still valid
         let latestCustomer = customer;
         try {
@@ -334,6 +413,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
            setIsVerified(false);
            setToast("Email đăng ký đã thay đổi hoặc phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
            setAuthModal({isOpen: true, link});
+           if (newTab) newTab.close();
            return;
         }
      }
@@ -347,9 +427,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
     const needsGoogleAuth = isFlagEnabled(customer?.require_google_auth, true) && !isPreviewDomain;
 
-    if (needsGoogleAuth && !isVerified) {
+    if (!skipAuthCheck && needsGoogleAuth && !isVerified) {
        console.log("handlePlayVideo: Authentication required, opening AuthModal");
        setAuthModal({isOpen: true, link: link});
+       if (newTab) newTab.close();
        return;
     }
 
@@ -365,22 +446,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           type: "WARNING", 
           color: "red" 
         });
+        if (newTab) newTab.close();
         return;
       }
     }
 
-    // Helper functions for Bunny Stream
-    function isExternalUrl(value: string) {
-       return typeof value === "string" && /^https?:\/\//i.test(value.trim());
-    }
-
-    function isBunnyVideoId(value: string) {
-       return typeof value === "string" && value.trim() !== "" && !/^https?:\/\//i.test(value.trim());
-    }
-
-    const trimmedLink = link.trim();
-
-    if (isBunnyVideoId(trimmedLink)) {
+    if (isBunnyVidId) {
         try {
             const dbToken = (customer?.token || token || "").trim();
             const dbCustomerId = customer?.customer_id || customerId;
@@ -423,9 +494,19 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             });
         }
     } else if (trimmedLink.includes('mediadelivery.net')) {
+      setToast("Cảnh báo: Video này sử dụng đường dẫn cũ và không được bảo vệ bằng Token.");
       setPlayingVideo(trimmedLink);
     } else {
-      window.open(link, '_blank');
+      setToast("Cảnh báo: Video này là liên kết ngoài, không được bảo vệ chống tải.");
+      if (newTab) {
+        try {
+          newTab.location.href = link;
+        } catch (e) {
+          window.location.href = link;
+        }
+      } else {
+        window.location.href = link;
+      }
     }
   };
 
@@ -1094,7 +1175,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         const existingEmail = (customer.email || "").toLowerCase().trim();
                         
                         if (loggedEmail === existingEmail) {
-                          localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
+                          safeSetLocalStorage(`verified_email_${customerId}`, loggedEmail);
                           setIsVerified(true);
                           setLastLoggedEmail(null);
                           setAuthModal(prev => {
@@ -1179,17 +1260,17 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                             setSelfApprovalLoading(false);
                             if (res.success) {
                                setToast('Duyệt email thành công!');
-                               localStorage.setItem(`verified_email_${customerId}`, lastLoggedEmail!);
+                               safeSetLocalStorage(`verified_email_${customerId}`, lastLoggedEmail!);
                                setIsVerified(true);
                                setCustomer({ ...customer, email: lastLoggedEmail! });
                                setLastLoggedEmail(null);
-                               setAuthModal(prev => {
-                                  if (prev.link) {
-                                     if (prev.link.includes('mediadelivery.net')) setPlayingVideo(prev.link);
-                                     else window.open(prev.link, '_blank');
-                                  }
-                                  return {isOpen: false, link: null};
-                               });
+                               
+                               const linkToPlay = authModal.link;
+                               setAuthModal({isOpen: false, link: null});
+                               if (linkToPlay) {
+                                  handlePlayVideo(linkToPlay, true);
+                               }
+                               
                                setSelfApprovalCode(''); setSelfApprovalError('');
                             } else {
                                setSelfApprovalError(res.message || 'Mã xác thực của bạn không đúng, hãy liên hệ để được trợ giúp.');
@@ -1237,32 +1318,32 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                           // Giai đoạn Đăng ký ban đầu
                           try {
                             await customerService.updateCustomerEmailByToken(customer.customer_id, (customer.token || token || ""), loggedEmail);
-                            localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
+                            safeSetLocalStorage(`verified_email_${customerId}`, loggedEmail);
                           setIsVerified(true);
                           setCustomer({ ...customer, email: loggedEmail });
                           setLastLoggedEmail(null);
-                          setAuthModal(prev => {
-                            if (prev.link) {
-                                if (prev.link.includes('mediadelivery.net')) setPlayingVideo(prev.link);
-                                else window.open(prev.link, '_blank');
-                            }
-                            return {isOpen: false, link: null};
-                          });
+                          
+                          const linkToPlay = authModal.link;
+                          setAuthModal({isOpen: false, link: null});
+                          if (linkToPlay) {
+                             handlePlayVideo(linkToPlay, true);
+                          }
+                          
                         } catch (e) {
                           console.error("Auto enrollment failed:", e);
                           setInfoModal({isOpen: true, title: "Lỗi Hệ Thống", message: "Không thể tự động lưu Email. Vui lòng liên hệ Admin!", type: "WARNING", color: "red"});
                         }
                       } else if (loggedEmail === existingEmail) {
-                        localStorage.setItem(`verified_email_${customerId}`, loggedEmail);
+                        safeSetLocalStorage(`verified_email_${customerId}`, loggedEmail);
                         setIsVerified(true);
                         setLastLoggedEmail(null);
-                        setAuthModal(prev => {
-                          if (prev.link) {
-                            if (prev.link.includes('mediadelivery.net')) setPlayingVideo(prev.link);
-                            else window.open(prev.link, '_blank');
-                          }
-                          return {isOpen: false, link: null};
-                        });
+                        
+                        const linkToPlay = authModal.link;
+                        setAuthModal({isOpen: false, link: null});
+                        if (linkToPlay) {
+                           handlePlayVideo(linkToPlay, true);
+                        }
+                        
                         } else {
                           setLastLoggedEmail(loggedEmail);
                         }

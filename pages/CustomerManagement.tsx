@@ -256,7 +256,13 @@ export const CustomerManagement: React.FC<{
     const exists = current.find(p => p.id_sp === product.id_sp);
     let newItems;
     if (exists) {
-      newItems = current.filter(p => p.id_sp !== product.id_sp);
+      newItems = current.map(p => {
+        if (p.id_sp === product.id_sp) {
+          const nextQty = (p.so_luong || 1) + 1;
+          return { ...p, so_luong: nextQty, thanh_tien: nextQty * p.don_gia };
+        }
+        return p;
+      });
     } else {
       newItems = [...current, { 
         id_sp: product.id_sp, ten_sp: product.ten_sp, so_luong: 1, 

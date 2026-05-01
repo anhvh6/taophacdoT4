@@ -5,6 +5,7 @@ import { Layout } from '../components/Layout';
 import { Card, Button } from '../components/UI';
 import { api } from '../services/api';
 import { Product } from '../types';
+import { safeSetLocalStorage } from '../src/utils/storage';
 
 export const ProductManagement: React.FC<{ onNavigate: (page: string) => void, onRefresh?: () => void }> = ({ onNavigate, onRefresh }) => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -30,7 +31,7 @@ export const ProductManagement: React.FC<{ onNavigate: (page: string) => void, o
 
         const data = await api.getProducts();
         setProducts(data);
-        localStorage.setItem('mega_products_cache', JSON.stringify(data));
+        safeSetLocalStorage('mega_products_cache', JSON.stringify(data));
       } catch (err) {
         console.error("Lỗi tải sản phẩm:", err);
       } finally {
@@ -46,7 +47,7 @@ export const ProductManagement: React.FC<{ onNavigate: (page: string) => void, o
       await api.saveProducts(products);
       
       // Cập nhật lại cache sau khi lưu thành công
-      localStorage.setItem('mega_products_cache', JSON.stringify(products));
+      safeSetLocalStorage('mega_products_cache', JSON.stringify(products));
       if (onRefresh) onRefresh();
       
       setShowSuccess(true);

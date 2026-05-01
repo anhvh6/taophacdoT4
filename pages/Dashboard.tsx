@@ -274,15 +274,30 @@ export const Dashboard: React.FC<{
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [isProfitModalOpen, setIsProfitModalOpen] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
-  const [viewedCustomerIds, setViewedCustomerIds] = useState<Set<string>>(new Set());
+  const [viewedCustomerIds, setViewedCustomerIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('admin_viewed_notifications');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch (e) {
+      return new Set();
+    }
+  });
   const [detailCustomerId, setDetailCustomerId] = useState<string | null>(null);
   const [customerDevices, setCustomerDevices] = useState<any[]>([]);
   const [draftDevices, setDraftDevices] = useState<Record<string, boolean>>({});
   const [draftEmailApproved, setDraftEmailApproved] = useState(false);
   const [isLoadingDevices, setIsLoadingDevices] = useState(false);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
-  const [handledCustomerIds, setHandledCustomerIds] = useState<Set<string>>(new Set());
+  const [handledCustomerIds, setHandledCustomerIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('admin_handled_notifications');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch (e) {
+      return new Set();
+    }
+  });
 
+  const prevPendingRef = React.useRef<string[]>([]);
 
   const fetchPending = async () => {
     try {
@@ -296,6 +311,29 @@ export const Dashboard: React.FC<{
         ...emails.map(e => ({ ...e, type: 'email' }))
       ].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+      const currentIds = combined.map(r => `${r.type}_${r.id || r.customer_id}`);
+      const newItems = combined.filter(r => !prevPendingRef.current.includes(`${r.type}_${r.id || r.customer_id}`));
+
+      if (prevPendingRef.current.length > 0 && newItems.length > 0) {
+        const unviewedNewItems = newItems.filter(r => !viewedCustomerIds.has(r.customer_id) && !handledCustomerIds.has(r.customer_id));
+        
+        if (unviewedNewItems.length > 0) {
+          setToast(`🔔 Có ${unviewedNewItems.length} yêu cầu duyệt mới!`);
+          
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            unviewedNewItems.forEach(item => {
+              const name = item.type === 'device' ? (item.customers?.customer_name || 'Học viên ẩn') : (item.customer_name || 'Học viên ẩn');
+              const msg = item.type === 'device' ? 'Yêu cầu duyệt thiết bị mới' : `Yêu cầu đổi sang email: ${item.pending_email}`;
+              new Notification(`🔔 Yêu cầu mới từ ${name}`, {
+                body: msg,
+                icon: 'https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg'
+              });
+            });
+          }
+        }
+      }
+
+      prevPendingRef.current = currentIds;
       setPendingRequests(combined);
     } catch (e) {
       console.error(e);
@@ -303,8 +341,16 @@ export const Dashboard: React.FC<{
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     fetchPending();
-    const timer = setInterval(fetchPending, 30000); 
+    const timer = setInterval(fetchPending, 10000); 
     return () => clearInterval(timer);
   }, []);
 
@@ -419,7 +465,13 @@ export const Dashboard: React.FC<{
     const exists = current.find(p => p.id_sp === product.id_sp);
     let newItems;
     if (exists) {
-      newItems = current.filter(p => p.id_sp !== product.id_sp);
+      newItems = current.map(p => {
+        if (p.id_sp === product.id_sp) {
+          const nextQty = (p.so_luong || 1) + 1;
+          return { ...p, so_luong: nextQty, thanh_tien: nextQty * p.don_gia };
+        }
+        return p;
+      });
     } else {
       newItems = [...current, { 
         id_sp: product.id_sp, ten_sp: product.ten_sp, so_luong: 1, 
@@ -731,7 +783,7 @@ export const Dashboard: React.FC<{
             MEGA PHƯƠNG ADMIN
           </a>
           {(() => {
-            const unviewedCount = pendingRequests.filter(r => !viewedCustomerIds.has(r.customer_id)).length;
+            const unviewedCount = pendingRequests.filter(r => !viewedCustomerIds.has(r.customer_id) && !handledCustomerIds.has(r.customer_id)).length;
             return (
               <div 
                 className="relative cursor-pointer group"
@@ -1270,7 +1322,11 @@ export const Dashboard: React.FC<{
                     key={group.customer_id}
                     className={`p-4 border rounded-[2rem] flex items-center justify-between hover:bg-blue-50/70 transition-all cursor-pointer shadow-sm group ${isRead ? 'bg-white border-blue-50 opacity-80' : 'bg-blue-50 border-blue-200'}`}
                     onClick={async () => {
-                      setViewedCustomerIds(prev => new Set(prev).add(group.customer_id));
+                      setViewedCustomerIds(prev => {
+                        const next = new Set(prev).add(group.customer_id);
+                        localStorage.setItem('admin_viewed_notifications', JSON.stringify(Array.from(next)));
+                        return next;
+                      });
                       setDetailCustomerId(group.customer_id);
                       setDraftDevices({});
                       setDraftEmailApproved(false);
@@ -1377,13 +1433,25 @@ export const Dashboard: React.FC<{
                       }
                     }
 
+                    if (detailCustomerId) {
+                      setViewedCustomerIds(prev => {
+                        const next = new Set(prev).add(detailCustomerId);
+                        localStorage.setItem('admin_viewed_notifications', JSON.stringify(Array.from(next)));
+                        return next;
+                      });
+                      setHandledCustomerIds(prev => {
+                        const next = new Set(prev).add(detailCustomerId);
+                        localStorage.setItem('admin_handled_notifications', JSON.stringify(Array.from(next)));
+                        return next;
+                      });
+                    }
+
                     if (failCount === 0) {
                       setToast("Đã lưu thay đổi thành công!");
                     } else {
                       setToast(`Đã lưu ${successCount} mục, thất bại ${failCount} mục.`);
                     }
                     
-                    setHandledCustomerIds(prev => new Set(prev).add(detailCustomerId as string));
                     setDetailCustomerId(null);
                     fetchPending();
                   } catch (e) {

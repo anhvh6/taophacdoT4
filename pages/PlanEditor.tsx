@@ -10,6 +10,7 @@ import { Customer, ExerciseTask, ExerciseType, SidebarBlock, CustomerStatus, Pro
 import { EXERCISE_TYPES, DEFAULT_SIDEBAR_BLOCKS, DEFAULT_CHEWING_INSTRUCTION } from '../constants';
 import { GoogleGenAI } from "@google/genai";
 import { toInputDateString, formatDDMM, parseVNDate, addDays, formatVNDate } from '../utils/date';
+import { safeSetLocalStorage } from '../src/utils/storage';
 
 const isFlagEnabled = (value: any, fallback = true) => {
   if (value === undefined || value === null) return fallback;
@@ -187,6 +188,84 @@ const SidebarBlockCard = React.memo(({
   );
 });
 
+const NoteModalContent = ({ initialValue, onSave, onCancel, handleAiOptimize, isAiProcessing, originalNote, hasContent }: {
+  initialValue: string;
+  onSave: (val: string) => void;
+  onCancel: () => void;
+  handleAiOptimize: () => void;
+  isAiProcessing: boolean;
+  originalNote: string | null;
+  hasContent: boolean;
+}) => {
+  const [val, setVal] = useState(initialValue);
+  
+  useEffect(() => {
+    setVal(initialValue);
+  }, [initialValue]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-end gap-3 mb-2 px-1">
+         <div className="flex items-center gap-2">
+            <button 
+              onClick={handleAiOptimize} 
+              disabled={!val.trim() || !hasContent || isAiProcessing} 
+              className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-all border border-blue-100 shadow-sm group disabled:opacity-50"
+            >
+              {isAiProcessing ? <RefreshCw size={16} className="animate-spin" /> : <Sparkles size={16} className="group-hover:scale-110 transition-transform" />}
+              <span className="text-[10px] font-black uppercase tracking-widest">Phân tích bằng AI</span>
+            </button>
+            <button 
+              onClick={() => { 
+                if (originalNote) {
+                  setVal(originalNote);
+                }
+              }} 
+              disabled={!originalNote} 
+              className="flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-xl transition-all border border-orange-100 shadow-sm group disabled:opacity-50"
+            >
+              <RotateCcw size={16} className="group-hover:-rotate-45 transition-transform" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Khôi phục gốc</span>
+            </button>
+         </div>
+      </div>
+      <textarea 
+        className="w-full h-96 p-8 bg-blue-50/30 border border-blue-50 rounded-[2rem] outline-none text-sm font-medium leading-relaxed resize-none focus:bg-white focus:border-blue-300 transition-all custom-scrollbar"
+        placeholder="Nhập chi tiết tình trạng học viên (ăn nhai, nằm nghiêng, vắt chéo chân...)"
+        value={val}
+        onChange={e => setVal(e.target.value)}
+      />
+      <div className="flex justify-end gap-3 mt-4">
+        <Button variant="ghost" onClick={onCancel}>HỦY</Button>
+        <Button variant="primary" onClick={() => onSave(val)}>XÁC NHẬN</Button>
+      </div>
+    </div>
+  );
+};
+
+const ChewingModalContent = ({ initialValue, onSave, onCancel }: {
+  initialValue: string;
+  onSave: (val: string) => void;
+  onCancel: () => void;
+}) => {
+  const [val, setVal] = useState(initialValue);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <textarea 
+        className="w-full h-64 p-8 bg-blue-50/30 border border-blue-50 rounded-[2rem] outline-none text-sm font-medium leading-relaxed resize-none focus:bg-white focus:border-blue-300 transition-all custom-scrollbar"
+        placeholder="Nhập hướng dẫn ăn nhai chi tiết..."
+        value={val}
+        onChange={e => setVal(e.target.value)}
+      />
+      <div className="flex justify-end gap-3 mt-4">
+        <Button variant="ghost" onClick={onCancel}>HỦY</Button>
+        <Button variant="primary" onClick={() => onSave(val)}>XÁC NHẬN</Button>
+      </div>
+    </div>
+  );
+};
+
 export const PlanEditor: React.FC<{ 
   onNavigate: (page: string, params?: any) => void; 
   customerId?: string; 
@@ -359,7 +438,7 @@ export const PlanEditor: React.FC<{
       }
 
       const data = await api.getPlanEditorData(cleanId, cleanTemplateId);
-      localStorage.setItem(cacheKey, JSON.stringify(data));
+      safeSetLocalStorage(cacheKey, JSON.stringify(data));
       applyFetchedData(data);
     } catch (err: any) {
       console.error("PlanEditor Fetch Error:", err);
@@ -516,7 +595,13 @@ export const PlanEditor: React.FC<{
       const exists = current.find(p => p.id_sp === product.id_sp);
       let newItems;
       if (exists) {
-        newItems = current.filter(p => p.id_sp !== product.id_sp);
+        newItems = current.map(p => {
+          if (p.id_sp === product.id_sp) {
+            const nextQty = (p.so_luong || 1) + 1;
+            return { ...p, so_luong: nextQty, thanh_tien: nextQty * p.don_gia };
+          }
+          return p;
+        });
       } else {
         newItems = [...current, { 
           id_sp: product.id_sp, ten_sp: product.ten_sp, so_luong: 1, 
@@ -661,15 +746,11 @@ export const PlanEditor: React.FC<{
       // Luôn cache tasks hiện tại để preview mượt mà, dù là customized hay không
       const cacheTasks = tasks.filter(t => !t.is_deleted);
       
-      try {
-        localStorage.setItem(`phacdo_cache_${result.customer_id}`, JSON.stringify({
-          customer: result,
-          tasks: cacheTasks,
-          timestamp: Date.now()
-        }));
-      } catch (e) {
-        console.warn("Could not cache to localStorage:", e);
-      }
+      safeSetLocalStorage(`phacdo_cache_${result.customer_id}`, JSON.stringify({
+        customer: result,
+        tasks: cacheTasks,
+        timestamp: Date.now()
+      }));
 
       // 3. Xóa cache PlanEditor để lần sau load lại từ server
       const cleanId = (payload.customer_id || 'new').trim();
@@ -1307,52 +1388,20 @@ export const PlanEditor: React.FC<{
         onClose={() => setIsNoteModalOpen(false)} 
         title="MÔ TẢ TÌNH TRẠNG & MONG MUỐN" 
         maxWidth="max-w-2xl"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => {
-              setLocalNote(customer.note || "");
-              setIsNoteModalOpen(false);
-            }}>HỦY</Button>
-            <Button variant="primary" onClick={() => {
-              setCustomer(prev => ({ ...prev, note: localNote }));
-              setIsNoteModalOpen(false);
-            }}>XÁC NHẬN</Button>
-          </>
-        }
       >
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-end gap-3 mb-2 px-1">
-             <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleAiOptimize} 
-                  disabled={!hasContent || isAiProcessing} 
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-all border border-blue-100 shadow-sm group disabled:opacity-50"
-                >
-                  {isAiProcessing ? <RefreshCw size={16} className="animate-spin" /> : <Sparkles size={16} className="group-hover:scale-110 transition-transform" />}
-                  <span className="text-[10px] font-black uppercase tracking-widest">Phân tích bằng AI</span>
-                </button>
-                <button 
-                  onClick={() => { 
-                    if(originalNote) {
-                      setLocalNote(originalNote);
-                      setCustomer(prev => ({...prev, note: originalNote})); 
-                    }
-                  }} 
-                  disabled={!originalNote} 
-                  className="flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-xl transition-all border border-orange-100 shadow-sm group disabled:opacity-50"
-                >
-                  <RotateCcw size={16} className="group-hover:-rotate-45 transition-transform" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Khôi phục gốc</span>
-                </button>
-             </div>
-          </div>
-          <textarea 
-            className="w-full h-96 p-8 bg-blue-50/30 border border-blue-50 rounded-[2rem] outline-none text-sm font-medium leading-relaxed resize-none focus:bg-white focus:border-blue-300 transition-all custom-scrollbar"
-            placeholder="Nhập chi tiết tình trạng học viên (ăn nhai, nằm nghiêng, vắt chéo chân...)"
-            value={localNote}
-            onChange={e => setLocalNote(e.target.value)}
-          />
-        </div>
+        <NoteModalContent
+          initialValue={localNote}
+          hasContent={hasContent}
+          isAiProcessing={isAiProcessing}
+          originalNote={originalNote}
+          handleAiOptimize={handleAiOptimize}
+          onCancel={() => setIsNoteModalOpen(false)}
+          onSave={(val) => {
+            setLocalNote(val);
+            setCustomer(prev => ({ ...prev, note: val }));
+            setIsNoteModalOpen(false);
+          }}
+        />
       </Modal>
 
       <Modal 
@@ -1360,24 +1409,15 @@ export const PlanEditor: React.FC<{
         onClose={() => setIsChewingModalOpen(false)} 
         title="CHỈ DẪN ĂN NHAI CÂN BẰNG" 
         maxWidth="max-w-2xl"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => {
-              setLocalChewing(customer.chewing_status || "");
-              setIsChewingModalOpen(false);
-            }}>HỦY</Button>
-            <Button variant="primary" onClick={() => {
-              setCustomer(prev => ({ ...prev, chewing_status: localChewing }));
-              setIsChewingModalOpen(false);
-            }}>XÁC NHẬN</Button>
-          </>
-        }
       >
-        <textarea 
-          className="w-full h-64 p-8 bg-blue-50/30 border border-blue-50 rounded-[2rem] outline-none text-sm font-medium leading-relaxed resize-none focus:bg-white focus:border-blue-300 transition-all custom-scrollbar"
-          placeholder="Nhập hướng dẫn ăn nhai chi tiết..."
-          value={localChewing}
-          onChange={e => setLocalChewing(e.target.value)}
+        <ChewingModalContent
+          initialValue={localChewing}
+          onCancel={() => setIsChewingModalOpen(false)}
+          onSave={(val) => {
+            setLocalChewing(val);
+            setCustomer(prev => ({ ...prev, chewing_status: val }));
+            setIsChewingModalOpen(false);
+          }}
         />
       </Modal>
 

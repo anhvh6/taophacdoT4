@@ -31,9 +31,8 @@ export const normalizeCustomer = (item: any): Customer => {
     try { sanPham = JSON.parse(sanPham); } catch (e) { sanPham = []; }
   }
 
-  // Use trang_thai_gan as a proxy for is_customized if is_customized is missing
-  // Handle both string "1" and number 1 for trang_thai_gan
-  const isCustomized = item.is_customized === 1 || item.is_customized === true || item.trang_thai_gan == 1 || item.trang_thai_gan === "1";
+  // Only use is_customized as the source of truth for private plan mode
+  const isCustomized = item.is_customized === 1 || item.is_customized === true;
 
   return { 
     ...item, 
@@ -61,10 +60,10 @@ export const normalizeCustomer = (item: any): Customer => {
   };
 };
 
-/** Domain public cho học viên (tách khỏi admin). Mặc định phacdo4.vercel.app */
+/** Domain public cho học viên (tách khỏi admin). Mặc định phacdo.vercel.app */
 export const getClientPublicOrigin = () => {
   const env = (import.meta as any).env?.VITE_CLIENT_PUBLIC_URL as string | undefined;
-  const fallback = 'https://phacdo4.vercel.app';
+  const fallback = 'https://phacdo.vercel.app';
   return (env && env.trim() ? env.trim() : fallback).replace(/\/$/, '');
 };
 

@@ -26,7 +26,7 @@ const App: React.FC = () => {
     const { pathname, hash } = window.location;
     const hasClientHash = hash.startsWith('#/client/');
     if (pathname.startsWith('/client/') || hasClientHash) return;
-    window.location.replace('https://30ngaythaydoi.vercel.app/');
+    window.location.replace('https://phacdo.vercel.app/');
   }, []);
   const getInitialPage = (): Page => {
     const hash = window.location.hash;
@@ -309,9 +309,7 @@ const App: React.FC = () => {
         hostname === 'phacdo.vercel.app' ||
         hostname === 'phacdo4.vercel.app' ||
         hostname === 'phacdo.netlify.app' ||
-        hostname.endsWith('.phacdo.vercel.app') ||
-        hostname.endsWith('.phacdo4.vercel.app') ||
-        hostname.endsWith('.phacdo.netlify.app');
+        hostname.endsWith('.phacdo.vercel.app');
       const pathname = window.location.pathname;
       const isRootPath = (!hash || hash === '' || hash === '#' || hash === '#/') && (pathname === '/' || pathname === '');
       

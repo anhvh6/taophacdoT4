@@ -2,38 +2,42 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+// Hardcoded identifying info for the project to ensure connectivity
+const SUPABASE_URL = "https://yovjwbswfeblfswdxown.supabase.co";
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
 export default async function handler(req: any, res: any) {
-  const { id, t } = req.query;
+  const { id, t, debug } = req.query;
   
   let customerName = "";
-  
-  if (id && t && supabaseUrl && supabaseAnonKey) {
+  let debugInfo = "";
+
+  if (id && SUPABASE_URL && SUPABASE_KEY) {
     try {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+      
+      // Try with ID ONLY first for OG tags (simplest, safest, avoids token query param issues)
       const { data, error } = await supabase
         .from('customers')
         .select('customer_name')
-        .eq('customer_id', id)
-        .eq('token', t)
+        .eq('customer_id', id.trim())
         .maybeSingle();
       
       if (data && data.customer_name) {
-        customerName = data.customer_name;
+        customerName = data.customer_name.trim();
+        debugInfo = `Found: ${customerName}`;
+      } else {
+        debugInfo = `NotFound: ${id} | Error: ${error?.message || 'none'}`;
       }
-    } catch (e) {
-      console.error("Error fetching customer name for OG tags:", e);
+    } catch (e: any) {
+      debugInfo = `ExecError: ${e.message}`;
     }
+  } else {
+    debugInfo = `MissingConfig: id=${!!id}, url=${!!SUPABASE_URL}, key=${!!SUPABASE_KEY}`;
   }
 
-  // Read index.html from the build output
-  // In Vercel, the root of the deployment is process.cwd()
-  // The build output is usually in 'dist'
+  // Read index.html
   let indexPath = path.join(process.cwd(), 'dist', 'index.html');
-  
-  // Fallback for different environments
   if (!fs.existsSync(indexPath)) {
     indexPath = path.join(process.cwd(), 'index.html');
   }
@@ -41,35 +45,42 @@ export default async function handler(req: any, res: any) {
   try {
     let html = fs.readFileSync(indexPath, 'utf8');
 
+    // Title structure: {Phác đồ trẻ hóa} + {Tên học viên}
     const title = customerName ? `Phác đồ trẻ hóa ${customerName}` : "Phác đồ trẻ hóa Mega Phương";
     const description = "Hành trình đánh thức vẻ đẹp tự nhiên, gìn giữ thanh xuân.";
     
-    // Replace title
-    html = html.replace(/<title>.*?<\/title>/, `<title>${title}</title>`);
+    // Aggressive replacement for all possible meta tags
+    html = html.replace(/<title[^>]*>.*?<\/title>/gi, `<title>${title}</title>`);
     
-    // Replace OG Title
-    if (html.includes('property="og:title"')) {
-      html = html.replace(/<meta property="og:title" content=".*?" \/>/g, `<meta property="og:title" content="${title}" />`);
-    } else {
-      html = html.replace('</head>', `<meta property="og:title" content="${title}" />\n</head>`);
-    }
+    const metaUpdates = [
+      { p: 'og:title', c: title },
+      { p: 'og:description', c: description },
+      { n: 'twitter:title', c: title },
+      { n: 'twitter:description', c: description },
+      { n: 'description', c: description }
+    ];
 
-    // Replace OG Description
-    if (html.includes('property="og:description"')) {
-      html = html.replace(/<meta property="og:description" content=".*?" \/>/g, `<meta property="og:description" content="${description}" />`);
-    } else {
-      html = html.replace('</head>', `<meta property="og:description" content="${description}" />\n</head>`);
-    }
-    
-    // Replace Twitter Title
-    if (html.includes('name="twitter:title"')) {
-      html = html.replace(/<meta name="twitter:title" content=".*?" \/>/g, `<meta name="twitter:title" content="${title}" />`);
-    }
+    metaUpdates.forEach(m => {
+      const attr = m.p ? 'property' : 'name';
+      const val = m.p || m.n;
+      const regex = new RegExp(`<meta\\s+[^>]*?${attr}=["']?${val}["']?[^>]*?>`, 'gi');
+      const tagContent = (val.includes('title')) ? title : description;
+      const finalTag = `<meta ${attr}="${val}" content="${tagContent}" />`;
+      
+      if (regex.test(html)) {
+        html = html.replace(regex, finalTag);
+      } else {
+        html = html.replace('</head>', `${finalTag}\n</head>`);
+      }
+    });
+
+    // Inject debug info into a hidden comment for verification
+    html = html.replace('</body>', `<!-- OG Debug: ${debugInfo} | ${new Date().toISOString()} -->\n</body>`);
 
     res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.status(200).send(html);
-  } catch (err) {
-    console.error("Error reading index.html:", err);
-    res.status(500).send("Internal Server Error");
+  } catch (err: any) {
+    res.status(500).send(`Server Error: ${err.message}`);
   }
 }
