@@ -497,6 +497,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
             if (data?.signed_embed_url) {
                 setPlayingVideo(data.signed_embed_url);
+                if (isStudent) {
+                    customerService.logVideoOpen(customerId!, customer?.token || token || '');
+                }
             } else if (!data?.error) {
                 throw new Error("Không nhận được token từ server");
             }
@@ -513,11 +516,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     } else if (trimmedLink.includes('mediadelivery.net')) {
       setToast("Cảnh báo: Video này sử dụng đường dẫn cũ và không được bảo vệ bằng Token.");
       setPlayingVideo(trimmedLink);
+      if (isStudent) customerService.logVideoOpen(customerId!, customer?.token || token || '');
     } else {
       setToast("Cảnh báo: Video này là liên kết ngoài, không được bảo vệ chống tải.");
       if (newTab) {
         try {
           newTab.location.href = link;
+          if (isStudent) customerService.logVideoOpen(customerId!, customer?.token || token || '');
         } catch (e) {
           window.location.href = link;
         }

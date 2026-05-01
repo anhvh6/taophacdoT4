@@ -56,7 +56,8 @@ export const normalizeCustomer = (item: any): Customer => {
     token: item.token || "",
     require_google_auth: parseFlag(item.require_google_auth, true),
     require_device_limit: parseFlag(item.require_device_limit, true),
-    pending_email: item.pending_email || ""
+    pending_email: item.pending_email || "",
+    raw_backup: item.raw_backup || {}
   };
 };
 

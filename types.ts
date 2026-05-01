@@ -99,6 +99,7 @@ export interface Customer {
   allowed_day?: number;
   access_state?: string;
   blocks?: SidebarBlock[];
+  raw_backup?: any;
 }
 
 export interface CustomerDevice {

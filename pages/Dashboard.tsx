@@ -258,7 +258,7 @@ export const Dashboard: React.FC<{
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [colorFilter, setColorFilter] = useState<string | null>(null);
+  const [videoOpenFilter, setVideoOpenFilter] = useState<boolean>(false);
   const [toast, setToast] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
     'expired': true,
@@ -592,14 +592,26 @@ export const Dashboard: React.FC<{
                           String(c.ma_vd || '').toLowerCase().includes(term) || 
                           String(c.sdt || '').includes(searchTerm);
       
-      if (term) return matchSearch; // Search independent of color filter
+      if (term) return matchSearch;
 
-      const category = getCategory(c, products, productMap);
-      const matchColor = !colorFilter || category === colorFilter;
+      let matchVideoOpen = true;
+      if (videoOpenFilter) {
+        if (c.raw_backup && c.raw_backup.last_video_open_time) {
+           const openTime = new Date(c.raw_backup.last_video_open_time);
+           const vnTime = new Date(openTime.toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
+           const todayVn = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
+           
+           matchVideoOpen = vnTime.getDate() === todayVn.getDate() && 
+                            vnTime.getMonth() === todayVn.getMonth() && 
+                            vnTime.getFullYear() === todayVn.getFullYear();
+        } else {
+           matchVideoOpen = false;
+        }
+      }
 
-      return matchSearch && matchColor;
+      return matchSearch && matchVideoOpen;
     });
-  }, [customers, searchTerm, colorFilter, products, productMap]);
+  }, [customers, searchTerm, videoOpenFilter, products, productMap]);
 
   // Helper function for sorting by most recent creation (using full timestamp)
   const getCreationTime = (c: Customer) => {
@@ -689,22 +701,29 @@ export const Dashboard: React.FC<{
 
   const isSearching = searchTerm.trim() !== "";
 
-  const colorStats = useMemo(() => {
-    const stats = { orange: 0, green: 0, gray: 0, brown: 0 };
+  const hvVaoHocCount = useMemo(() => {
+    let count = 0;
+    const todayVn = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
+    
     customers.filter(c => c.status !== CustomerStatus.DELETED).forEach(c => {
       const createdAtISO = toISODateKey(c.created_at);
       const matchDate = isSearching || ((!dateFrom || createdAtISO >= dateFrom) && (!dateTo || createdAtISO <= dateTo));
       
       if (!matchDate) return;
 
-      const category = getCategory(c, products, productMap);
-      if (category === 'orange') stats.orange++;
-      else if (category === 'green') stats.green++;
-      else if (category === 'gray') stats.gray++;
-      else if (category === 'brown') stats.brown++;
+      if (c.raw_backup && c.raw_backup.last_video_open_time) {
+         const openTime = new Date(c.raw_backup.last_video_open_time);
+         const vnTime = new Date(openTime.toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
+         
+         if (vnTime.getDate() === todayVn.getDate() && 
+             vnTime.getMonth() === todayVn.getMonth() && 
+             vnTime.getFullYear() === todayVn.getFullYear()) {
+             count++;
+         }
+      }
     });
-    return stats;
-  }, [customers, products, productMap, dateFrom, dateTo, isSearching]);
+    return count;
+  }, [customers, dateFrom, dateTo, isSearching]);
   
   const handleCopyLink = (link: string, customer?: Customer) => {
     const dbToken = customer?.token && String(customer.token).trim() !== "" ? String(customer.token).trim() : "";
@@ -843,10 +862,12 @@ export const Dashboard: React.FC<{
           </div>
           
           <div className="flex overflow-x-auto gap-3 sm:gap-x-4 sm:gap-y-2 mt-1 px-1 items-center scrollbar-hide pb-2 sm:pb-0">
-             <button onClick={() => setColorFilter(colorFilter === 'orange' ? null : 'orange')} className={`shrink-0 group flex items-center gap-2 transition-all p-2 px-3 rounded-xl border ${colorFilter === 'orange' ? 'bg-orange-50 border-orange-200 shadow-sm scale-105' : 'bg-white border-blue-50 sm:bg-transparent sm:border-transparent opacity-70 hover:opacity-100 hover:bg-gray-50'}`}><div className="w-2.5 h-2.5 rounded-full bg-orange-500"></div><span className={`text-[10px] font-black uppercase tracking-tight ${colorFilter === 'orange' ? 'text-orange-700' : 'text-orange-600'}`}>Chưa gán - Mail<span className="text-black ml-1">:{colorStats.orange}</span></span></button>
-             <button onClick={() => setColorFilter(colorFilter === 'green' ? null : 'green')} className={`shrink-0 group flex items-center gap-2 transition-all p-2 px-3 rounded-xl border ${colorFilter === 'green' ? 'bg-green-50 border-green-200 shadow-sm scale-105' : 'bg-white border-blue-50 sm:bg-transparent sm:border-transparent opacity-70 hover:opacity-100 hover:bg-gray-50'}`}><div className="w-2.5 h-2.5 rounded-full bg-green-600"></div><span className={`text-[10px] font-black uppercase tracking-tight ${colorFilter === 'green' ? 'text-green-800' : 'text-green-700'}`}>Chưa gán + Mail<span className="text-black ml-1">:{colorStats.green}</span></span></button>
-             <button onClick={() => setColorFilter(colorFilter === 'gray' ? null : 'gray')} className={`shrink-0 group flex items-center gap-2 transition-all p-2 px-3 rounded-xl border ${colorFilter === 'gray' ? 'bg-slate-100 border-slate-300 shadow-sm scale-105' : 'bg-white border-blue-50 sm:bg-transparent sm:border-transparent opacity-70 hover:opacity-100 hover:bg-gray-50'}`}><div className="w-2.5 h-2.5 rounded-full bg-[#4B5563]"></div><span className={`text-[10px] font-black uppercase tracking-tight ${colorFilter === 'gray' ? 'text-slate-900' : 'text-slate-600'}`}>Gán - ĐC (Vốn)<span className="text-black ml-1">:{colorStats.gray}</span></span></button>
-             <button onClick={() => setColorFilter(colorFilter === 'brown' ? null : 'brown')} className={`shrink-0 group flex items-center gap-2 transition-all p-2 px-3 rounded-xl border ${colorFilter === 'brown' ? 'bg-amber-100 border-amber-300 shadow-sm scale-105' : 'bg-white border-blue-50 sm:bg-transparent sm:border-transparent opacity-70 hover:opacity-100 hover:bg-gray-50'}`}><div className="w-2.5 h-2.5 rounded-full bg-[#8B4513]"></div><span className={`text-[10px] font-black uppercase tracking-tight ${colorFilter === 'brown' ? 'text-amber-950' : 'text-amber-800'}`}>Gán - MVĐ (ĐC)<span className="text-black ml-1">:{colorStats.brown}</span></span></button>
+             <button onClick={() => setVideoOpenFilter(!videoOpenFilter)} className={`shrink-0 group flex items-center gap-2 transition-all p-2 px-3 rounded-xl border ${videoOpenFilter ? 'bg-indigo-50 border-indigo-200 shadow-sm scale-105' : 'bg-white border-blue-50 sm:bg-transparent sm:border-transparent opacity-70 hover:opacity-100 hover:bg-gray-50'}`}>
+                <div className={`w-2.5 h-2.5 rounded-full ${videoOpenFilter ? 'bg-indigo-600 animate-pulse' : 'bg-indigo-400'}`}></div>
+                <span className={`text-[10px] font-black uppercase tracking-tight ${videoOpenFilter ? 'text-indigo-800' : 'text-indigo-600'}`}>
+                   HV VÀO HỌC <span className="text-black ml-1">:{hvVaoHocCount}</span>
+                </span>
+             </button>
           </div>
         </div>
 
