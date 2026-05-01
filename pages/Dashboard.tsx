@@ -1304,8 +1304,8 @@ export const Dashboard: React.FC<{
 
                 const studentGroups = Object.values(grouped)
                   .sort((a: any, b: any) => {
-                    const aRead = a.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}`)) ? 1 : 0;
-                    const bRead = b.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}`)) ? 1 : 0;
+                    const aRead = a.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}`)) ? 1 : 0;
+                    const bRead = b.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}`)) ? 1 : 0;
                     if (aRead !== bRead) return aRead - bRead;
                     return new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime();
                   });
@@ -1315,7 +1315,7 @@ export const Dashboard: React.FC<{
                 }
 
                 return studentGroups.map((group: any) => {
-                  const isRead = group.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}`));
+                  const isRead = group.requests.every((r: any) => viewedCustomerIds.has(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}`));
                   return (
                   <div 
                     key={group.customer_id}
@@ -1323,7 +1323,7 @@ export const Dashboard: React.FC<{
                     onClick={async () => {
                       setViewedCustomerIds(prev => {
                         const next = new Set(prev);
-                        group.requests.forEach((r: any) => next.add(`${r.type}_${r.id || r.customer_id}`));
+                        group.requests.forEach((r: any) => next.add(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}`));
                         localStorage.setItem('admin_viewed_notifications', JSON.stringify(Array.from(next)));
                         return next;
                       });
@@ -1435,13 +1435,10 @@ export const Dashboard: React.FC<{
 
                     if (detailCustomerId) {
                       setViewedCustomerIds(prev => {
-                        const next = new Set(prev).add(detailCustomerId);
+                        const next = new Set(prev);
+                        const detailCustomerReqs = pendingRequests.filter(r => r.customer_id === detailCustomerId);
+                        detailCustomerReqs.forEach((r: any) => next.add(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}`));
                         localStorage.setItem('admin_viewed_notifications', JSON.stringify(Array.from(next)));
-                        return next;
-                      });
-                      setHandledCustomerIds(prev => {
-                        const next = new Set(prev).add(detailCustomerId);
-                        localStorage.setItem('admin_handled_notifications', JSON.stringify(Array.from(next)));
                         return next;
                       });
                     }
