@@ -29,7 +29,9 @@ import {
   Pie, 
   AreaChart, 
   Area,
-  Legend
+  Legend,
+  LineChart,
+  Line
 } from 'recharts';
 import { Customer, Product, CustomerStatus } from '../types';
 import { calcRevenueCostProfit, getProfitMonth } from '../utils/finance';
@@ -46,7 +48,92 @@ interface AnalyticsDashboardProps {
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigate, customers, products }) => {
   const [timeRange, setTimeRange] = useState<'month' | 'quarter' | 'year'>('month');
+  const [loginTimeRange, setLoginTimeRange] = useState<'day' | 'week' | 'month'>('day');
   
+  const loginStats = useMemo(() => {
+    const activeCustomers = customers.filter(c => c.status !== CustomerStatus.DELETED);
+    const now = new Date();
+    
+    if (loginTimeRange === 'day') {
+      const currentDay = now.getDay(); 
+      const diff = currentDay === 0 ? -6 : 1 - currentDay; 
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() + diff);
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      const data = [
+        { name: 'T2', value: 0 },
+        { name: 'T3', value: 0 },
+        { name: 'T4', value: 0 },
+        { name: 'T5', value: 0 },
+        { name: 'T6', value: 0 },
+        { name: 'T7', value: 0 },
+        { name: 'CN', value: 0 },
+      ];
+
+      activeCustomers.forEach(c => {
+        if (c.raw_backup && c.raw_backup.last_video_open_time) {
+          const d = new Date(c.raw_backup.last_video_open_time);
+          if (d >= startOfWeek && d <= endOfWeek) {
+            let day = d.getDay();
+            let index = day === 0 ? 6 : day - 1;
+            data[index].value += 1;
+          }
+        }
+      });
+      return data;
+    } else if (loginTimeRange === 'week') {
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      
+      const data = [
+        { name: 'Tuần 1', value: 0 },
+        { name: 'Tuần 2', value: 0 },
+        { name: 'Tuần 3', value: 0 },
+        { name: 'Tuần 4', value: 0 },
+        { name: 'Tuần 5', value: 0 },
+      ];
+
+      activeCustomers.forEach(c => {
+        if (c.raw_backup && c.raw_backup.last_video_open_time) {
+          const d = new Date(c.raw_backup.last_video_open_time);
+          if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+            const date = d.getDate();
+            if (date <= 7) data[0].value += 1;
+            else if (date <= 14) data[1].value += 1;
+            else if (date <= 21) data[2].value += 1;
+            else if (date <= 28) data[3].value += 1;
+            else data[4].value += 1;
+          }
+        }
+      });
+      if (currentMonth === 1 && currentYear % 4 !== 0) {
+        data.pop(); 
+      }
+      return data;
+    } else {
+      const currentYear = now.getFullYear();
+      const data = Array.from({ length: 12 }, (_, i) => ({
+        name: `T${i + 1}`,
+        value: 0
+      }));
+
+      activeCustomers.forEach(c => {
+        if (c.raw_backup && c.raw_backup.last_video_open_time) {
+          const d = new Date(c.raw_backup.last_video_open_time);
+          if (d.getFullYear() === currentYear) {
+            data[d.getMonth()].value += 1;
+          }
+        }
+      });
+      return data;
+    }
+  }, [customers, loginTimeRange]);
+
   // Data Processing
   const stats = useMemo(() => {
     const now = new Date();
@@ -354,6 +441,60 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
                   </div>
                 ))}
               </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* User Login Chart Section */}
+        <div className="grid grid-cols-1 gap-8">
+          <Card className="p-8 bg-white border-blue-50 shadow-sm">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-lg font-black text-blue-900 uppercase tracking-tight">Thống kê học viên vào học</h3>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Số lượng học viên truy cập hệ thống</p>
+              </div>
+              <div>
+                <select
+                  value={loginTimeRange}
+                  onChange={(e) => setLoginTimeRange(e.target.value as any)}
+                  className="text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="day">Ngày (Trong tuần)</option>
+                  <option value="week">Tuần (Trong tháng)</option>
+                  <option value="month">Tháng (Trong năm)</option>
+                </select>
+              </div>
+            </div>
+            <div className="h-[350px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={loginStats} margin={{ top: 20, right: 30, left: 20, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fontWeight: 700, fill: '#94A3B8' }}
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fontWeight: 700, fill: '#94A3B8' }}
+                  />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="value" 
+                    name="Số lượng truy cập"
+                    stroke="#8B5CF6" 
+                    strokeWidth={3}
+                    activeDot={{ r: 8 }}
+                    label={{ position: 'top', fill: '#6D28D9', fontSize: 12, fontWeight: 800, formatter: (val: number) => val > 0 ? val : '' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </Card>
         </div>
