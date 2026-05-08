@@ -44,6 +44,22 @@ export default async function handler(req: any, res: any) {
     const raw_backup = customer.raw_backup || {};
     raw_backup.last_video_open_time = new Date().toISOString();
 
+    // Add to video_open_dates
+    if (!raw_backup.video_open_dates) {
+      raw_backup.video_open_dates = [];
+    }
+    
+    // Convert to VN timezone YYYY-MM-DD
+    const vnTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
+    const yyyy = vnTime.getFullYear();
+    const mm = String(vnTime.getMonth() + 1).padStart(2, '0');
+    const dd = String(vnTime.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    
+    if (!raw_backup.video_open_dates.includes(dateStr)) {
+      raw_backup.video_open_dates.push(dateStr);
+    }
+
     const { error: updateError } = await supabase
       .from('customers')
       .update({ raw_backup })

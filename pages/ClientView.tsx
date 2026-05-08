@@ -1052,7 +1052,66 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                  )}
                </div>
              ))}
+
+             {/* Theo dõi Chuyên cần Block */}
+             {(() => {
+                const start = parseVNDate(customer.start_date);
+                if (!start) return null;
+                const trackingStartStr = (customer.raw_backup?.video_open_dates && customer.raw_backup.video_open_dates.length > 0) 
+                  ? customer.raw_backup.video_open_dates[0] 
+                  : null;
+                const trackingStartDate = trackingStartStr ? new Date(trackingStartStr) : new Date(); 
+                trackingStartDate.setHours(0, 0, 0, 0);
+
+                const diffDays = getDiffDays(start, today) + 1;
+                const cycle = Math.max(0, Math.floor((diffDays - 1) / 60));
+                const cycleStartDate = addDays(start, cycle * 60);
+
+                return (
+                  <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-blue-50 text-[#1E3A8A]">
+                    <h3 className="text-lg font-black mb-4 border-b border-blue-50 pb-3 flex items-center gap-2 uppercase tracking-wide">
+                      Theo dõi Chuyên cần
+                    </h3>
+                    <div className="text-[10px] text-gray-500 font-bold mb-4 uppercase tracking-widest text-center">
+                      Chu kỳ {cycle + 1} (60 ngày)
+                    </div>
+                    <div className="grid grid-cols-6 gap-2">
+                      {Array.from({ length: 60 }, (_, i) => i + 1).map(day => {
+                        const actualDate = addDays(cycleStartDate, day - 1);
+                        const isFuture = actualDate > today;
+                        const isBeforeTracking = actualDate < trackingStartDate;
+                        
+                        let status: 'none' | 'check' | 'cross' = 'none';
+                        if (!isFuture && !isBeforeTracking) {
+                          const yyyy = actualDate.getFullYear();
+                          const mm = String(actualDate.getMonth() + 1).padStart(2, '0');
+                          const dd = String(actualDate.getDate()).padStart(2, '0');
+                          const dateStr = `${yyyy}-${mm}-${dd}`;
+                          if (customer.raw_backup?.video_open_dates?.includes(dateStr)) {
+                            status = 'check';
+                          } else {
+                            status = 'cross';
+                          }
+                        }
+
+                        return (
+                          <div key={day} className="flex flex-col items-center justify-center h-10 bg-blue-50/50 rounded-lg relative border border-blue-100/50">
+                            {status === 'check' && (
+                              <div className="absolute -top-2 text-green-500 font-bold text-xs" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>✔</div>
+                            )}
+                            {status === 'cross' && (
+                              <div className="absolute -top-2 text-red-500 font-bold text-[10px]" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>✖</div>
+                            )}
+                            <span className="text-[10px] font-black text-blue-900">{day}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+             })()}
           </aside>
+
 
           <section className="flex-1">
              <div className="bg-white rounded-[2.5rem] p-8 md:p-12 border border-blue-50 shadow-sm">
