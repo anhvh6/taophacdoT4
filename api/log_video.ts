@@ -60,12 +60,21 @@ export default async function handler(req: any, res: any) {
       raw_backup.video_open_dates.push(dateStr);
     }
 
+    // Update customers table
     const { error: updateError } = await supabase
       .from('customers')
       .update({ raw_backup })
       .eq('customer_id', customer_id);
 
     if (updateError) throw updateError;
+
+    // Log to attendance_logs table
+    await supabase
+      .from('attendance_logs')
+      .upsert({ 
+        customer_id: customer_id, 
+        access_date: dateStr 
+      }, { onConflict: 'customer_id,access_date' });
 
     return res.status(200).json({ success: true });
   } catch (err: any) {

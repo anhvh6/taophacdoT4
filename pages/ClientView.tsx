@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut } from 'lucide-react';
+import { Play, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, ChevronUp, ChevronDown, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut } from 'lucide-react';
 import { Toast } from '../components/UI';
 import { customerService, generateCustomerLink } from '../src/services/customerService';
 import { planService } from '../src/services/planService';
 import { customPlanService } from '../src/services/customPlanService';
 import { supabase } from '../src/lib/supabaseClient';
 import { Customer, ExerciseTask, CustomerStatus, ExerciseType } from '../types';
-import { toVnZeroHour, formatDDMMYYYY, getDiffDays, addDays, parseVNDate } from '../utils/date';
+import { toVnZeroHour, formatDDMMYYYY, getDiffDays, addDays, parseVNDate, toISODateKey } from '../utils/date';
 import { safeSetLocalStorage } from '../src/utils/storage';
 import { ImmersiveChat } from '../components/ImmersiveChat';
 import { GoogleLogin } from '@react-oauth/google';
@@ -58,6 +58,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const [selfApprovalCode, setSelfApprovalCode] = useState('');
   const [selfApprovalLoading, setSelfApprovalLoading] = useState(false);
   const [selfApprovalError, setSelfApprovalError] = useState('');
+  const [isAttendanceExpanded, setIsAttendanceExpanded] = useState(false);
 
   const refreshInFlight = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -332,6 +333,31 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     }
   }, [customer, isVerified, loading, authModal.isOpen]);
 
+  // Helper to mark attendance in local state for instant UI feedback
+  const markAttendanceLocally = () => {
+    if (!customer) return;
+    const dateStr = toISODateKey(new Date());
+    const currentDates = customer.raw_backup?.video_open_dates || [];
+    if (!currentDates.includes(dateStr)) {
+      const updatedDates = [...currentDates, dateStr];
+      const updatedCustomer = {
+        ...customer,
+        raw_backup: {
+          ...(customer.raw_backup || {}),
+          video_open_dates: updatedDates
+        }
+      };
+      setCustomer(updatedCustomer);
+      
+      // Update cache to persist the checkmark locally until next refresh
+      safeSetLocalStorage(`phacdo_cache_${customerId}`, JSON.stringify({
+        customer: updatedCustomer,
+        tasks: tasks,
+        timestamp: Date.now()
+      }));
+    }
+  };
+
   // Play Video Logic
   const handlePlayVideo = async (link?: string, skipAuthCheck: boolean = false) => {
     if (!link) return;
@@ -499,6 +525,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                 setPlayingVideo(data.signed_embed_url);
                 if (isStudent) {
                     customerService.logVideoOpen(customerId!, customer?.token || token || '');
+                    markAttendanceLocally();
                 }
             } else if (!data?.error) {
                 throw new Error("Không nhận được token từ server");
@@ -516,13 +543,19 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     } else if (trimmedLink.includes('mediadelivery.net')) {
       setToast("Cảnh báo: Video này sử dụng đường dẫn cũ và không được bảo vệ bằng Token.");
       setPlayingVideo(trimmedLink);
-      if (isStudent) customerService.logVideoOpen(customerId!, customer?.token || token || '');
+      if (isStudent) {
+          customerService.logVideoOpen(customerId!, customer?.token || token || '');
+          markAttendanceLocally();
+      }
     } else {
       setToast("Cảnh báo: Video này là liên kết ngoài, không được bảo vệ chống tải.");
       if (newTab) {
         try {
           newTab.location.href = link;
-          if (isStudent) customerService.logVideoOpen(customerId!, customer?.token || token || '');
+          if (isStudent) {
+              customerService.logVideoOpen(customerId!, customer?.token || token || '');
+              markAttendanceLocally();
+          }
         } catch (e) {
           window.location.href = link;
         }
@@ -1046,67 +1079,100 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                  <p className={`text-sm leading-relaxed mb-6 whitespace-pre-line font-medium text-justify ${block.type === 'dark' ? 'text-white/90' : 'text-blue-800'}`}>{block.content}</p>
                  
                  {block.is_chat ? (
-                    <button onClick={() => setIsImmersiveOpen(true)} className={`w-full py-4 rounded-full font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${block.type === 'dark' ? 'bg-[#F97316] text-white' : 'bg-[#F97316] text-white'}`}><MessageSquare size={16} /> Hỏi đáp với chuyên gia</button>
-                 ) : (block.video_link || block.videoLink) && (
-                   <button onClick={() => handlePlayVideo(block.video_link || block.videoLink)} className={`w-full py-4 rounded-full font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-lg transition-all hover:opacity-90 active:scale-95 ${block.type === 'dark' ? 'bg-white text-blue-900' : 'bg-blue-600 text-white'}`}>▶ Xem hướng dẫn</button>
-                 )}
+                    <button onClick={() => setIsImmersiveOpen(true)} className={`w-full py-4 rounded-full font-black text-[10px] uppercase flex items-center justify-center gap-2 transition-all active:scale-95 ${block.type === 'dark' ? 'bg-white text-[#1E3A8A] hover:bg-blue-50' : 'bg-[#1E3A8A] text-white hover:bg-blue-900'}`}>💬 Chat cùng chuyên gia</button>
+                 ) : block.video_link ? (
+                    <button onClick={() => window.open(block.video_link, '_blank')} className={`w-full py-3.5 text-[11px] font-black rounded-full flex items-center justify-center gap-2 transition-all active:scale-95 ${block.type === 'dark' ? 'bg-white text-[#1E3A8A] hover:bg-blue-50' : 'bg-[#1E3A8A] text-white hover:bg-blue-900'}`}>▶ Xem hướng dẫn video</button>
+                 ) : null}
                </div>
              ))}
 
-             {/* Theo dõi Chuyên cần Block */}
              {(() => {
                 const start = parseVNDate(customer.start_date);
                 if (!start) return null;
-                const trackingStartStr = (customer.raw_backup?.video_open_dates && customer.raw_backup.video_open_dates.length > 0) 
-                  ? customer.raw_backup.video_open_dates[0] 
-                  : null;
-                const trackingStartDate = trackingStartStr ? new Date(trackingStartStr) : new Date(); 
-                trackingStartDate.setHours(0, 0, 0, 0);
 
                 const diffDays = getDiffDays(start, today) + 1;
                 const cycle = Math.max(0, Math.floor((diffDays - 1) / 60));
                 const cycleStartDate = addDays(start, cycle * 60);
 
-                return (
-                  <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-blue-50 text-[#1E3A8A]">
-                    <h3 className="text-lg font-black mb-4 border-b border-blue-50 pb-3 flex items-center gap-2 uppercase tracking-wide">
-                      Theo dõi Chuyên cần
-                    </h3>
-                    <div className="text-[10px] text-gray-500 font-bold mb-4 uppercase tracking-widest text-center">
-                      Chu kỳ {cycle + 1} (60 ngày)
-                    </div>
-                    <div className="grid grid-cols-6 gap-2">
-                      {Array.from({ length: 60 }, (_, i) => i + 1).map(day => {
-                        const actualDate = addDays(cycleStartDate, day - 1);
-                        const isFuture = actualDate > today;
-                        const isBeforeTracking = actualDate < trackingStartDate;
-                        
-                        let status: 'none' | 'check' | 'cross' = 'none';
-                        if (!isFuture && !isBeforeTracking) {
-                          const yyyy = actualDate.getFullYear();
-                          const mm = String(actualDate.getMonth() + 1).padStart(2, '0');
-                          const dd = String(actualDate.getDate()).padStart(2, '0');
-                          const dateStr = `${yyyy}-${mm}-${dd}`;
-                          if (customer.raw_backup?.video_open_dates?.includes(dateStr)) {
-                            status = 'check';
-                          } else {
-                            status = 'cross';
-                          }
-                        }
+                // Tính toán số liệu chuyên cần trong chu kỳ hiện tại
+                const videoOpenDates = customer.raw_backup?.video_open_dates || [];
+                let attendedCount = 0;
+                let missedCount = 0;
+                const currentDayInCycle = Math.min(60, Math.max(1, getDiffDays(cycleStartDate, today) + 1));
 
-                        return (
-                          <div key={day} className="flex flex-col items-center justify-center h-10 bg-blue-50/50 rounded-lg relative border border-blue-100/50">
-                            {status === 'check' && (
-                              <div className="absolute -top-2 text-green-500 font-bold text-xs" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>✔</div>
-                            )}
-                            {status === 'cross' && (
-                              <div className="absolute -top-2 text-red-500 font-bold text-[10px]" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>✖</div>
-                            )}
-                            <span className="text-[10px] font-black text-blue-900">{day}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                for (let i = 1; i <= currentDayInCycle; i++) {
+                  const checkDate = addDays(cycleStartDate, i - 1);
+                  const dateStr = toISODateKey(checkDate);
+                  if (videoOpenDates.includes(dateStr)) {
+                    attendedCount++;
+                  } else if (checkDate < today) {
+                    missedCount++;
+                  }
+                }
+
+                // Tạo nhận xét đánh giá
+                let assessment = "";
+                if (currentDayInCycle > 0) {
+                  const rate = attendedCount / (attendedCount + missedCount || 1);
+                  let encouragement = "";
+                  if (rate >= 0.8) encouragement = "Mức độ chuyên cần tuyệt vời! Hãy tiếp tục phát huy nhé! 🔥";
+                  else if (rate >= 0.5) encouragement = "Bạn đang làm khá tốt, hãy cố gắng đều đặn hơn nữa nhé! 💪";
+                  else encouragement = "Hãy dành thời gian tập luyện đều đặn hơn để đạt hiệu quả tốt nhất bạn nhé! Cố lên nào! ✨";
+                  
+                  assessment = `Bạn đã tham gia ${attendedCount} buổi, vắng ${missedCount} buổi. Bạn đang ở ngày thứ ${currentDayInCycle} của lộ trình. ${encouragement}`;
+                }
+
+                return (
+                  <div 
+                    className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-blue-50 text-[#1E3A8A] cursor-pointer hover:shadow-md transition-all"
+                    onClick={() => setIsAttendanceExpanded(!isAttendanceExpanded)}
+                  >
+                    <h3 className="text-lg font-black flex items-center justify-between uppercase tracking-wide">
+                      <span className="flex items-center gap-2">Theo dõi Chuyên cần</span>
+                      {isAttendanceExpanded ? <ChevronUp size={20} className="text-blue-400" /> : <ChevronDown size={20} className="text-blue-400" />}
+                    </h3>
+                    
+                    {isAttendanceExpanded && (
+                      <div className="mt-6 animate-in fade-in slide-in-from-top-2 duration-300" onClick={(e) => e.stopPropagation()}>
+                        <div className="text-[10px] text-gray-500 font-bold mb-4 uppercase tracking-widest text-center">
+                          Chu kỳ {cycle + 1} (60 ngày)
+                          {assessment && <div className="mt-2 text-[11px] text-blue-600 normal-case font-medium leading-relaxed italic px-4">{assessment}</div>}
+                        </div>
+                        <div className="grid grid-cols-6 gap-2">
+                          {Array.from({ length: 60 }, (_, i) => i + 1).map(day => {
+                            const actualDate = addDays(cycleStartDate, day - 1);
+                            const isFuture = actualDate > today;
+                            const isToday = actualDate.getTime() === today.getTime();
+                            
+                            let status: 'none' | 'check' | 'cross' = 'none';
+                            if (!isFuture) {
+                              const dateStr = toISODateKey(actualDate);
+                              if (videoOpenDates.includes(dateStr)) {
+                                status = 'check';
+                              } else if (actualDate < today) {
+                                status = 'cross';
+                              }
+                            }
+
+                            return (
+                              <div 
+                                key={day} 
+                                className={`flex flex-col items-center justify-center h-10 rounded-lg relative border transition-colors ${isToday ? 'bg-[#E0F2FE] border-blue-300' : 'bg-blue-50/50 border-blue-100/50'}`}
+                                title={isToday ? "Ngày học hiện tại" : undefined}
+                              >
+                                {status === 'check' && (
+                                  <div className="absolute -top-2 text-green-500 font-bold text-xs" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>✔</div>
+                                )}
+                                {status === 'cross' && (
+                                  <div className="absolute -top-2 text-red-500 font-bold text-[10px]" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>✖</div>
+                                )}
+                                <span className="text-[10px] font-black text-blue-900">{day}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
              })()}

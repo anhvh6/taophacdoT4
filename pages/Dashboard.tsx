@@ -703,11 +703,22 @@ export const Dashboard: React.FC<{
 
   const hvVaoHocCount = useMemo(() => {
     let count = 0;
+    const todayStr = toISODateKey(new Date());
     const todayVn = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
     
     customers.filter(c => c.status !== CustomerStatus.DELETED).forEach(c => {
-      if (c.raw_backup && c.raw_backup.last_video_open_time) {
-         const openTime = new Date(c.raw_backup.last_video_open_time);
+      const raw = c.raw_backup || {};
+      const openDates = Array.isArray(raw.video_open_dates) ? raw.video_open_dates : [];
+      
+      // Check in the persistent dates array first (most accurate for daily uniqueness)
+      if (openDates.includes(todayStr)) {
+        count++;
+        return;
+      }
+
+      // Fallback for older data that only has the timestamp
+      if (raw.last_video_open_time) {
+         const openTime = new Date(raw.last_video_open_time);
          const vnTime = new Date(openTime.toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
          
          if (vnTime.getDate() === todayVn.getDate() && 

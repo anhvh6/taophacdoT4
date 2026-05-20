@@ -53,19 +53,25 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
   const loginStats = useMemo(() => {
     const activeCustomers = customers.filter(c => c.status !== CustomerStatus.DELETED);
     const now = new Date();
-    
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    let data: any[] = [];
+    let startOfWeek: Date | null = null;
+    let endOfWeek: Date | null = null;
+
     if (loginTimeRange === 'day') {
       const currentDay = now.getDay(); 
       const diff = currentDay === 0 ? -6 : 1 - currentDay; 
-      const startOfWeek = new Date(now);
+      startOfWeek = new Date(now);
       startOfWeek.setDate(now.getDate() + diff);
       startOfWeek.setHours(0, 0, 0, 0);
 
-      const endOfWeek = new Date(startOfWeek);
+      endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 6);
       endOfWeek.setHours(23, 59, 59, 999);
 
-      const data = [
+      data = [
         { name: 'T2', value: 0 },
         { name: 'T3', value: 0 },
         { name: 'T4', value: 0 },
@@ -74,64 +80,59 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
         { name: 'T7', value: 0 },
         { name: 'CN', value: 0 },
       ];
-
-      activeCustomers.forEach(c => {
-        if (c.raw_backup && c.raw_backup.last_video_open_time) {
-          const d = new Date(c.raw_backup.last_video_open_time);
-          if (d >= startOfWeek && d <= endOfWeek) {
-            let day = d.getDay();
-            let index = day === 0 ? 6 : day - 1;
-            data[index].value += 1;
-          }
-        }
-      });
-      return data;
     } else if (loginTimeRange === 'week') {
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
-      
-      const data = [
+      data = [
         { name: 'Tuần 1', value: 0 },
         { name: 'Tuần 2', value: 0 },
         { name: 'Tuần 3', value: 0 },
         { name: 'Tuần 4', value: 0 },
         { name: 'Tuần 5', value: 0 },
       ];
+    } else {
+      data = Array.from({ length: 12 }, (_, i) => ({
+        name: `T${i + 1}`,
+        value: 0
+      }));
+    }
 
-      activeCustomers.forEach(c => {
-        if (c.raw_backup && c.raw_backup.last_video_open_time) {
-          const d = new Date(c.raw_backup.last_video_open_time);
+    activeCustomers.forEach(c => {
+      const openDates = c.raw_backup?.video_open_dates || [];
+      if (openDates.length === 0 && c.raw_backup?.last_video_open_time) {
+        // Fallback if video_open_dates is missing but last_video_open_time exists
+        openDates.push(c.raw_backup.last_video_open_time.split('T')[0]);
+      }
+
+      openDates.forEach((dateStr: string) => {
+        const d = new Date(dateStr);
+        
+        if (loginTimeRange === 'day' && startOfWeek && endOfWeek) {
+          if (d >= startOfWeek && d <= endOfWeek) {
+            let day = d.getDay();
+            let index = day === 0 ? 6 : day - 1;
+            data[index].value += 1;
+          }
+        } else if (loginTimeRange === 'week') {
           if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
             const date = d.getDate();
             if (date <= 7) data[0].value += 1;
             else if (date <= 14) data[1].value += 1;
             else if (date <= 21) data[2].value += 1;
             else if (date <= 28) data[3].value += 1;
-            else data[4].value += 1;
+            else if (data[4]) data[4].value += 1;
           }
-        }
-      });
-      if (currentMonth === 1 && currentYear % 4 !== 0) {
-        data.pop(); 
-      }
-      return data;
-    } else {
-      const currentYear = now.getFullYear();
-      const data = Array.from({ length: 12 }, (_, i) => ({
-        name: `T${i + 1}`,
-        value: 0
-      }));
-
-      activeCustomers.forEach(c => {
-        if (c.raw_backup && c.raw_backup.last_video_open_time) {
-          const d = new Date(c.raw_backup.last_video_open_time);
+        } else {
           if (d.getFullYear() === currentYear) {
             data[d.getMonth()].value += 1;
           }
         }
       });
-      return data;
+    });
+
+    if (loginTimeRange === 'week' && currentMonth === 1 && currentYear % 4 !== 0) {
+      data.pop(); 
     }
+
+    return data;
   }, [customers, loginTimeRange]);
 
   // Data Processing
@@ -489,9 +490,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
                     dataKey="value" 
                     name="Số lượng truy cập"
                     stroke="#8B5CF6" 
-                    strokeWidth={3}
-                    activeDot={{ r: 8 }}
-                    label={{ position: 'top', fill: '#6D28D9', fontSize: 12, fontWeight: 800, formatter: (val: number) => val > 0 ? val : '' }}
+                    strokeWidth={1.5}
+                    activeDot={{ r: 6 }}
+                    dot={{ r: 2, fill: '#8B5CF6', strokeWidth: 1 }}
+                    label={{ position: 'top', fill: '#6D28D9', fontSize: 10, fontWeight: 800, formatter: (val: number) => val > 0 ? val : '' }}
                   />
                 </LineChart>
               </ResponsiveContainer>

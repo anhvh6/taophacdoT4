@@ -502,13 +502,86 @@ export const CustomerManagement: React.FC<{
                              className="flex items-center justify-center w-10 h-10 bg-orange-50 text-orange-600 rounded-xl hover:bg-orange-100 transition-all border border-orange-100 hover:scale-110"
                              title="Copy phác đồ từ học viên khác"
                            >
-                             <CopyPlus size={22} />
+                          <CopyPlus size={22} />
                            </button>
                          </div>
                        )}
                      </div>
                   </div>
                 </div>
+
+                {/* Attendance Tracking Summary for Admin */}
+                {!isNew && (
+                  <div className="mt-8 bg-blue-50/30 rounded-3xl p-6 border border-blue-100">
+                    <h5 className="text-[11px] font-black text-blue-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <ClipboardList size={16} /> Theo dõi chuyên cần
+                    </h5>
+                    {(() => {
+                      const start = parseVNDate(customer.start_date);
+                      if (!start) return <p className="text-[10px] text-gray-400 font-bold uppercase italic">Chưa có ngày bắt đầu</p>;
+
+                      const today = toVnZeroHour();
+                      const diffDays = getDiffDays(start, today) + 1;
+                      const cycle = Math.max(0, Math.floor((diffDays - 1) / 60));
+                      const cycleStartDate = addDays(start, cycle * 60);
+
+                      const videoOpenDates = customer.raw_backup?.video_open_dates || [];
+                      let attendedCount = 0;
+                      let missedCount = 0;
+                      const currentDayInCycle = Math.min(60, Math.max(1, getDiffDays(cycleStartDate, today) + 1));
+
+                      for (let i = 1; i <= currentDayInCycle; i++) {
+                        const checkDate = addDays(cycleStartDate, i - 1);
+                        const dateStr = toISODateKey(checkDate);
+                        if (videoOpenDates.includes(dateStr)) attendedCount++;
+                        else if (checkDate < today) missedCount++;
+                      }
+
+                      return (
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-center gap-6">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase">Đã tham gia</span>
+                              <span className="text-lg font-black text-green-600">{attendedCount} buổi</span>
+                            </div>
+                            <div className="flex flex-col border-l border-blue-100 pl-6">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase">Vắng mặt</span>
+                              <span className="text-lg font-black text-red-500">{missedCount} buổi</span>
+                            </div>
+                            <div className="flex flex-col border-l border-blue-100 pl-6">
+                              <span className="text-[10px] font-bold text-gray-400 uppercase">Tiến độ</span>
+                              <span className="text-lg font-black text-blue-600">Ngày {currentDayInCycle}/60</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {Array.from({ length: 60 }, (_, i) => i + 1).map(day => {
+                              const actualDate = addDays(cycleStartDate, day - 1);
+                              const isFuture = actualDate > today;
+                              const isToday = actualDate.getTime() === today.getTime();
+                              const dateStr = toISODateKey(actualDate);
+                              const attended = videoOpenDates.includes(dateStr);
+                              const missed = !attended && !isFuture && actualDate < today;
+
+                              return (
+                                <div 
+                                  key={day} 
+                                  className={`w-4 h-4 rounded-sm flex items-center justify-center text-[7px] font-bold border transition-colors
+                                    ${attended ? 'bg-green-500 border-green-600 text-white' : 
+                                      missed ? 'bg-red-500 border-red-600 text-white' : 
+                                      isToday ? 'bg-blue-100 border-blue-400 text-blue-600' : 
+                                      'bg-white border-gray-100 text-gray-300'}`}
+                                  title={attended ? "Đã học" : missed ? "Vắng" : isToday ? "Hôm nay" : "Chưa học"}
+                                >
+                                  {day}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-8">
