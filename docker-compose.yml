@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      # Thêm các biến môi trường khác của bạn ở đây nếu cần thiết
+      # - VITE_SUPABASE_URL=your_supabase_url
+      # - VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+      # - SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+    restart: unless-stopped
