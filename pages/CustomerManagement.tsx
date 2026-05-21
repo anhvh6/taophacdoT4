@@ -12,7 +12,7 @@ import { DateInput } from '../components/DateInput';
 import { api } from '../services/api';
 import { Customer, Product, CustomerStatus } from '../types';
 import { calcRevenueCostProfit, isChuaGan, buildProductMap, getProfitMonth } from '../utils/finance';
-import { toVnZeroHour, getDiffDays, formatDDMM, formatDDMMYYYY, toInputDateString, toISODateKey, parseVNDate } from '../utils/date';
+import { toVnZeroHour, getDiffDays, formatDDMM, formatDDMMYYYY, toInputDateString, toISODateKey, parseVNDate, addDays } from '../utils/date';
 import { ProfitChartModal } from '../components/ProfitChartModal';
 import { generateCustomerLink } from '../src/services/customerService';
 
@@ -646,7 +646,11 @@ export const CustomerManagement: React.FC<{
                           </div>
                           <div className="flex items-center gap-3 sm:gap-6">
                              <span className="text-sm font-black text-blue-600">{formatVND(item.thanh_tien)}</span>
-                             <button onClick={() => toggleProduct(products.find(p => p.id_sp === item.id_sp)!)} className="text-red-200 hover:text-red-500 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16} /></button>
+                             <button onClick={() => {
+                               const newItems = (formData.san_pham || []).filter(p => p.id_sp !== item.id_sp);
+                               const total = newItems.reduce((acc, curr) => acc + curr.thanh_tien, 0);
+                               setFormData({ ...formData, san_pham: newItems, gia_tien: total });
+                             }} className="text-red-200 hover:text-red-500 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16} /></button>
                           </div>
                         </div>
                       ))}

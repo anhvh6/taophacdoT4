@@ -1156,8 +1156,9 @@ export const PlanEditor: React.FC<{
                         <span className="text-sm font-black text-blue-600">{formatVND(item.thanh_tien)}</span>
                         <button 
                           onClick={() => {
-                            const prod = products.find(p => p.id_sp === item.id_sp) || { id_sp: item.id_sp } as Product;
-                            toggleProduct(prod);
+                            const newItems = (customer.san_pham || []).filter(p => p.id_sp !== item.id_sp);
+                            const total = newItems.reduce((acc, curr) => acc + curr.thanh_tien, 0);
+                            setCustomer({ ...customer, san_pham: newItems, gia_tien: total });
                           }} 
                           className="text-red-200 hover:text-red-500 transition-all"
                         >
