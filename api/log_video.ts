@@ -41,11 +41,20 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const raw_backup = customer.raw_backup || {};
+    let raw_backup = customer.raw_backup || {};
+    if (typeof raw_backup === 'string') {
+      try {
+        raw_backup = JSON.parse(raw_backup);
+      } catch (e) {
+        raw_backup = {};
+      }
+    }
     raw_backup.last_video_open_time = new Date().toISOString();
 
     // Add to video_open_dates
-    if (!raw_backup.video_open_dates) {
+    if (!raw_backup.video_open_dates || !Array.isArray(raw_backup.video_open_dates)) {
+      raw_backup.video_open_dates = [];
+    }
       raw_backup.video_open_dates = [];
     }
     

@@ -1209,6 +1209,11 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     const isActive = day === allowedDay && !isNotStarted;
                     const dayTasks = tasks.filter(t => t.day === day);
                     
+                    // Kiểm tra xem ngày này đã học chưa
+                    const actualDate = addDays(parseVNDate(customer.start_date) || toVnZeroHour(), day - 1);
+                    const dateStr = toISODateKey(actualDate);
+                    const isAttended = (customer.raw_backup?.video_open_dates || []).includes(dateStr);
+                    
                     // Ẩn các ngày chưa đến (nhưng vẫn giữ ngày 1 nếu chưa bắt đầu)
                     const shouldHide = day > Math.max(1, allowedDay);
                     if (shouldHide) return null;
@@ -1219,7 +1224,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         onClick={() => { if(dayTasks.length === 0) handleTaskClick({day} as any) }} 
                         className={`bg-white rounded-3xl border p-6 transition-all cursor-pointer ${isLocked ? 'opacity-40 blur-[1px] grayscale' : 'hover:border-blue-300'} ${isActive ? 'border-blue-600 ring-4 ring-blue-50 day-card-active' : 'border-blue-50'}`}
                       >
-                        <div className={`text-center font-black text-xs border-b mb-4 pb-2 uppercase tracking-widest ${isUnlocked && !isNotStarted ? 'text-blue-600' : 'text-gray-400'}`}>Ngày {day}</div>
+                        <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-2 uppercase tracking-widest ${isUnlocked && !isNotStarted ? 'text-blue-600' : 'text-gray-400'}`}>
+                          Ngày {day}
+                          {isAttended && <CheckCircle size={14} className="text-green-500" strokeWidth={3} />}
+                        </div>
                         {dayTasks.length > 0 ? dayTasks.map((t, idx) => (
                           <button key={idx} onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} className="w-full text-center py-2.5 text-[13px] font-bold hover:bg-blue-50 rounded-xl transition-colors mb-1" style={{ color: isMandatory(t) ? '#2563EB' : '#10B981' }}>{t.title}</button>
                         )) : <div className="text-center text-[10px] text-gray-300 font-bold uppercase italic py-4">Nghỉ ngơi</div>}
