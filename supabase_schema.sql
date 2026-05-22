@@ -249,7 +249,8 @@ returns table (
   app_slogan text,
   is_customized boolean,
   require_google_auth boolean,
-  require_device_limit boolean
+  require_device_limit boolean,
+  raw_backup jsonb
 ) security definer
 set search_path = public
 as $$
@@ -282,7 +283,8 @@ begin
     c.app_slogan,
     c.is_customized,
     c.require_google_auth,
-    c.require_device_limit
+    c.require_device_limit,
+    c.raw_backup
   from customers c
   where trim(c.customer_id) = trim(p_customer_id)
     and trim(c.token) = trim(p_token)
