@@ -55,8 +55,6 @@ export default async function handler(req: any, res: any) {
     if (!raw_backup.video_open_dates || !Array.isArray(raw_backup.video_open_dates)) {
       raw_backup.video_open_dates = [];
     }
-      raw_backup.video_open_dates = [];
-    }
     
     // Convert to VN timezone YYYY-MM-DD
     const vnTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
