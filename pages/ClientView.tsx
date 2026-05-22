@@ -30,7 +30,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const [customer, setCustomer] = useState<Customer | any>(null);
   const [tasks, setTasks] = useState<ExerciseTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isExpanded, setIsExpanded] = useState(false);
   const [selectedTask, setSelectedTask] = useState<ExerciseTask | null>(null);
   const [infoModal, setInfoModal] = useState<{ isOpen: boolean; title: string; message: string; type?: string; color?: string; confirmText?: string; onConfirm?: () => void } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -179,14 +178,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         tasks: cleanTasks,
         timestamp: Date.now()
       }));
-
-      /* Tự động mở rộng nếu ngày học hiện tại > 10
-      const today = toVnZeroHour();
-      const startDate = toVnZeroHour(customerData.start_date);
-      const allowedDay = customerData.allowed_day || getDiffDays(startDate, today) + 1;
-      if (allowedDay > 10) {
-        setIsExpanded(true);
-      } */
       
       if (customerData.expire_warning === true) {
         setTimeout(() => {
@@ -592,17 +583,25 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   // Cuộn đến ngày đang học sau khi render xong
   useEffect(() => {
     if (!loading && customer && !hasScrolledRef.current) {
-      // Giảm delay xuống để cảm giác nhanh hơn
-      const timer = setTimeout(() => {
-        const activeCard = document.querySelector('.day-card-active');
-        if (activeCard) {
-          activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          hasScrolledRef.current = true;
-        }
-      }, 100);
-      return () => clearTimeout(timer);
+      const today = toVnZeroHour();
+      const startDate = toVnZeroHour(customer.start_date);
+      const allowedDay = customer.allowed_day || getDiffDays(startDate, today) + 1;
+
+      if (allowedDay >= 2) {
+        // Giảm delay xuống để cảm giác nhanh hơn
+        const timer = setTimeout(() => {
+          const activeCard = document.querySelector('.day-card-active');
+          if (activeCard) {
+            activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            hasScrolledRef.current = true;
+          }
+        }, 100);
+        return () => clearTimeout(timer);
+      } else {
+        hasScrolledRef.current = true;
+      }
     }
-  }, [loading, isExpanded, customer]);
+  }, [loading, customer]);
 
   const triggerBackgroundRefresh = async (currentTask?: ExerciseTask) => {
     if (refreshInFlight.current) return;
@@ -787,8 +786,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     }
     setSelectedTask(task);
   }
-
-  const toggleSchedule = () => setIsExpanded(!isExpanded);
 
   if (loading && !customer) return (
     <div className="min-h-screen bg-[#F8FBFF] p-6">
@@ -1207,12 +1204,14 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5" ref={gridRef}>
                   {Array.from({ length: Math.min(customer.duration_days || 30, 30) }, (_, i) => i + 1).map(day => {
-                    const isHidden = !isExpanded && day > 10;
                     const isLocked = day > allowedDay || isNotStarted;
                     const isUnlocked = day <= allowedDay;
                     const isActive = day === allowedDay && !isNotStarted;
                     const dayTasks = tasks.filter(t => t.day === day);
-                    if (isHidden) return null;
+                    
+                    // Ẩn các ngày chưa đến (nhưng vẫn giữ ngày 1 nếu chưa bắt đầu)
+                    const shouldHide = day > Math.max(1, allowedDay);
+                    if (shouldHide) return null;
 
                     return (
                       <div 
@@ -1228,7 +1227,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     );
                   })}
                 </div>
-                <button onClick={toggleSchedule} className="w-full max-w-[320px] mx-auto mt-10 py-4 bg-[#1E3A8A] text-white font-bold rounded-full flex items-center justify-center gap-2 uppercase text-xs tracking-widest shadow-xl transition-all active:scale-95">{isExpanded ? "Thu gọn phác đồ" : "Xem tất cả 30 ngày"}</button>
              </div>
           </section>
         </div>
