@@ -596,8 +596,15 @@ export const Dashboard: React.FC<{
 
       let matchVideoOpen = true;
       if (videoOpenFilter) {
-        if (c.raw_backup && c.raw_backup.last_video_open_time) {
-           const openTime = new Date(c.raw_backup.last_video_open_time);
+        const todayStr = toISODateKey(new Date());
+        const raw = c.raw_backup || {};
+        const openDates = Array.isArray(raw.video_open_dates) ? raw.video_open_dates : [];
+        
+        if (openDates.includes(todayStr)) {
+          matchVideoOpen = true;
+        } else if (raw.last_video_open_time) {
+           // Fallback for older data that only has the timestamp
+           const openTime = new Date(raw.last_video_open_time);
            const vnTime = new Date(openTime.toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
            const todayVn = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
            

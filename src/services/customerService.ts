@@ -34,32 +34,37 @@ export const normalizeCustomer = (item: any): Customer => {
   // Only use is_customized as the source of truth for private plan mode
   const isCustomized = item.is_customized === 1 || item.is_customized === true;
 
-  return { 
-    ...item, 
-    is_customized: isCustomized,
-    id: item.id,
-    customer_id: String(item.customer_id || item.id || ""),
-    customer_name: String(item.customer_name || "").toUpperCase(),
-    sdt: String(item.sdt || "").trim(),
-    email: String(item.email || "").trim().toLowerCase(),
-    dia_chi: String(item.dia_chi || "").trim(),
-    note: String(item.note || ""), 
-    sidebar_blocks_json: blocks,
-    san_pham: Array.isArray(sanPham) ? sanPham : [],
-    gia_tien: Number(item.gia_tien || 0),
-    trang_thai: Number(item.trang_thai || 0),
-    chewing_status: String(item.chewing_status || DEFAULT_CHEWING_INSTRUCTION),
-    app_title: item.app_title || "Phác đồ 30 ngày thay đổi khuôn mặt",
-    app_slogan: item.app_slogan || "Hành trình đánh thức vẻ đẹp tự nhiên, gìn giữ thanh xuân.",
-    video_date: item.Video_date || item.video_date,
-    link: item.link || "",
-    token: item.token || "",
-    require_google_auth: parseFlag(item.require_google_auth, true),
-    require_device_limit: parseFlag(item.require_device_limit, true),
-    pending_email: item.pending_email || "",
-    raw_backup: item.raw_backup || {}
+    let rawBackup = item.raw_backup || {};
+    if (typeof rawBackup === 'string') {
+      try { rawBackup = JSON.parse(rawBackup); } catch(e) {}
+    }
+
+    return { 
+      ...item, 
+      is_customized: isCustomized,
+      id: item.id,
+      customer_id: String(item.customer_id || item.id || ""),
+      customer_name: String(item.customer_name || "").toUpperCase(),
+      sdt: String(item.sdt || "").trim(),
+      email: String(item.email || "").trim().toLowerCase(),
+      dia_chi: String(item.dia_chi || "").trim(),
+      note: String(item.note || ""), 
+      sidebar_blocks_json: blocks,
+      san_pham: Array.isArray(sanPham) ? sanPham : [],
+      gia_tien: Number(item.gia_tien || 0),
+      trang_thai: Number(item.trang_thai || 0),
+      chewing_status: String(item.chewing_status || DEFAULT_CHEWING_INSTRUCTION),
+      app_title: item.app_title || "Phác đồ 30 ngày thay đổi khuôn mặt",
+      app_slogan: item.app_slogan || "Hành trình đánh thức vẻ đẹp tự nhiên, gìn giữ thanh xuân.",
+      video_date: item.Video_date || item.video_date,
+      link: item.link || "",
+      token: item.token || "",
+      require_google_auth: parseFlag(item.require_google_auth, true),
+      require_device_limit: parseFlag(item.require_device_limit, true),
+      pending_email: item.pending_email || "",
+      raw_backup: rawBackup
+    };
   };
-};
 
 /** Domain public cho học viên (tách khỏi admin). Mặc định phacdo.vercel.app */
 export const getClientPublicOrigin = () => {
