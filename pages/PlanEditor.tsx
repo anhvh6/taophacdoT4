@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Save, Trash2, Plus, RefreshCw, Moon, Sun, Info, Copy, CopyPlus, UserPlus, Link as LinkIcon, Sparkles, RotateCcw, Search, Lock, Maximize2, Loader2, ArrowRight, Layout as LayoutIcon, Type, Video, Palette, AlertCircle, FileJson, CheckCircle, MessageSquare, Terminal, ShieldAlert, Bot, Eraser, Play, ChevronDown, ChevronRight, X, ShoppingBag, Clock, Calendar, User } from 'lucide-react';
+import { Save, Trash2, Plus, RefreshCw, Moon, Sun, Info, Copy, CopyPlus, UserPlus, Link as LinkIcon, Sparkles, RotateCcw, Search, Lock, Maximize2, Loader2, ArrowRight, Layout as LayoutIcon, Type, Video, Palette, AlertCircle, FileJson, CheckCircle, MessageSquare, Terminal, ShieldAlert, Bot, Eraser, Play, ChevronDown, ChevronRight, X, ShoppingBag, Clock, Calendar, User, Pin, DollarSign } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Card, Button, Modal } from '../components/UI';
 import { LineInput } from '../components/UI';
@@ -332,6 +332,28 @@ export const PlanEditor: React.FC<{
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [copySearchTerm, setCopySearchTerm] = useState('');
+  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('mega_pinned_copy_students');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const togglePin = (customerId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPinnedIds(prev => {
+      let next;
+      if (prev.includes(customerId)) {
+        next = prev.filter(id => id !== customerId);
+      } else {
+        next = [customerId, ...prev];
+      }
+      localStorage.setItem('mega_pinned_copy_students', JSON.stringify(next));
+      return next;
+    });
+  };
   const [copyToast, setCopyToast] = useState(false);
   const [originalNote, setOriginalNote] = useState<string | null>(null);
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
@@ -876,12 +898,7 @@ export const PlanEditor: React.FC<{
       const dayB = Number(b.day) || 0;
       if (dayA !== dayB) return dayA - dayB;
       
-      const isAMandatory = isMandatory(a);
-      const isBMandatory = isMandatory(b);
-      
-      if (isAMandatory && !isBMandatory) return -1;
-      if (!isAMandatory && isBMandatory) return 1;
-      return 0;
+      return (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true });
     });
   }, [tasks]);
 
@@ -954,10 +971,34 @@ export const PlanEditor: React.FC<{
     }
   };
 
-  const filteredCustomersForCopy = allCustomers.filter(c => 
-    c.customer_name.toLowerCase().includes(copySearchTerm.toLowerCase()) ||
-    c.customer_id.toLowerCase().includes(copySearchTerm.toLowerCase())
-  );
+  const filteredCustomersForCopy = useMemo(() => {
+    const term = copySearchTerm.toLowerCase();
+    const list = allCustomers.filter(c => 
+      String(c.customer_name || '').toLowerCase().includes(term) ||
+      String(c.customer_id || '').toLowerCase().includes(term)
+    );
+    
+    const pinnedList: Customer[] = [];
+    const unpinnedList: Customer[] = [];
+    
+    list.forEach(c => {
+      if (pinnedIds.includes(c.customer_id)) {
+        pinnedList.push(c);
+      } else {
+        unpinnedList.push(c);
+      }
+    });
+    
+    pinnedList.sort((a, b) => pinnedIds.indexOf(a.customer_id) - pinnedIds.indexOf(b.customer_id));
+    
+    unpinnedList.sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return timeB - timeA;
+    });
+    
+    return [...pinnedList, ...unpinnedList];
+  }, [allCustomers, copySearchTerm, pinnedIds]);
 
   if (isNavigating) {
     return (
@@ -1179,6 +1220,62 @@ export const PlanEditor: React.FC<{
                   </div>
                 </div>
               </div>
+
+              {/* Đặt cọc section */}
+              <div className="bg-pink-50/50 rounded-3xl p-6 border border-pink-100 flex flex-col gap-4 mt-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="w-5 h-5 text-pink-600 rounded border-pink-200 focus:ring-pink-500"
+                    checked={!!customer.is_deposit}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      let newProducts = customer.san_pham;
+                      let newGiaTien = customer.gia_tien;
+                      
+                      if (checked) {
+                        newProducts = [];
+                        newGiaTien = 0;
+                      } else {
+                        const targetProductId = 'SP1768731546380';
+                        const defaultProduct = products.find(p => p.id_sp === targetProductId && p.trang_thai === 1) || products.find(p => p.trang_thai === 1);
+                        if (defaultProduct) {
+                          newProducts = [{ id_sp: defaultProduct.id_sp, ten_sp: defaultProduct.ten_sp, so_luong: 1, don_gia: defaultProduct.gia_ban, gia_nhap: defaultProduct.gia_nhap, thanh_tien: defaultProduct.gia_ban }];
+                          newGiaTien = defaultProduct.gia_ban;
+                        }
+                      }
+
+                      setCustomer({
+                        ...customer, 
+                        is_deposit: checked, 
+                        deposit_amount: checked ? (customer.deposit_amount || 500000) : 0,
+                        san_pham: newProducts,
+                        gia_tien: newGiaTien
+                      });
+                    }}
+                  />
+                  <span className="text-sm font-bold text-pink-900 uppercase tracking-wide flex items-center gap-2">
+                    <DollarSign size={16} className="text-pink-500" />
+                    Đã Đặt Cọc
+                  </span>
+                </label>
+                
+                {customer.is_deposit && (
+                  <div className="flex flex-col ml-8 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <span className="text-[10px] font-bold text-pink-400 uppercase tracking-widest mb-1">SỐ TIỀN CỌC</span>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="text" 
+                        className="text-xl font-black text-pink-600 bg-transparent outline-none border-b border-pink-200 focus:border-pink-500 w-32" 
+                        value={formatVND(customer.deposit_amount || 0)} 
+                        onChange={e => setCustomer({...customer, deposit_amount: parseInt(e.target.value.replace(/\D/g, '')) || 0})} 
+                      />
+                      <span className="text-pink-600 font-bold text-sm">VNĐ</span>
+                    </div>
+                    <p className="text-[10px] text-pink-400 mt-2 italic">Tiền cọc này sẽ tự động được tính vào Tổng doanh thu (giá vốn = 0đ).</p>
+                  </div>
+                )}
+              </div>
             </Card>
 
             <Card className="flex flex-col gap-6 p-6 sm:p-8">
@@ -1244,7 +1341,7 @@ export const PlanEditor: React.FC<{
                 <div className="flex items-center justify-between p-4 bg-blue-50/50 rounded-2xl border border-blue-100/50 transition-all hover:bg-blue-50">
                   <div className="flex flex-col gap-1">
                     <span className="text-[12px] font-black text-blue-900 uppercase">Giới hạn thiết bị</span>
-                    <span className="text-[10px] font-bold text-gray-400">Tối đa 2 thiết bị tự động duyệt, chặn từ thiết bị t3</span>
+                    <span className="text-[10px] font-bold text-gray-400">Tối đa 3 thiết bị tự động duyệt, chặn từ thiết bị t4</span>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input 
@@ -1336,7 +1433,11 @@ export const PlanEditor: React.FC<{
       {/* Modals for Details and Chewing instructions */}
       <Modal 
         isOpen={isCopyModalOpen} 
-        onClose={() => setIsCopyModalOpen(false)} 
+        onClose={() => {
+          setIsCopyModalOpen(false);
+          setCopySearchTerm("");
+          localStorage.setItem('mega_pinned_copy_students', JSON.stringify(pinnedIds));
+        }} 
         title="SAO CHÉP DỮ LIỆU PHÁC ĐỒ" 
         maxWidth="max-w-2xl"
       >
@@ -1360,11 +1461,20 @@ export const PlanEditor: React.FC<{
                   onClick={() => performCopy(c)}
                   className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer transition-all group"
                 >
-                  <div className="flex flex-col">
-                    <span className="text-sm font-black text-blue-900 uppercase group-hover:text-blue-600 transition-colors">{c.customer_name}</span>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">ID: {c.customer_id} • {c.duration_days} ngày</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button 
+                      onClick={(e) => togglePin(c.customer_id, e)}
+                      className={`p-2 rounded-xl transition-all hover:bg-gray-200 shrink-0 ${pinnedIds.includes(c.customer_id) ? 'text-orange-500 bg-orange-50 hover:bg-orange-100' : 'text-gray-300 hover:text-gray-600'}`}
+                      title={pinnedIds.includes(c.customer_id) ? "Bỏ ghim" : "Ghim lên đầu"}
+                    >
+                      <Pin size={16} className={pinnedIds.includes(c.customer_id) ? "fill-current" : ""} />
+                    </button>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-sm font-black text-blue-900 uppercase group-hover:text-blue-600 transition-colors truncate">{c.customer_name}</span>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1 truncate">ID: {c.customer_id} • {c.duration_days} ngày</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 shrink-0">
                     <div className="text-right hidden sm:block">
                       <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Bắt đầu</div>
                       <div className="text-xs font-bold text-blue-900">{formatVNDate(c.start_date)}</div>
@@ -1492,7 +1602,6 @@ const DeviceManagementCard: React.FC<{ customerId: string }> = ({ customerId }) 
     try {
       await customerService.deleteDevice(deviceId);
       fetchDevices();
-      setSelectedIds(prev => prev.filter(id => id !== deviceId));
     } catch (e) { console.error(e); }
   };
 

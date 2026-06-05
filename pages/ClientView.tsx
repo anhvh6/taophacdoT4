@@ -26,6 +26,29 @@ const isFlagEnabled = (value: any, fallback = true) => {
   return fallback;
 };
 
+const getOrCreateDeviceId = async (customerId: string) => {
+  const localKey = `phacdo_device_id_${customerId}`;
+  let storedId = localStorage.getItem(localKey);
+  if (storedId && storedId.trim() !== '') {
+    return storedId;
+  }
+
+  try {
+    const fp = await FingerprintJS.load();
+    const result = await fp.get();
+    if (result.visitorId) {
+      localStorage.setItem(localKey, result.visitorId);
+      return result.visitorId;
+    }
+  } catch (e) {
+    console.warn("FingerprintJS failed, using generated fallback UUID:", e);
+  }
+
+  const randomId = 'dev_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  localStorage.setItem(localKey, randomId);
+  return randomId;
+};
+
 export const ClientView: React.FC<{ customerId: string; token?: string; onNavigate?: (page: string, params?: any) => void; isAdmin?: boolean }> = ({ customerId, token, onNavigate, isAdmin }) => {
   const [customer, setCustomer] = useState<Customer | any>(null);
   const [tasks, setTasks] = useState<ExerciseTask[]>([]);
@@ -43,12 +66,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   // Zalo Bypass & Video Auth State
   const [isZalo, setIsZalo] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
-  const [authModal, setAuthModal] = useState<{isOpen: boolean, link: string | null}>({isOpen: false, link: null});
+  const [authModal, setAuthModal] = useState<{isOpen: boolean, link: string | null, day?: number}>({isOpen: false, link: null});
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
 
   // Device & Security State
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [deviceAuthorized, setDeviceAuthorized] = useState(false);
+  const [deviceAuthLoading, setDeviceAuthLoading] = useState(true);
   const [deviceModal, setDeviceModal] = useState<{ isOpen: boolean, message?: string } | null>(null);
   const [isRequestingApproval, setIsRequestingApproval] = useState(false);
   const [isRequestingEmail, setIsRequestingEmail] = useState(false);
@@ -129,7 +153,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         }
       }
 
-      // CRITICAL: Tự động cập nhật nội dung mới nhất từ Lich phac do khi vào ngày chia hết cho 3
+      // CRITICAL: Tự động cập nhật nội dung mới nhất từ Lich phac do khi load trang
       // CHÚ Ý: Chuyển lên trên hoặc chạy song song để tối ưu tốc độ render ban đầu
       const videoDate = customerData.video_date || customerData.Video_date;
       let syncOccurred = false;
@@ -138,8 +162,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         const start = toVnZeroHour(customerData.start_date);
         const currentAllowedDay = customerData.allowed_day || getDiffDays(start, todayDate) + 1;
         
-        // Nếu ngày hiện tại chia hết cho 3, đồng bộ toàn bộ phác đồ từ master
-        if (currentAllowedDay > 0 && currentAllowedDay % 3 === 0) {
+        // Đồng bộ toàn bộ phác đồ từ master
+        if (currentAllowedDay > 0) {
            // Ở đây ta có thể chọn await hoặc không. Để chắc chắn dữ liệu mới nhất, ta await, 
            // nhưng vì đã có Stale UI phía trên nên cảm giác vẫn nhanh.
           try {
@@ -158,11 +182,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         .filter(task => !task.is_deleted && task.day <= 30)
         .sort((a, b) => {
           if (a.day !== b.day) return a.day - b.day;
-          const aM = String(a.type || "").toLowerCase().includes('bắt buộc') || String(a.type || "").toLowerCase().includes('bat buoc');
-          const bM = String(b.type || "").toLowerCase().includes('bắt buộc') || String(b.type || "").toLowerCase().includes('bat buoc');
-          if (aM && !bM) return -1;
-          if (!aM && bM) return 1;
-          return 0;
+          return (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true });
         });
       
       setTasks(cleanTasks);
@@ -211,16 +231,16 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   // Device & OAuth Initialization
   useEffect(() => {
     const initDevice = async () => {
+      setDeviceAuthLoading(true);
       try {
-        const fp = await FingerprintJS.load();
-        const result = await fp.get();
-        const fpId = result.visitorId;
+        const fpId = await getOrCreateDeviceId(customerId);
         setDeviceId(fpId);
 
         // If in admin mode or preview domain, always authorized
         const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
         if (onNavigate || isAdmin || isPreviewDomain) {
           setDeviceAuthorized(true);
+          setDeviceAuthLoading(false);
           return;
         }
 
@@ -240,6 +260,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         console.error("Device init error:", e);
         // Nếu lỗi fingerprint thì cho phép admin xem, nhưng khóa học viên nếu cần cực kỳ bảo mật
         if (onNavigate) setDeviceAuthorized(true);
+      } finally {
+        setDeviceAuthLoading(false);
       }
     };
 
@@ -325,32 +347,42 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   }, [customer, isVerified, loading, authModal.isOpen]);
 
   // Helper to mark attendance in local state for instant UI feedback
-  const markAttendanceLocally = () => {
+  const markAttendanceLocally = (dayNum?: number) => {
     if (!customer) return;
     const dateStr = toISODateKey(new Date());
     const currentDates = customer.raw_backup?.video_open_dates || [];
+    const currentCompletedDays = customer.raw_backup?.completed_days || [];
+    
+    let updatedDates = currentDates;
     if (!currentDates.includes(dateStr)) {
-      const updatedDates = [...currentDates, dateStr];
-      const updatedCustomer = {
-        ...customer,
-        raw_backup: {
-          ...(customer.raw_backup || {}),
-          video_open_dates: updatedDates
-        }
-      };
-      setCustomer(updatedCustomer);
-      
-      // Update cache to persist the checkmark locally until next refresh
-      safeSetLocalStorage(`phacdo_cache_${customerId}`, JSON.stringify({
-        customer: updatedCustomer,
-        tasks: tasks,
-        timestamp: Date.now()
-      }));
+      updatedDates = [...currentDates, dateStr];
     }
+    
+    let updatedCompletedDays = currentCompletedDays;
+    if (dayNum !== undefined && !currentCompletedDays.includes(dayNum)) {
+      updatedCompletedDays = [...currentCompletedDays, dayNum];
+    }
+    
+    const updatedCustomer = {
+      ...customer,
+      raw_backup: {
+        ...(customer.raw_backup || {}),
+        video_open_dates: updatedDates,
+        completed_days: updatedCompletedDays
+      }
+    };
+    setCustomer(updatedCustomer);
+    
+    // Update cache to persist the checkmark locally until next refresh
+    safeSetLocalStorage(`phacdo_cache_${customerId}`, JSON.stringify({
+      customer: updatedCustomer,
+      tasks: tasks,
+      timestamp: Date.now()
+    }));
   };
 
   // Play Video Logic
-  const handlePlayVideo = async (link?: string, skipAuthCheck: boolean = false) => {
+  const handlePlayVideo = async (link?: string, skipAuthCheck: boolean = false, dayNum?: number) => {
     if (!link) return;
     
     const trimmedLink = link.trim();
@@ -419,10 +451,17 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     // 1. Kiểm tra thiết bị (Device Limit)
     const needsDeviceLimit = isFlagEnabled(customer?.require_device_limit, true) && !isPreviewDomain;
 
-    if (!skipAuthCheck && needsDeviceLimit && !deviceAuthorized) {
+    if (!skipAuthCheck && needsDeviceLimit) {
+      if (deviceAuthLoading) {
+        setToast("Đang xác thực thiết bị của bạn, vui lòng đợi trong giây lát...");
+        if (newTab) newTab.close();
+        return;
+      }
+      if (!deviceAuthorized) {
         setDeviceModal({ isOpen: true });
         if (newTab) newTab.close();
         return;
+      }
     }
 
      if (!skipAuthCheck && isFlagEnabled(customer?.require_google_auth, true) && !isPreviewDomain) {
@@ -446,7 +485,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
            localStorage.removeItem(`verified_email_${customerId}`);
            setIsVerified(false);
            setToast("Email đăng ký đã thay đổi hoặc phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
-           setAuthModal({isOpen: true, link});
+           setAuthModal({isOpen: true, link, day: dayNum});
            if (newTab) newTab.close();
            return;
         }
@@ -463,7 +502,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
     if (!skipAuthCheck && needsGoogleAuth && !isVerified) {
        console.log("handlePlayVideo: Authentication required, opening AuthModal");
-       setAuthModal({isOpen: true, link: link});
+       setAuthModal({isOpen: true, link: link, day: dayNum});
        if (newTab) newTab.close();
        return;
     }
@@ -515,8 +554,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             if (data?.signed_embed_url) {
                 setPlayingVideo(data.signed_embed_url);
                 if (isStudent) {
-                    customerService.logVideoOpen(customerId!, customer?.token || token || '');
-                    markAttendanceLocally();
+                    customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
+                    markAttendanceLocally(dayNum);
                 }
             } else if (!data?.error) {
                 throw new Error("Không nhận được token từ server");
@@ -535,8 +574,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       setToast("Cảnh báo: Video này sử dụng đường dẫn cũ và không được bảo vệ bằng Token.");
       setPlayingVideo(trimmedLink);
       if (isStudent) {
-          customerService.logVideoOpen(customerId!, customer?.token || token || '');
-          markAttendanceLocally();
+          customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
+          markAttendanceLocally(dayNum);
       }
     } else {
       setToast("Cảnh báo: Video này là liên kết ngoài, không được bảo vệ chống tải.");
@@ -544,8 +583,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         try {
           newTab.location.href = link;
           if (isStudent) {
-              customerService.logVideoOpen(customerId!, customer?.token || token || '');
-              markAttendanceLocally();
+              customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
+              markAttendanceLocally(dayNum);
           }
         } catch (e) {
           window.location.href = link;
@@ -625,12 +664,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           }
         }
 
-        // Logic: Nếu là ngày chia hết cho 3, tự động cập nhật TOÀN BỘ nội dung mới nhất từ Lich phac do
+        // Logic: Tự động cập nhật TOÀN BỘ nội dung mới nhất từ Lich phac do mỗi khi click
         let syncOccurred = false;
-        if (currentTask && currentTask.day % 3 === 0) {
+        if (currentTask) {
           const videoDate = customerData.video_date || customerData.Video_date;
           if (videoDate) {
-            console.log(`Day ${currentTask.day} is divisible by 3. REPLACING ENTIRE PLAN with master plan...`);
+            console.log(`User clicked a task. REPLACING ENTIRE PLAN with master plan...`);
             const masterTasks = await planService.getMasterPlan(videoDate);
             
             if (masterTasks && masterTasks.length > 0) {
@@ -645,11 +684,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           .filter(task => !task.is_deleted && task.day <= 30)
           .sort((a, b) => {
             if (a.day !== b.day) return a.day - b.day;
-            const aM = String(a.type || "").toLowerCase().includes('bắt buộc') || String(a.type || "").toLowerCase().includes('bat buoc');
-            const bM = String(b.type || "").toLowerCase().includes('bắt buộc') || String(b.type || "").toLowerCase().includes('bat buoc');
-            if (aM && !bM) return -1;
-            if (!aM && bM) return 1;
-            return 0;
+            return (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true });
           });
         setTasks(cleanTasks);
 
@@ -657,7 +692,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         if (syncOccurred && actualId) {
           try {
             await customPlanService.saveCustomPlan(actualId, planTasks);
-            console.log("Saved synced day % 3 tasks back to Lịch trình");
+            console.log("Saved synced tasks back to Lịch trình");
             
             // Cập nhật lại cache
             localStorage.setItem(`phacdo_cache_${customerId}`, JSON.stringify({
@@ -780,10 +815,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   };
 
   const processTaskSelection = (task: ExerciseTask) => {
-    // Chỉ chạy cập nhật dữ liệu khi bài tập có ngày chia hết cho 3 để đảm bảo hiệu năng
-    if (task.day % 3 === 0) {
-      triggerBackgroundRefresh(task);
-    }
+    // Luôn chạy cập nhật dữ liệu khi click vào bất kỳ bài nào để lấy nội dung mới nhất
+    triggerBackgroundRefresh(task);
     setSelectedTask(task);
   }
 
@@ -1092,17 +1125,15 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                 const cycleStartDate = addDays(start, cycle * 60);
 
                 // Tính toán số liệu chuyên cần trong chu kỳ hiện tại
-                const videoOpenDates = customer.raw_backup?.video_open_dates || [];
+                const completedDays = customer.raw_backup?.completed_days || [];
                 let attendedCount = 0;
                 let missedCount = 0;
                 const currentDayInCycle = Math.min(60, Math.max(1, getDiffDays(cycleStartDate, today) + 1));
 
                 for (let i = 1; i <= currentDayInCycle; i++) {
-                  const checkDate = addDays(cycleStartDate, i - 1);
-                  const dateStr = toISODateKey(checkDate);
-                  if (videoOpenDates.includes(dateStr)) {
+                  if (completedDays.includes(i)) {
                     attendedCount++;
-                  } else if (checkDate < today) {
+                  } else if (i < currentDayInCycle) {
                     missedCount++;
                   }
                 }
@@ -1142,28 +1173,30 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                             const isToday = actualDate.getTime() === today.getTime();
                             
                             let status: 'none' | 'check' | 'cross' = 'none';
-                            if (!isFuture) {
-                              const dateStr = toISODateKey(actualDate);
-                              if (videoOpenDates.includes(dateStr)) {
+                            if (day <= currentDayInCycle) {
+                              if (completedDays.includes(day)) {
                                 status = 'check';
-                              } else if (actualDate < today) {
+                              } else if (day < currentDayInCycle) {
                                 status = 'cross';
                               }
+                            }
+
+                            let cellClass = 'bg-blue-50/50 border-blue-100/50 text-blue-900';
+                            if (status === 'check') {
+                              cellClass = 'bg-green-500 border-green-600 text-white font-bold';
+                            } else if (status === 'cross') {
+                              cellClass = 'bg-red-500 border-red-600 text-white font-bold';
+                            } else if (isToday) {
+                              cellClass = 'bg-[#E0F2FE] border-blue-300 text-blue-600 font-bold';
                             }
 
                             return (
                               <div 
                                 key={day} 
-                                className={`flex flex-col items-center justify-center h-10 rounded-lg relative border transition-colors ${isToday ? 'bg-[#E0F2FE] border-blue-300' : 'bg-blue-50/50 border-blue-100/50'}`}
-                                title={isToday ? "Ngày học hiện tại" : undefined}
+                                className={`flex flex-col items-center justify-center h-10 rounded-lg relative border transition-colors ${cellClass}`}
+                                title={isToday ? "Ngày học hiện tại" : status === 'check' ? "Đã học" : status === 'cross' ? "Chưa học" : undefined}
                               >
-                                {status === 'check' && (
-                                  <div className="absolute -top-2 text-green-500 font-bold text-xs" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>✔</div>
-                                )}
-                                {status === 'cross' && (
-                                  <div className="absolute -top-2 text-red-500 font-bold text-[10px]" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>✖</div>
-                                )}
-                                <span className="text-[10px] font-black text-blue-900">{day}</span>
+                                <span className="text-[10px] font-black">{day}</span>
                               </div>
                             );
                           })}
@@ -1207,12 +1240,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     const isLocked = day > allowedDay || isNotStarted;
                     const isUnlocked = day <= allowedDay;
                     const isActive = day === allowedDay && !isNotStarted;
-                    const dayTasks = tasks.filter(t => t.day === day);
+                    const dayTasks = tasks
+                      .filter(t => t.day === day)
+                      .sort((a, b) => (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true }));
                     
                     // Kiểm tra xem ngày này đã học chưa
-                    const actualDate = addDays(parseVNDate(customer.start_date) || toVnZeroHour(), day - 1);
-                    const dateStr = toISODateKey(actualDate);
-                    const isAttended = (customer.raw_backup?.video_open_dates || []).includes(dateStr);
+                    const isAttended = (customer.raw_backup?.completed_days || []).includes(day);
                     
                     // Ẩn các ngày chưa đến (nhưng vẫn giữ ngày 1 nếu chưa bắt đầu)
                     const shouldHide = day > Math.max(1, allowedDay);
@@ -1265,7 +1298,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                 <button onClick={() => setSelectedTask(null)} className="p-2 hover:bg-blue-100 rounded-full text-[#1E3A8A] transition-colors"><X size={24}/></button>
              </div>
              <div className="p-8 max-h-[50vh] overflow-y-auto whitespace-pre-line text-base text-gray-700 leading-relaxed font-medium text-justify custom-scrollbar">{selectedTask.detail}</div>
-             <div className="p-8 pt-0">{selectedTask.link && <button onClick={() => handlePlayVideo(selectedTask.link)} className="w-full py-4 bg-blue-600 text-white font-bold rounded-full shadow-lg flex items-center justify-center gap-2 uppercase text-xs tracking-widest transition-all hover:bg-blue-700 active:scale-95">▶ Xem hướng dẫn bài tập</button>}</div>
+             <div className="p-8 pt-0">{selectedTask.link && <button onClick={() => handlePlayVideo(selectedTask.link, false, selectedTask.day)} className="w-full py-4 bg-blue-600 text-white font-bold rounded-full shadow-lg flex items-center justify-center gap-2 uppercase text-xs tracking-widest transition-all hover:bg-blue-700 active:scale-95">▶ Xem hướng dẫn bài tập</button>}</div>
           </div>
         </div>
       )}
@@ -1333,10 +1366,15 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                           setLastLoggedEmail(null);
                           setAuthModal(prev => {
                             if (prev.link) {
-                              if (prev.link.includes('mediadelivery.net')) setPlayingVideo(prev.link);
-                              else window.open(prev.link, '_blank');
+                              if (prev.link.includes('mediadelivery.net')) {
+                                setPlayingVideo(prev.link);
+                              } else {
+                                window.open(prev.link, '_blank');
+                              }
+                              customerService.logVideoOpen(customerId!, customer?.token || token || '', prev.day);
+                              markAttendanceLocally(prev.day);
                             }
-                            return {isOpen: false, link: null};
+                            return {isOpen: false, link: null, day: undefined};
                           });
                         } else {
                           setLastLoggedEmail(loggedEmail);
@@ -1395,13 +1433,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                        <input 
                          type="text" 
                          value={selfApprovalCode}
-                         onChange={(e) => setSelfApprovalCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
-                         placeholder="XXXX"
+                         onChange={(e) => setSelfApprovalCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                         placeholder="Mã số"
                          className="flex-1 bg-gray-50 border border-gray-200 text-center text-lg font-bold rounded-xl tracking-[0.2em] outline-none focus:border-blue-500 focus:bg-blue-50 transition-all text-[#1E3A8A]"
                          disabled={selfApprovalLoading}
                        />
                        <button
-                         disabled={selfApprovalCode.length < 4 || selfApprovalLoading}
+                         disabled={selfApprovalCode.length < 5 || selfApprovalLoading}
                          onClick={async () => {
                             setSelfApprovalLoading(true);
                             setSelfApprovalError('');
@@ -1422,9 +1460,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                                setLastLoggedEmail(null);
                                
                                const linkToPlay = authModal.link;
-                               setAuthModal({isOpen: false, link: null});
+                               const dayToPlay = authModal.day;
+                               setAuthModal({isOpen: false, link: null, day: undefined});
                                if (linkToPlay) {
-                                  handlePlayVideo(linkToPlay, true);
+                                  handlePlayVideo(linkToPlay, true, dayToPlay);
                                }
                                
                                setSelfApprovalCode(''); setSelfApprovalError('');
@@ -1480,9 +1519,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                           setLastLoggedEmail(null);
                           
                           const linkToPlay = authModal.link;
-                          setAuthModal({isOpen: false, link: null});
+                          const dayToPlay = authModal.day;
+                          setAuthModal({isOpen: false, link: null, day: undefined});
                           if (linkToPlay) {
-                             handlePlayVideo(linkToPlay, true);
+                             handlePlayVideo(linkToPlay, true, dayToPlay);
                           }
                           
                         } catch (e) {
@@ -1495,9 +1535,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         setLastLoggedEmail(null);
                         
                         const linkToPlay = authModal.link;
-                        setAuthModal({isOpen: false, link: null});
+                        const dayToPlay = authModal.day;
+                        setAuthModal({isOpen: false, link: null, day: undefined});
                         if (linkToPlay) {
-                           handlePlayVideo(linkToPlay, true);
+                           handlePlayVideo(linkToPlay, true, dayToPlay);
                         }
                         
                         } else {
@@ -1577,13 +1618,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                   <input 
                      type="text" 
                      value={selfApprovalCode}
-                     onChange={(e) => setSelfApprovalCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
-                     placeholder="XXXX"
+                     onChange={(e) => setSelfApprovalCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                     placeholder="Mã số"
                      className="flex-1 bg-gray-50 border border-gray-200 text-center text-lg font-bold rounded-xl tracking-[0.2em] outline-none focus:border-blue-500 focus:bg-blue-50 transition-all text-[#1E3A8A]"
                      disabled={selfApprovalLoading}
                   />
                   <button
-                     disabled={selfApprovalCode.length < 4 || selfApprovalLoading}
+                     disabled={selfApprovalCode.length < 5 || selfApprovalLoading}
                      onClick={async () => {
                         if (!customerId || !token || !deviceId) return;
                         setSelfApprovalLoading(true);

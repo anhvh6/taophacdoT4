@@ -4,7 +4,7 @@ import {
   Search, Users, Home, Plus, AlertCircle, Gift, 
   ClipboardList, TrendingUp, Eraser, Mail, 
   Phone, Truck, Minimize2, ShoppingBag, Trash2, 
-  Pencil, User, CheckCircle, X, ExternalLink, Copy, CopyPlus, Play, List, Eye, ChevronDown, Maximize2, RefreshCw, UserPlus, Youtube, Unlink
+  Pencil, User, CheckCircle, X, ExternalLink, Copy, CopyPlus, Play, List, Eye, ChevronDown, Maximize2, RefreshCw, UserPlus, Youtube, Unlink, Pin, DollarSign
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Button, LineInput, Card, Modal, Toast } from '../components/UI';
@@ -51,10 +51,62 @@ export const CustomerManagement: React.FC<{
   loading: boolean;
   onUpsert: (payload: Partial<Customer>) => Promise<any>;
   onDelete: (id: string) => Promise<any>;
-}> = ({ onNavigate, customerId: initialId, customers, products, loading, onUpsert, onDelete }) => {
+  checkPermission?: (perm: string) => boolean;
+}> = ({ onNavigate, customerId: initialId, customers, products, loading, onUpsert, onDelete, checkPermission }) => {
+  const hasPerm = (perm: string) => checkPermission ? checkPermission(perm) : true;
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySearchTerm, setCopySearchTerm] = useState("");
   const [isCopying, setIsCopying] = useState(false);
+  const [optimisticPins, setOptimisticPins] = useState<Record<string, number>>({});
+
+  const togglePin = async (customerId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const customer = customers.find(c => c.customer_id === customerId);
+    const currentlyPinned = !!(optimisticPins[customerId] || customer?.raw_backup?.pinned_at);
+    
+    if (currentlyPinned) {
+      setOptimisticPins(prev => ({ ...prev, [customerId]: 0 }));
+    } else {
+      setOptimisticPins(prev => ({ ...prev, [customerId]: Date.now() }));
+    }
+
+    await api.toggleCustomerPin(customerId, !currentlyPinned);
+    // Ideally we should have an onRefresh prop, but if not we can rely on polling or local state
+  };
+
+  const filteredCopyCustomers = useMemo(() => {
+    const term = copySearchTerm.toLowerCase();
+    const list = customers.filter(c => c.video_date && (
+      String(c.customer_name || '').toLowerCase().includes(term) ||
+      String(c.sdt || '').includes(copySearchTerm)
+    ));
+    
+    const pinnedList: Customer[] = [];
+    const unpinnedList: Customer[] = [];
+    
+    list.forEach(c => {
+      const pinTime = optimisticPins[c.customer_id] !== undefined 
+        ? optimisticPins[c.customer_id] 
+        : (c.raw_backup?.pinned_at || 0);
+
+      if (pinTime > 0) {
+        pinnedList.push({ ...c, _tempPinTime: pinTime } as any);
+      } else {
+        unpinnedList.push(c);
+      }
+    });
+    
+    pinnedList.sort((a: any, b: any) => b._tempPinTime - a._tempPinTime);
+    
+    unpinnedList.sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return timeB - timeA;
+    });
+    
+    return [...pinnedList, ...unpinnedList];
+  }, [customers, copySearchTerm, optimisticPins]);
+
   const [isSaving, setIsSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(initialId || null);
   const [lastViewedId, setLastViewedId] = useState<string | null>(initialId || null);
@@ -475,7 +527,6 @@ export const CustomerManagement: React.FC<{
                            <button onClick={() => onNavigate('plan-editor', { customerId: customer.customer_id })} className="text-blue-600 hover:scale-110 transition-all" title="Sửa phác đồ"><Pencil size={20}/></button>
                            <button onClick={() => onNavigate('preview', { customerId: customer.customer_id, token: customer.token })} className="text-green-600 hover:scale-110 transition-all" title="Xem phác đồ"><Eye size={20}/></button>
                            <button 
-                             onMouseEnter={() => api.getPlanEditorData(undefined, customer.customer_id)}
                              onClick={() => onNavigate('plan-editor', { templateId: customer.customer_id })} 
                              className="text-orange-500 hover:scale-110 transition-all" 
                              title="Nhân bản phác đồ"
@@ -525,16 +576,14 @@ export const CustomerManagement: React.FC<{
                       const cycle = Math.max(0, Math.floor((diffDays - 1) / 60));
                       const cycleStartDate = addDays(start, cycle * 60);
 
-                      const videoOpenDates = customer.raw_backup?.video_open_dates || [];
+                      const completedDays = customer.raw_backup?.completed_days || [];
                       let attendedCount = 0;
                       let missedCount = 0;
                       const currentDayInCycle = Math.min(60, Math.max(1, getDiffDays(cycleStartDate, today) + 1));
 
                       for (let i = 1; i <= currentDayInCycle; i++) {
-                        const checkDate = addDays(cycleStartDate, i - 1);
-                        const dateStr = toISODateKey(checkDate);
-                        if (videoOpenDates.includes(dateStr)) attendedCount++;
-                        else if (checkDate < today) missedCount++;
+                        if (completedDays.includes(i)) attendedCount++;
+                        else if (i < currentDayInCycle) missedCount++;
                       }
 
                       return (
@@ -558,9 +607,8 @@ export const CustomerManagement: React.FC<{
                               const actualDate = addDays(cycleStartDate, day - 1);
                               const isFuture = actualDate > today;
                               const isToday = actualDate.getTime() === today.getTime();
-                              const dateStr = toISODateKey(actualDate);
-                              const attended = videoOpenDates.includes(dateStr);
-                              const missed = !attended && !isFuture && actualDate < today;
+                              const attended = completedDays.includes(day);
+                              const missed = !attended && day < currentDayInCycle;
 
                               return (
                                 <div 
@@ -614,7 +662,7 @@ export const CustomerManagement: React.FC<{
                               >
                                 <div className="flex flex-col">
                                   <span className="text-[12px] font-bold text-gray-700 uppercase group-hover:text-blue-600">{p.ten_sp}</span>
-                                  <span className="text-[10px] font-bold text-gray-400">{formatVND(p.gia_ban)}</span>
+                                  {hasPerm('view_financials') && <span className="text-[10px] font-bold text-gray-400">{formatVND(p.gia_ban)}</span>}
                                 </div>
                                 <Plus size={14} className="text-blue-200 group-hover:text-blue-600" />
                               </div>
@@ -633,19 +681,21 @@ export const CustomerManagement: React.FC<{
                             <div className="text-[12px] font-black text-blue-900 uppercase">{item.ten_sp}</div>
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 mt-1">
                               <span className="text-[11px] font-bold text-gray-400">SL: <input type="number" className="w-8 bg-transparent outline-none font-bold text-blue-600 border-b border-blue-50 focus:border-blue-400" value={item.so_luong || 0} onChange={e => updateProductQty(item.id_sp, parseInt(e.target.value) || 0)} /></span>
-                              <span className="text-[11px] font-bold text-gray-400 flex items-center gap-1">
-                                GIÁ: 
-                                <input 
-                                  type="text" 
-                                  className="w-20 bg-transparent outline-none font-bold text-blue-900 border-b border-blue-50 focus:border-blue-400" 
-                                  value={formatVND(item.don_gia || 0)} 
-                                  onChange={e => updateProductPrice(item.id_sp, parseInt(e.target.value.replace(/\D/g, '')) || 0)} 
-                                />
-                              </span>
+                              {hasPerm('view_financials') && (
+                                <span className="text-[11px] font-bold text-gray-400 flex items-center gap-1">
+                                  GIÁ: 
+                                  <input 
+                                    type="text" 
+                                    className="w-20 bg-transparent outline-none font-bold text-blue-900 border-b border-blue-50 focus:border-blue-400" 
+                                    value={formatVND(item.don_gia || 0)} 
+                                    onChange={e => updateProductPrice(item.id_sp, parseInt(e.target.value.replace(/\D/g, '')) || 0)} 
+                                  />
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-3 sm:gap-6">
-                             <span className="text-sm font-black text-blue-600">{formatVND(item.thanh_tien)}</span>
+                             {hasPerm('view_financials') && <span className="text-sm font-black text-blue-600">{formatVND(item.thanh_tien)}</span>}
                              <button onClick={() => {
                                const newItems = (formData.san_pham || []).filter(p => p.id_sp !== item.id_sp);
                                const total = newItems.reduce((acc, curr) => acc + curr.thanh_tien, 0);
@@ -656,12 +706,70 @@ export const CustomerManagement: React.FC<{
                       ))}
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">TỔNG THANH TOÁN</span>
-                        <span className="text-xl sm:text-2xl font-black text-blue-600">{formatVND(formData.gia_tien || 0)}</span>
+                    {hasPerm('view_financials') && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">TỔNG THANH TOÁN</span>
+                          <span className="text-xl sm:text-2xl font-black text-blue-600">{formatVND(formData.gia_tien || 0)}</span>
+                        </div>
                       </div>
-                    </div>
+                    )}
+                 </div>
+
+                 {/* Đặt cọc section */}
+                 <div className="bg-pink-50/50 rounded-3xl p-6 border border-pink-100 flex flex-col gap-4 mt-2">
+                   <label className="flex items-center gap-3 cursor-pointer">
+                     <input 
+                       type="checkbox" 
+                       className="w-5 h-5 text-pink-600 rounded border-pink-200 focus:ring-pink-500"
+                       checked={!!formData.is_deposit}
+                       onChange={e => {
+                         const checked = e.target.checked;
+                         let newProducts = formData.san_pham;
+                         let newGiaTien = formData.gia_tien;
+                         
+                         if (checked) {
+                           newProducts = [];
+                           newGiaTien = 0;
+                         } else {
+                           const targetProductId = 'SP1768731546380';
+                           const defaultProduct = products.find(p => p.id_sp === targetProductId && p.trang_thai === 1) || products.find(p => p.trang_thai === 1);
+                           if (defaultProduct) {
+                             newProducts = [{ id_sp: defaultProduct.id_sp, ten_sp: defaultProduct.ten_sp, so_luong: 1, don_gia: defaultProduct.gia_ban, gia_nhap: defaultProduct.gia_nhap, thanh_tien: defaultProduct.gia_ban }];
+                             newGiaTien = defaultProduct.gia_ban;
+                           }
+                         }
+
+                         setFormData({
+                           ...formData, 
+                           is_deposit: checked, 
+                           deposit_amount: checked ? (formData.deposit_amount || 500000) : 0,
+                           san_pham: newProducts,
+                           gia_tien: newGiaTien
+                         });
+                       }}
+                     />
+                     <span className="text-sm font-bold text-pink-900 uppercase tracking-wide flex items-center gap-2">
+                       <DollarSign size={16} className="text-pink-500" />
+                       Đã Đặt Cọc
+                     </span>
+                   </label>
+                   
+                   {formData.is_deposit && hasPerm('view_financials') && (
+                     <div className="flex flex-col ml-8 animate-in fade-in slide-in-from-top-2 duration-200">
+                       <span className="text-[10px] font-bold text-pink-400 uppercase tracking-widest mb-1">SỐ TIỀN CỌC</span>
+                       <div className="flex items-center gap-2">
+                         <input 
+                           type="text" 
+                           className="text-xl font-black text-pink-600 bg-transparent outline-none border-b border-pink-200 focus:border-pink-500 w-32" 
+                           value={formatVND(formData.deposit_amount || 0)} 
+                           onChange={e => setFormData({...formData, deposit_amount: parseInt(e.target.value.replace(/\D/g, '')) || 0})} 
+                         />
+                         <span className="text-pink-600 font-bold text-sm">VNĐ</span>
+                       </div>
+                       <p className="text-[10px] text-pink-400 mt-2 italic">Tiền cọc này sẽ tự động được tính vào Tổng doanh thu (giá vốn = 0đ).</p>
+                     </div>
+                   )}
                  </div>
               </div>
             </div>
@@ -718,13 +826,15 @@ export const CustomerManagement: React.FC<{
              <button className={`shrink-0 flex items-center gap-2.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full border transition-all shadow-sm ${filterMissing === 'chua_gan' ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-orange-500 border-blue-100 hover:bg-blue-50'}`} onClick={() => setFilterMissing('chua_gan')}><AlertCircle size={16} /><span className="text-[11px] sm:text-[12px] font-black uppercase tracking-tight">{stats.notAssigned} CHƯA GÁN</span></button>
              <button className={`shrink-0 flex items-center gap-2.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full border transition-all shadow-sm ${filterMissing === 'ma_vd' ? 'bg-purple-500 text-white border-purple-500' : 'bg-white text-purple-500 border-blue-100 hover:bg-blue-50'}`} onClick={() => setFilterMissing('ma_vd')}><Gift size={16} /><span className="text-[11px] sm:text-[12px] font-black uppercase tracking-tight">{stats.missingMVD} THIẾU MVD</span></button>
              <button className={`shrink-0 flex items-center gap-2.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full border transition-all shadow-sm ${filterMissing === 'phac_do' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-red-500 border-blue-100 hover:bg-blue-50'}`} onClick={() => setFilterMissing('phac_do')}><ClipboardList size={16} /><span className="text-[11px] sm:text-[12px] font-black uppercase tracking-tight">{stats.noPlan} THIẾU PĐ</span></button>
-             <div 
-               onClick={() => setIsProfitModalOpen(true)}
-               className="shrink-0 flex items-center gap-2.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full border border-green-200 text-green-600 bg-white/50 shadow-sm cursor-pointer hover:bg-green-50 transition-all"
-               title="Xem biểu đồ lợi nhuận"
-             >
-               <TrendingUp size={16} /><span className="text-[11px] sm:text-[12px] font-black uppercase tracking-tight">+{formatVND(stats.profit)}</span>
-             </div>
+             {hasPerm('view_financials') && (
+               <div 
+                 onClick={() => setIsProfitModalOpen(true)}
+                 className="shrink-0 flex items-center gap-2.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full border border-green-200 text-green-600 bg-white/50 shadow-sm cursor-pointer hover:bg-green-50 transition-all"
+                 title="Xem biểu đồ lợi nhuận"
+               >
+                 <TrendingUp size={16} /><span className="text-[11px] sm:text-[12px] font-black uppercase tracking-tight">+{formatVND(stats.profit)}</span>
+               </div>
+             )}
           </div>
           
           <div className="flex overflow-x-auto gap-4 px-1 scrollbar-hide pb-2 sm:pb-0">
@@ -811,8 +921,8 @@ export const CustomerManagement: React.FC<{
                   <th className="p-4 text-[10px] font-black uppercase w-20 text-center">Ngày</th>
                   <th className="p-4 text-[10px] font-black uppercase">Sản phẩm</th>
                   <th className="p-4 text-[10px] font-black uppercase w-32 text-center">Công cụ</th>
-                  <th className="p-4 text-[10px] font-black uppercase text-right w-28">Tổng tiền</th>
-                  <th className="p-4 text-[10px] font-black uppercase text-right w-28">Lợi nhuận</th>
+                  {hasPerm('view_financials') && <th className="p-4 text-[10px] font-black uppercase text-right w-28">Tổng tiền</th>}
+                  {hasPerm('view_financials') && <th className="p-4 text-[10px] font-black uppercase text-right w-28">Lợi nhuận</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-blue-50">
@@ -838,9 +948,11 @@ export const CustomerManagement: React.FC<{
                           <div className={`px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-black border uppercase tracking-tight shadow-sm ${getCustomerNamePillColor(c, products, productMap)}`}>
                             {c.customer_name}
                           </div>
-                          <div className="text-[10px] text-blue-600 font-black ml-2">
-                            {formatVND(fin.revenue)}
-                          </div>
+                          {hasPerm('view_financials') && (
+                            <div className="text-[10px] text-blue-600 font-black ml-2">
+                              {formatVND(fin.revenue)}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="p-4 text-center font-black text-blue-900 text-[12px]">
@@ -863,12 +975,16 @@ export const CustomerManagement: React.FC<{
                           <span onClick={(e) => handleIconClick(e, c, 'ma_vd')} className="hover:scale-125 transition-all cursor-pointer"><Truck size={16} className={c.ma_vd ? "text-orange-500" : "text-gray-200"} /></span>
                         </div>
                       </td>
-                      <td className="p-4 text-right font-black text-blue-900 text-[12px]">
-                        {formatVND(fin.revenue)}
-                      </td>
-                      <td className="p-4 text-right font-black text-green-500 text-[12px]">
-                        {formatVND(fin.profit)}
-                      </td>
+                      {hasPerm('view_financials') && (
+                        <td className="p-4 text-right font-black text-blue-900 text-[12px]">
+                          {formatVND(fin.revenue)}
+                        </td>
+                      )}
+                      {hasPerm('view_financials') && (
+                        <td className="p-4 text-right font-black text-green-500 text-[12px]">
+                          {formatVND(fin.profit)}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -891,7 +1007,11 @@ export const CustomerManagement: React.FC<{
 
       <Modal
         isOpen={isCopyModalOpen}
-        onClose={() => { setIsCopyModalOpen(false); setCopySearchTerm(""); }}
+        onClose={() => { 
+          setIsCopyModalOpen(false); 
+          setCopySearchTerm(""); 
+          localStorage.setItem('mega_pinned_copy_students', JSON.stringify(pinnedIds));
+        }}
         title="CHỌN HỌC VIÊN ĐỂ COPY PHÁC ĐỒ"
         maxWidth="max-w-2xl"
       >
@@ -908,13 +1028,7 @@ export const CustomerManagement: React.FC<{
           </div>
 
           <div className="max-h-[400px] overflow-y-auto custom-scrollbar flex flex-col gap-2">
-            {customers
-              .filter(c => c.video_date && (
-                c.customer_name.toLowerCase().includes(copySearchTerm.toLowerCase()) ||
-                c.sdt.includes(copySearchTerm)
-              ))
-              .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-              .map(c => (
+            {filteredCopyCustomers.map(c => (
                 <div 
                   key={c.customer_id}
                   onMouseEnter={() => api.getPlanEditorData(undefined, c.customer_id)}
@@ -936,11 +1050,22 @@ export const CustomerManagement: React.FC<{
                   }}
                   className="flex items-center justify-between p-4 hover:bg-blue-50 rounded-2xl cursor-pointer border border-transparent hover:border-blue-100 transition-all group"
                 >
-                  <div className="flex flex-col">
-                    <span className="font-black text-blue-900 uppercase text-sm group-hover:text-blue-600">{c.customer_name}</span>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">SĐT: {c.sdt || '---'} | NGÀY: {formatDDMMYYYY(c.video_date)}</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button 
+                      onClick={(e) => togglePin(c.customer_id, e)}
+                      className={`p-2 rounded-xl transition-all hover:bg-gray-200 shrink-0 ${(optimisticPins[c.customer_id] !== undefined ? optimisticPins[c.customer_id] > 0 : !!c.raw_backup?.pinned_at) ? 'text-orange-500 bg-orange-50 hover:bg-orange-100' : 'text-gray-300 hover:text-gray-600'}`}
+                      title={(optimisticPins[c.customer_id] !== undefined ? optimisticPins[c.customer_id] > 0 : !!c.raw_backup?.pinned_at) ? "Bỏ ghim" : "Ghim lên đầu"}
+                    >
+                      <Pin size={16} className={(optimisticPins[c.customer_id] !== undefined ? optimisticPins[c.customer_id] > 0 : !!c.raw_backup?.pinned_at) ? "fill-current" : ""} />
+                    </button>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-black text-blue-900 uppercase text-sm group-hover:text-blue-600 truncate">{c.customer_name}</span>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">SĐT: {c.sdt || '---'} | NGÀY: {formatDDMMYYYY(c.video_date)}</span>
+                    </div>
                   </div>
-                  <CopyPlus size={18} className="text-gray-300 group-hover:text-blue-600" />
+                  <div className="p-2 text-gray-300 group-hover:text-blue-600 shrink-0">
+                    <CopyPlus size={18} />
+                  </div>
                 </div>
               ))}
             {customers.filter(c => c.video_date).length === 0 && (

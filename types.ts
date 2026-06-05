@@ -95,6 +95,8 @@ export interface Customer {
   require_google_auth?: boolean;
   require_device_limit?: boolean;
   pending_email?: string;
+  is_deposit?: boolean;
+  deposit_amount?: number;
   // Fix: Added missing optional properties used in ClientView logic to satisfy TypeScript
   allowed_day?: number;
   access_state?: string;
@@ -110,4 +112,28 @@ export interface CustomerDevice {
   is_approved: boolean;
   last_used_at?: string;
   created_at?: string;
+}
+
+export interface Role {
+  name: string;
+  display_name: string;
+  created_at?: string;
+}
+
+export interface Permission {
+  code: string;
+  display_name: string;
+  created_at?: string;
+}
+
+export interface RolePermission {
+  role_name: string;
+  permission_code: string;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  role: string;
+  created_at: string;
 }

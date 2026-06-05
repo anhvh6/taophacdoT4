@@ -26,7 +26,7 @@ export async function runYoutubeAutomation(
   if (videoIds.length === 0) return { success: true, successCount: 0, failedCount: 0, errors: [] };
 
   // Khởi động trình duyệt
-  const isHeadless = process.env.YOUTUBE_HEADLESS === 'false' ? false : "new";
+  const isHeadless = process.env.YOUTUBE_HEADLESS === 'false' ? false : "shell";
   
   const browser = await puppeteer.launch({
     headless: isHeadless,

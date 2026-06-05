@@ -292,14 +292,7 @@
         let html = '';
         for(let i=1; i<=30; i++) {
           const tasks = DATA.tasks.filter(t => t.day == i);
-          // Sắp xếp bài tập: Bắt buộc lên đầu
-          tasks.sort((a, b) => {
-            const aM = String(a.type || "").toLowerCase().includes('bắt buộc') || String(a.type || "").toLowerCase().includes('bat buoc');
-            const bM = String(b.type || "").toLowerCase().includes('bắt buộc') || String(b.type || "").toLowerCase().includes('bat buoc');
-            if (aM && !bM) return -1;
-            if (!aM && bM) return 1;
-            return 0;
-          });
+          tasks.sort((a, b) => (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true }));
           
           const isLocked = i > DATA.allowed_day;
           const isActive = i === DATA.allowed_day;
@@ -341,14 +334,7 @@
         }
 
         const dayTasks = DATA.tasks.filter(t => t.day == day);
-        // Sắp xếp bài tập: Bắt buộc lên đầu (phải khớp với renderGrid)
-        dayTasks.sort((a, b) => {
-          const aM = String(a.type || "").toLowerCase().includes('bắt buộc') || String(a.type || "").toLowerCase().includes('bat buoc');
-          const bM = String(b.type || "").toLowerCase().includes('bắt buộc') || String(b.type || "").toLowerCase().includes('bat buoc');
-          if (aM && !bM) return -1;
-          if (!aM && bM) return 1;
-          return 0;
-        });
+        dayTasks.sort((a, b) => (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true }));
         const task = dayTasks[idx];
 
         const displayTaskDetail = () => {

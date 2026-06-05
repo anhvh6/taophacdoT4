@@ -35,7 +35,7 @@ export const customPlanService = {
       title: t.title || "",
       detail: t.detail || "",
       type: t.type || "Bài bắt buộc",
-      nhom: t.nhom || t.Nhom || "",
+      nhom: t.nhom || (t as any).Nhom || "",
       is_deleted: Number(t.is_deleted || 0) === 1
     }));
     return mapped;
@@ -56,7 +56,7 @@ export const customPlanService = {
       detail: t.detail || '',
       link: t.link || '',
       is_deleted: t.is_deleted ? 1 : 0,
-      nhom: t.nhom || t.Nhom || ''
+      nhom: t.nhom || (t as any).Nhom || ''
     })).filter(t => t.day > 0);
 
     await mockDB.saveCustomPlan(cleanId, rows as any[]);

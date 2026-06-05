@@ -73,7 +73,8 @@ export function calcRevenueCostProfit(customer: Customer, products: Product[], p
     revenueFromItems += giaBan * qty;
   }
 
-  const revenue = (Number(customer?.gia_tien ?? 0) || 0) > 0 ? Number(customer.gia_tien) : revenueFromItems;
+  const deposit = customer?.is_deposit ? (Number(customer?.deposit_amount) || 0) : 0;
+  const revenue = ((Number(customer?.gia_tien ?? 0) || 0) > 0 ? Number(customer.gia_tien) : revenueFromItems) + deposit;
   const profit = revenue - cost;
 
   return {

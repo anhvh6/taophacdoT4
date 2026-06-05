@@ -44,9 +44,11 @@ interface AnalyticsDashboardProps {
   onNavigate: (page: string, params?: any) => void;
   customers: Customer[];
   products: Product[];
+  checkPermission?: (perm: string) => boolean;
 }
 
-export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigate, customers, products }) => {
+export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNavigate, customers, products, checkPermission }) => {
+  const hasPerm = (perm: string) => checkPermission ? checkPermission(perm) : true;
   const [timeRange, setTimeRange] = useState<'month' | 'quarter' | 'year'>('month');
   const [loginTimeRange, setLoginTimeRange] = useState<'day' | 'week' | 'month'>('day');
   
@@ -172,7 +174,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
     activeCustomers.forEach(c => {
       const fin = calcRevenueCostProfit(c, products);
       
-      const profitMonthKey = getProfitMonth(c.created_at || Date.now());
+      const profitMonthKey = getProfitMonth(c.created_at || new Date());
       const [m, y] = profitMonthKey.split('/').map(Number);
       
       // Monthly Data for the current year
@@ -269,32 +271,36 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
     >
       <div className="flex flex-col gap-8 pb-20">
         {/* Top Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="p-6 bg-white border-blue-50 shadow-sm hover:shadow-md transition-all">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-blue-50 rounded-2xl text-blue-600">
-                <DollarSign size={24} />
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${hasPerm('view_financials') ? 'lg:grid-cols-4' : 'lg:grid-cols-2'} gap-6`}>
+          {hasPerm('view_financials') && (
+            <Card className="p-6 bg-white border-blue-50 shadow-sm hover:shadow-md transition-all">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-blue-50 rounded-2xl text-blue-600">
+                  <DollarSign size={24} />
+                </div>
+                <div className="flex items-center gap-1 text-xs font-bold text-emerald-600">
+                  <ArrowUpRight size={14} />
+                  {stats.profitContribution.toFixed(1)}% năm
+                </div>
               </div>
-              <div className="flex items-center gap-1 text-xs font-bold text-emerald-600">
-                <ArrowUpRight size={14} />
-                {stats.profitContribution.toFixed(1)}% năm
-              </div>
-            </div>
-            <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Lợi nhuận chu kỳ này</h3>
-            <p className="text-2xl font-black text-blue-900">{formatVND(stats.currentCycleProfit)}</p>
-            <p className="text-[10px] font-bold text-gray-400 mt-1">Doanh thu: {formatVND(stats.currentCycleRevenue)}</p>
-          </Card>
+              <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Lợi nhuận chu kỳ này</h3>
+              <p className="text-2xl font-black text-blue-900">{formatVND(stats.currentCycleProfit)}</p>
+              <p className="text-[10px] font-bold text-gray-400 mt-1">Doanh thu: {formatVND(stats.currentCycleRevenue)}</p>
+            </Card>
+          )}
 
-          <Card className="p-6 bg-white border-blue-50 shadow-sm hover:shadow-md transition-all">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600">
-                <TrendingUp size={24} />
+          {hasPerm('view_financials') && (
+            <Card className="p-6 bg-white border-blue-50 shadow-sm hover:shadow-md transition-all">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600">
+                  <TrendingUp size={24} />
+                </div>
               </div>
-            </div>
-            <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Tổng lợi nhuận năm</h3>
-            <p className="text-2xl font-black text-emerald-700">{formatVND(stats.totalProfit)}</p>
-            <p className="text-[10px] font-bold text-gray-400 mt-1">Doanh thu: {formatVND(stats.totalRevenue)}</p>
-          </Card>
+              <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Tổng lợi nhuận năm</h3>
+              <p className="text-2xl font-black text-emerald-700">{formatVND(stats.totalProfit)}</p>
+              <p className="text-[10px] font-bold text-gray-400 mt-1">Doanh thu: {formatVND(stats.totalRevenue)}</p>
+            </Card>
+          )}
 
           <Card className="p-6 bg-white border-blue-50 shadow-sm hover:shadow-md transition-all">
             <div className="flex justify-between items-start mb-4">
@@ -320,9 +326,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
         </div>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className={`grid grid-cols-1 ${hasPerm('view_financials') ? 'lg:grid-cols-2' : 'lg:grid-cols-1'} gap-8`}>
           {/* Revenue Over Time */}
-          <Card className="p-8 bg-white border-blue-50 shadow-sm">
+          {hasPerm('view_financials') && (
+            <Card className="p-8 bg-white border-blue-50 shadow-sm">
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h3 className="text-lg font-black text-blue-900 uppercase tracking-tight">Biểu đồ doanh thu & Lợi nhuận</h3>
@@ -397,6 +404,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
               </ResponsiveContainer>
             </div>
           </Card>
+          )}
 
           {/* Student Status Distribution */}
           <Card className="p-8 bg-white border-blue-50 shadow-sm">
@@ -556,16 +564,18 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
                 </div>
               </div>
               
-              <div className="flex items-start gap-4">
-                <div className="p-2 bg-white/10 rounded-xl">
-                  <TrendingUp className="w-5 h-5" />
+              {hasPerm('view_financials') && (
+                <div className="flex items-start gap-4">
+                  <div className="p-2 bg-white/10 rounded-xl">
+                    <TrendingUp className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-1">Dự kiến doanh thu năm</p>
+                    <p className="text-sm font-bold">{formatVND(stats.totalRevenue * 1.2)}</p>
+                    <p className="text-[10px] text-emerald-300 font-bold mt-1">+20% so với dự kiến ban đầu</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-1">Dự kiến doanh thu năm</p>
-                  <p className="text-sm font-bold">{formatVND(stats.totalRevenue * 1.2)}</p>
-                  <p className="text-[10px] text-emerald-300 font-bold mt-1">+20% so với dự kiến ban đầu</p>
-                </div>
-              </div>
+              )}
 
               <div className="mt-4 p-4 bg-white/10 rounded-2xl border border-white/10">
                 <p className="text-[10px] font-bold uppercase tracking-widest mb-3 opacity-60">Top trạng thái</p>

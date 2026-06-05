@@ -20,7 +20,7 @@ export default async function handler(req: any, res: any) {
   
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
   
-  const { customer_id, token } = req.body;
+  const { customer_id, token, day } = req.body;
   
   if (!customer_id || !token || !supabaseUrl || !supabaseServiceKey) {
     return res.status(400).json({ success: false, message: 'Thiếu thông tin yêu cầu.' });
@@ -54,6 +54,18 @@ export default async function handler(req: any, res: any) {
     // Add to video_open_dates
     if (!raw_backup.video_open_dates || !Array.isArray(raw_backup.video_open_dates)) {
       raw_backup.video_open_dates = [];
+    }
+
+    // Add to completed_days
+    if (!raw_backup.completed_days || !Array.isArray(raw_backup.completed_days)) {
+      raw_backup.completed_days = [];
+    }
+
+    if (day !== undefined && day !== null) {
+      const dayNum = parseInt(day, 10);
+      if (!isNaN(dayNum) && !raw_backup.completed_days.includes(dayNum)) {
+        raw_backup.completed_days.push(dayNum);
+      }
     }
     
     // Convert to VN timezone YYYY-MM-DD

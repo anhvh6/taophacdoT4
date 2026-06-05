@@ -6,6 +6,8 @@ import { ProductManagement } from './pages/ProductManagement';
 import { ClientView } from './pages/ClientView';
 import { VideoGroupManagement } from './pages/VideoGroupManagement';
 import { AnalyticsDashboard } from './pages/AnalyticsDashboard';
+import { PermissionsManagement } from './pages/PermissionsManagement';
+import { AdminUsersManagement } from './pages/AdminUsersManagement';
 import { MigrationTool } from './src/pages/MigrationTool';
 import { customerService } from './src/services/customerService';
 import { productService } from './src/services/productService';
@@ -13,9 +15,10 @@ import { auth } from './src/lib/auth';
 import { AlertCircle, RefreshCw, ShieldAlert, LogIn, Database } from 'lucide-react';
 import { Button, Toast } from './components/UI';
 
-import { Customer, Product, CustomerStatus } from './types';
+import { Customer, Product, CustomerStatus, RolePermission } from './types';
+import { permissionService } from './src/services/permissionService';
 
-type Page = 'dashboard' | 'management' | 'plan-editor' | 'products' | 'preview' | 'video-groups' | 'login' | 'migrate' | 'analytics';
+type Page = 'dashboard' | 'management' | 'plan-editor' | 'products' | 'preview' | 'video-groups' | 'login' | 'migrate' | 'analytics' | 'permissions' | 'admin-users';
 
 const APP_MODE = import.meta.env.VITE_APP_MODE || 'admin';
 
@@ -42,6 +45,8 @@ const App: React.FC = () => {
     if (path === '#/products') return 'products';
     if (path === '#/video-groups') return 'video-groups';
     if (path === '#/analytics') return 'analytics';
+    if (path === '#/permissions') return 'permissions';
+    if (path === '#/admin-users') return 'admin-users';
     if (path === '#/migrate') return 'migrate';
     if (path === '#/add-student') return 'dashboard';
     return 'dashboard';
@@ -86,7 +91,36 @@ const App: React.FC = () => {
   // Auth State
   const [session, setSession] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminRole, setAdminRole] = useState<string | null>(null);
+  const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([]);
   const [authLoading, setAuthLoading] = useState(true);
+
+  // Load user role permissions mapping
+  useEffect(() => {
+    const loadUserPermissions = async () => {
+      if (session) {
+        try {
+          const perms = await permissionService.getRolePermissions();
+          setRolePermissions(perms);
+        } catch (e) {
+          console.error("Failed to load role permissions:", e);
+        }
+      } else {
+        setRolePermissions([]);
+      }
+    };
+    loadUserPermissions();
+  }, [session]);
+
+  const checkPermission = (permCode: string): boolean => {
+    if (!session) return false;
+    if (!adminRole) return false;
+    if (adminRole === 'super_admin') return true;
+    return rolePermissions.some(rp => 
+      rp.role_name.toLowerCase() === adminRole.toLowerCase() &&
+      rp.permission_code.toLowerCase() === permCode.toLowerCase()
+    );
+  };
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -117,6 +151,7 @@ const App: React.FC = () => {
         setSession(session);
         if (session) {
           auth.isAdmin(session.user.id).then(setIsAdmin);
+          auth.getAdminRole(session.user.id).then(setAdminRole);
         }
       } catch (e) {
         console.error("Auth init failed:", e);
@@ -131,8 +166,10 @@ const App: React.FC = () => {
       setSession(session);
       if (session) {
         auth.isAdmin(session.user.id).then(setIsAdmin);
+        auth.getAdminRole(session.user.id).then(setAdminRole);
       } else {
         setIsAdmin(false);
+        setAdminRole(null);
       }
     });
 
@@ -149,10 +186,14 @@ const App: React.FC = () => {
       if (data.session) {
         setSession(data.session);
         const admin = await auth.isAdmin(data.session.user.id);
+        const role = await auth.getAdminRole(data.session.user.id);
         setIsAdmin(admin);
+        setAdminRole(role);
         if (!admin) {
+          console.log("Non-admin user ID:", data.session.user.id, "Email:", data.session.user.email);
           await auth.signOut();
-          throw new Error('Bạn không có quyền truy cập trang quản trị');
+          setAdminRole(null);
+          throw new Error(`Bạn không có quyền truy cập trang quản trị. (User ID: ${data.session.user.id}, Email: ${data.session.user.email})`);
         }
         window.location.hash = '#/dashboard';
       }
@@ -168,6 +209,7 @@ const App: React.FC = () => {
     await auth.signOut();
     setSession(null);
     setIsAdmin(false);
+    setAdminRole(null);
     window.location.hash = '#/login';
   };
 
@@ -369,6 +411,12 @@ const App: React.FC = () => {
       } else if (path === '#/analytics') {
         setCurrentPage('analytics');
         setPageParams({});
+      } else if (path === '#/permissions') {
+        setCurrentPage('permissions');
+        setPageParams({});
+      } else if (path === '#/admin-users') {
+        setCurrentPage('admin-users');
+        setPageParams({});
       } else if (path === '#/migrate') {
         setCurrentPage('migrate');
         setPageParams({});
@@ -392,6 +440,48 @@ const App: React.FC = () => {
       window.location.hash = '#/login';
     }
   }, [session, authLoading, currentPage]);
+
+  // Enforce page level permission checks
+  useEffect(() => {
+    if (!session || authLoading) return;
+    
+    // Skip if super_admin or preview/login/migrate
+    if (adminRole === 'super_admin') return;
+    if (['preview', 'login', 'migrate', 'dashboard'].includes(currentPage)) return;
+
+    // Define page-permission mappings
+    const pagePermissions: Record<string, string> = {
+      management: 'view_students',
+      products: 'view_products',
+      'video-groups': 'view_plan',
+      analytics: 'view_reports',
+      'plan-editor': 'view_plan',
+      permissions: 'super_admin_only',
+      'admin-users': 'super_admin_only'
+    };
+
+    const requiredPerm = pagePermissions[currentPage];
+    if (requiredPerm) {
+      if (requiredPerm === 'super_admin_only') {
+        if (adminRole !== 'super_admin') {
+          window.location.hash = '#/dashboard';
+          setGlobalToast('Bạn không có quyền truy cập tính năng này');
+        }
+      } else {
+        // Wait until rolePermissions are loaded before checking
+        if (rolePermissions.length > 0) {
+          const hasPerm = rolePermissions.some(rp => 
+            rp.role_name.toLowerCase() === adminRole?.toLowerCase() &&
+            rp.permission_code.toLowerCase() === requiredPerm.toLowerCase()
+          );
+          if (!hasPerm) {
+            window.location.hash = '#/dashboard';
+            setGlobalToast('Bạn không có quyền truy cập trang này');
+          }
+        }
+      }
+    }
+  }, [session, authLoading, currentPage, adminRole, rolePermissions]);
 
   // Update page title
   useEffect(() => {
@@ -559,6 +649,8 @@ const App: React.FC = () => {
               onUpsert={handleUpsertCustomer}
               onDelete={handleDeleteCustomer}
               onLogout={handleLogout}
+              currentUserRole={adminRole || 'super_admin'}
+              checkPermission={checkPermission}
             />
           )}
           {currentPage === 'management' && (
@@ -570,6 +662,7 @@ const App: React.FC = () => {
               loading={loading}
               onUpsert={handleUpsertCustomer}
               onDelete={handleDeleteCustomer}
+              checkPermission={checkPermission}
             />
           )}
           {currentPage === 'plan-editor' && (
@@ -591,7 +684,13 @@ const App: React.FC = () => {
             <VideoGroupManagement onNavigate={navigate} />
           )}
           {currentPage === 'analytics' && (
-            <AnalyticsDashboard onNavigate={navigate} customers={customers} products={products} />
+            <AnalyticsDashboard onNavigate={navigate} customers={customers} products={products} checkPermission={checkPermission} />
+          )}
+          {currentPage === 'permissions' && (
+            <PermissionsManagement onNavigate={navigate} currentUserRole={adminRole || 'super_admin'} />
+          )}
+          {currentPage === 'admin-users' && (
+            <AdminUsersManagement onNavigate={navigate} />
           )}
           {currentPage === 'migrate' && (
             <MigrationTool />

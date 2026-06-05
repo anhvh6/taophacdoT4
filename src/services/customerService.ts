@@ -1,6 +1,6 @@
 import { mockDB } from '../lib/mockData';
 import { supabase } from '../lib/supabaseClient';
-import { Customer } from '../../types';
+import { Customer, CustomerStatus } from '../../types';
 import { DEFAULT_SIDEBAR_BLOCKS, DEFAULT_CHEWING_INSTRUCTION } from '../../constants';
 import { parseVNDate, addDays, toISODateKey } from '../../utils/date';
 
@@ -214,7 +214,8 @@ export const customerService = {
       'customer_name', 'sdt', 'email', 'dia_chi', 'san_pham', 'gia_tien', 
       'trang_thai', 'ma_vd', 'note', 'chewing_status', 'start_date', 
       'status', 'sidebar_blocks_json', 'app_title', 'app_slogan',
-      'require_google_auth', 'require_device_limit', 'pending_email', 'video_date'
+      'require_google_auth', 'require_device_limit', 'pending_email', 'video_date',
+      'is_deposit', 'deposit_amount'
     ];
 
     fields.forEach(field => {
@@ -447,12 +448,45 @@ export const customerService = {
     }
   },
 
-  async logVideoOpen(customerId: string, token: string) {
+  async toggleCustomerPin(customerId: string, isPinned: boolean) {
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('customers')
+        .select('raw_backup')
+        .eq('customer_id', customerId)
+        .maybeSingle();
+
+      if (fetchError || !data) return false;
+
+      let rawBackup = data.raw_backup || {};
+      if (typeof rawBackup === 'string') {
+        try { rawBackup = JSON.parse(rawBackup); } catch(e) { rawBackup = {}; }
+      }
+
+      if (isPinned) {
+        rawBackup.pinned_at = Date.now();
+      } else {
+        delete rawBackup.pinned_at;
+      }
+
+      const { error } = await supabase
+        .from('customers')
+        .update({ raw_backup: rawBackup })
+        .eq('customer_id', customerId);
+
+      return !error;
+    } catch (e) {
+      console.error('toggleCustomerPin error:', e);
+      return false;
+    }
+  },
+
+  async logVideoOpen(customerId: string, token: string, day?: number) {
     try {
       const response = await fetch('/api/log_video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customer_id: customerId, token })
+        body: JSON.stringify({ customer_id: customerId, token, day })
       });
       return await response.json();
     } catch (e) {

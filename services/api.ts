@@ -15,6 +15,7 @@ export const api = {
   },
   upsertCustomer: customerService.upsertCustomer,
   deleteCustomer: customerService.deleteCustomer,
+  toggleCustomerPin: customerService.toggleCustomerPin,
   
   getProducts: productService.getProducts,
   saveProducts: async (products: Product[]) => {
@@ -49,8 +50,8 @@ export const api = {
     // Create a unique list of {video_date, nhom}
     const uniqueMap = new Map();
     (videoTasks || []).forEach(v => {
-      const vDate = v.Video_date || (v as any).video_date;
-      const vNhom = v.Nhom || (v as any).nhom;
+      const vDate = (v as any).Video_date || v.video_date;
+      const vNhom = (v as any).Nhom || v.nhom;
       if (vDate && !uniqueMap.has(vDate)) {
         uniqueMap.set(vDate, vNhom || vDate);
       }

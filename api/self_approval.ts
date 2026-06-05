@@ -30,7 +30,9 @@ export default async function handler(req: any, res: any) {
   const vnTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
   const dayStr = String(vnTime.getDate()).padStart(2, '0');
   const monthStr = String(vnTime.getMonth() + 1).padStart(2, '0');
-  const expectedCode = `${dayStr[0]}${monthStr}${dayStr[1]}`;
+  let hour12 = vnTime.getHours() % 12;
+  if (hour12 === 0) hour12 = 12;
+  const expectedCode = `${hour12}${dayStr[0]}${monthStr}${dayStr[1]}`;
 
   if (code !== expectedCode) {
     return res.status(200).json({ success: false, message: 'Mã xác thực của bạn không đúng, hãy liên hệ để được trợ giúp.' });

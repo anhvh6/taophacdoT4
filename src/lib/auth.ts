@@ -19,7 +19,22 @@ export const auth = {
       .select('id')
       .eq('id', userId)
       .maybeSingle();
-    if (error) return false;
+    if (error) {
+      console.error("isAdmin query error:", error);
+      return false;
+    }
     return !!data;
+  },
+  getAdminRole: async (userId: string): Promise<string | null> => {
+    const { data, error } = await supabase
+      .from('admin_users')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      console.error("getAdminRole query error:", error);
+      return null;
+    }
+    return data?.role || null;
   }
 };

@@ -1,5 +1,5 @@
 
-import { Search, UserPlus, Users, Calendar, ExternalLink, Edit2, Copy, Package, Clock, AlertTriangle, CheckCircle, Archive, Zap, CopyPlus, UserCircle, Filter, Eraser, AlertCircle, X, Plus, Mail, MapPin, Truck, FileWarning, User, Play, List, ChevronDown, ChevronRight, ChevronLeft, Trash2, RefreshCw, ShoppingBag, Phone, ClipboardList, BookOpen, LogOut, BarChart3, Bell } from 'lucide-react';
+import { Search, UserPlus, Users, Calendar, ExternalLink, Edit2, Copy, Package, Clock, AlertTriangle, CheckCircle, Archive, Zap, CopyPlus, UserCircle, Filter, Eraser, AlertCircle, X, Plus, Mail, MapPin, Truck, FileWarning, User, Play, List, ChevronDown, ChevronRight, ChevronLeft, Trash2, RefreshCw, ShoppingBag, Phone, ClipboardList, BookOpen, LogOut, BarChart3, Bell, Shield, Pin, DollarSign } from 'lucide-react';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Layout } from '../components/Layout';
 import { Card, Button, LineInput, Modal, Toast } from '../components/UI';
@@ -34,6 +34,7 @@ interface CustomerCardProps {
   onCopyName: (name: string) => void;
   groupColor: string;
   groupIcon: any;
+  checkPermission?: (perm: string) => boolean;
 }
 
 const getCategory = (c: Customer, products: Product[], productMap?: Map<string, Product>): 'orange' | 'green' | 'gray' | 'brown' | null => {
@@ -53,7 +54,7 @@ const getCategory = (c: Customer, products: Product[], productMap?: Map<string, 
   return null;
 };
 
-const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, productMap, onEdit, onPreview, onDuplicate, onCopyPlan, onDetail, onCopyLink, onCopyName, groupColor, groupIcon: GroupIcon }) => {
+const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, productMap, onEdit, onPreview, onDuplicate, onCopyPlan, onDetail, onCopyLink, onCopyName, groupColor, groupIcon: GroupIcon, checkPermission }) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
@@ -136,6 +137,11 @@ const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, pro
       className={`relative flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 ${cardGradientClass} rounded-[1.5rem] transition-all hover:shadow-xl hover:-translate-y-1 group cursor-pointer shadow-sm overflow-hidden`}
     >
       <div className="absolute inset-0 bg-white/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+      {customer.is_deposit && (
+        <div className="absolute top-3 right-3 text-red-500 bg-red-50 rounded-full p-1 border border-red-100 shadow-sm z-20" title="Đã đặt cọc">
+          <DollarSign size={14} strokeWidth={2.5} />
+        </div>
+      )}
       <div className="flex items-center gap-4 w-full sm:w-auto">
         <div 
           onClick={(e) => { e.stopPropagation(); onDetail(customer.customer_id); }}
@@ -185,7 +191,7 @@ const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, pro
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 bg-white/60 px-2 py-0.5 rounded-lg border border-white/50 shadow-sm">
               <ShoppingBag size={11} className="text-emerald-500" />
-              <span className="text-[10px] text-emerald-700 font-bold">{formatVND(customer.gia_tien || 0)}</span>
+              <span className="text-[10px] text-emerald-700 font-bold">{formatVND((customer.gia_tien || 0) + (customer.is_deposit ? (customer.deposit_amount || 0) : 0))}</span>
             </div>
 
             <div className="flex items-center gap-1">
@@ -193,7 +199,6 @@ const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, pro
                 <>
                   <button onClick={(e) => { e.stopPropagation(); onCopyLink(customer.link, customer); }} className="w-7 h-7 flex items-center justify-center text-blue-600 bg-white/80 hover:bg-blue-600 hover:text-white rounded-lg transition-all shadow-sm border border-blue-50 active:scale-90"><Copy size={12} /></button>
                   <button 
-                    onMouseEnter={() => api.getPlanEditorData(undefined, customer.customer_id)}
                     onClick={(e) => { e.stopPropagation(); onDuplicate(customer.customer_id); }} 
                     className="w-7 h-7 flex items-center justify-center text-orange-600 bg-white/80 hover:bg-orange-600 hover:text-white rounded-lg transition-all shadow-sm border border-orange-50 active:scale-90"
                   >
@@ -203,7 +208,6 @@ const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, pro
               )}
               {!hasPlan && customer.status !== CustomerStatus.DELETED && (
                 <button 
-                  onMouseEnter={() => api.getPlanEditorData(undefined, customer.customer_id)}
                   onClick={(e) => { e.stopPropagation(); onCopyPlan(customer.customer_id); }} 
                   className="w-7 h-7 flex items-center justify-center text-orange-600 bg-white/80 hover:bg-orange-600 hover:text-white rounded-lg transition-all shadow-sm border border-orange-50 active:scale-90"
                   title="Copy phác đồ từ học viên khác"
@@ -254,7 +258,10 @@ export const Dashboard: React.FC<{
   onUpsert: (payload: Partial<Customer>) => Promise<any>;
   onDelete: (id: string) => Promise<any>;
   onLogout: () => void;
-}> = ({ onNavigate, initialAction, filterStatus, customers, products, loading, onRefresh, onUpsert, onDelete, onLogout }) => {
+  currentUserRole?: string;
+  checkPermission?: (perm: string) => boolean;
+}> = ({ onNavigate, initialAction, filterStatus, customers, products, loading, onRefresh, onUpsert, onDelete, onLogout, currentUserRole = 'super_admin', checkPermission }) => {
+  const hasPerm = (perm: string) => checkPermission ? checkPermission(perm) : true;
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -269,6 +276,56 @@ export const Dashboard: React.FC<{
   const [targetCustomerId, setTargetCustomerId] = useState<string | null>(null);
   const [copySearchTerm, setCopySearchTerm] = useState("");
   const [isCopying, setIsCopying] = useState(false);
+  const [optimisticPins, setOptimisticPins] = useState<Record<string, number>>({});
+
+  const togglePin = async (customerId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const customer = customers.find(c => c.customer_id === customerId);
+    const currentlyPinned = !!(optimisticPins[customerId] || customer?.raw_backup?.pinned_at);
+    
+    if (currentlyPinned) {
+      setOptimisticPins(prev => ({ ...prev, [customerId]: 0 }));
+    } else {
+      setOptimisticPins(prev => ({ ...prev, [customerId]: Date.now() }));
+    }
+
+    await customerService.toggleCustomerPin(customerId, !currentlyPinned);
+    onRefresh();
+  };
+
+  const filteredCopyCustomers = useMemo(() => {
+    const term = copySearchTerm.toLowerCase();
+    const list = customers.filter(c => c.video_date && (
+      String(c.customer_name || '').toLowerCase().includes(term) ||
+      String(c.sdt || '').includes(copySearchTerm)
+    ));
+    
+    const pinnedList: Customer[] = [];
+    const unpinnedList: Customer[] = [];
+    
+    list.forEach(c => {
+      const pinTime = optimisticPins[c.customer_id] !== undefined 
+        ? optimisticPins[c.customer_id] 
+        : (c.raw_backup?.pinned_at || 0);
+
+      if (pinTime > 0) {
+        pinnedList.push({ ...c, _tempPinTime: pinTime } as any);
+      } else {
+        unpinnedList.push(c);
+      }
+    });
+    
+    pinnedList.sort((a: any, b: any) => b._tempPinTime - a._tempPinTime);
+    
+    unpinnedList.sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return timeB - timeA;
+    });
+    
+    return [...pinnedList, ...unpinnedList];
+  }, [customers, copySearchTerm, optimisticPins]);
+
   const [formData, setFormData] = useState<Partial<Customer>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
@@ -312,14 +369,14 @@ export const Dashboard: React.FC<{
         ...emails.map(e => ({ ...e, type: 'email' }))
       ].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      const currentIds = combined.map(r => `${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}_${r.pending_email || ''}`);
-      const newItems = combined.filter(r => !prevPendingRef.current.includes(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}_${r.pending_email || ''}`));
+      const currentIds = combined.map((r: any) => `${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}_${r.pending_email || ''}`);
+      const newItems = combined.filter((r: any) => !prevPendingRef.current.includes(`${r.type}_${r.id || r.customer_id}_${r.created_at || r.updated_at || ''}_${r.pending_email || ''}`));
 
       if (!isFirstLoadRef.current && newItems.length > 0) {
         setToast(`🔔 Có ${newItems.length} yêu cầu duyệt mới!`);
         
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-          newItems.forEach(item => {
+          newItems.forEach((item: any) => {
             const name = item.type === 'device' ? (item.customers?.customer_name || 'Học viên ẩn') : (item.customer_name || 'Học viên ẩn');
             const msg = item.type === 'device' ? 'Yêu cầu duyệt thiết bị mới' : `Yêu cầu đổi sang email: ${item.pending_email}`;
             new Notification(`🔔 Yêu cầu mới từ ${name}`, {
@@ -421,7 +478,7 @@ export const Dashboard: React.FC<{
       trang_thai_gan: '0', // Match DB default
       trang_thai: 0,
       start_date: toISODateKey(new Date()),
-      duration_days: 30,
+      duration_days: 65,
       san_pham: defaultProducts,
       gia_tien: defaultTotal,
       status: CustomerStatus.ACTIVE,
@@ -540,7 +597,6 @@ export const Dashboard: React.FC<{
       setSearchTerm("");
       setDateFrom("");
       setDateTo("");
-      setColorFilter(null);
       
       // We need to handle the filtering logic. 
       // Since Dashboard uses useMemo for groups, we just need to ensure the groups reflect the filter.
@@ -634,6 +690,7 @@ export const Dashboard: React.FC<{
   const groups = useMemo(() => {
     const deleted: Customer[] = [];
     const newToday: Customer[] = [];
+    const deposit: Customer[] = [];
     const expiring: Customer[] = [];
     const noPlan: Customer[] = [];
     const active: Customer[] = [];
@@ -657,7 +714,9 @@ export const Dashboard: React.FC<{
 
       if (isNewToday) newToday.push(c);
 
-      if (!hasPlan) {
+      if (c.is_deposit) {
+        if (matchDate) deposit.push(c);
+      } else if (!hasPlan) {
         if (matchDate) noPlan.push(c);
       } else if (currentDay < 1) {
         if (matchDate) notStarted.push(c);
@@ -678,13 +737,14 @@ export const Dashboard: React.FC<{
     // Sort each group
     deleted.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
     newToday.sort((a, b) => getCreationTime(b) - getCreationTime(a));
+    deposit.sort((a, b) => getCreationTime(b) - getCreationTime(a));
     expiring.sort((a, b) => calcInfo(a).daysLeft - calcInfo(b).daysLeft);
     noPlan.sort((a, b) => getCreationTime(b) - getCreationTime(a));
     active.sort((a, b) => calcInfo(a).daysLeft - calcInfo(b).daysLeft);
     notStarted.sort((a, b) => calcInfo(a).start.getTime() - calcInfo(b).start.getTime());
     expired.sort((a, b) => (calcInfo(b).start.getTime() + (b.duration_days || 0) * 86400000) - (calcInfo(a).start.getTime() + (a.duration_days || 0) * 86400000));
 
-    return { newToday, noPlan, expiring, active, notStarted, expired, deleted };
+    return { newToday, deposit, noPlan, expiring, active, notStarted, expired, deleted };
   }, [filteredBySearch, todayStr, dateFrom, dateTo, searchTerm, videoOpenFilter]);
 
   const summaryStats = useMemo(() => {
@@ -804,14 +864,20 @@ export const Dashboard: React.FC<{
     <Layout 
       title={
         <div className="flex items-center gap-2">
-          <a 
-            href="https://docs.google.com/spreadsheets/d/193-BwKDTSLZdgwfQSo-0N3ueREo0HeJ2Ta9gLbI3oc8/edit?usp=sharing" 
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-blue-600 transition-colors"
-          >
-            MEGA PHƯƠNG ADMIN
-          </a>
+          {hasPerm('xem_bao_cao') ? (
+            <a 
+              href="https://docs.google.com/spreadsheets/d/193-BwKDTSLZdgwfQSo-0N3ueREo0HeJ2Ta9gLbI3oc8/edit?usp=sharing" 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-blue-600 transition-colors"
+            >
+              MEGA PHƯƠNG ADMIN
+            </a>
+          ) : (
+            <span className="text-blue-900 cursor-default select-none">
+              MEGA PHƯƠNG ADMIN
+            </span>
+          )}
           {(() => {
             const unviewedCount = pendingRequests.length;
             return (
@@ -838,15 +904,26 @@ export const Dashboard: React.FC<{
           <Button variant="primary" size="sm" onClick={() => onNavigate('plan-editor')}>
             <Plus size={14} className="mr-1.5" /> Tạo PĐ
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => onNavigate('management')}>
-            <Users size={14} className="mr-1.5" /> HV
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => onNavigate('products')}>
-             <Package size={14} className="mr-1.5" /> SP
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => onNavigate('video-groups')}>
-            <List size={14} className="mr-1.5" /> PĐ mẫu
-          </Button>
+          {hasPerm('view_students') && (
+            <Button variant="secondary" size="sm" onClick={() => onNavigate('management')}>
+              <Users size={14} className="mr-1.5" /> HV
+            </Button>
+          )}
+          {hasPerm('view_products') && (
+            <Button variant="secondary" size="sm" onClick={() => onNavigate('products')}>
+               <Package size={14} className="mr-1.5" /> SP
+            </Button>
+          )}
+          {hasPerm('view_plan') && (
+            <Button variant="secondary" size="sm" onClick={() => onNavigate('video-groups')}>
+              <List size={14} className="mr-1.5" /> PĐ mẫu
+            </Button>
+          )}
+          {currentUserRole === 'super_admin' && (
+            <Button variant="secondary" size="sm" onClick={() => onNavigate('permissions')}>
+              <Shield size={14} className="mr-1.5" /> Phân quyền
+            </Button>
+          )}
           <button 
             onClick={onLogout}
             className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all ml-1"
@@ -865,13 +942,15 @@ export const Dashboard: React.FC<{
              <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-blue-50 sm:border-none sm:p-0"><CheckCircle size={14} className="text-green-500" /> {summaryStats.active} Hoạt động</div>
              <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-blue-50 sm:border-none sm:p-0"><AlertTriangle size={14} className="text-orange-400" /> {summaryStats.expiring} Sắp hết hạn</div>
              <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-blue-50 sm:border-none sm:p-0"><Clock size={14} className="text-blue-500" /> {summaryStats.total} Tổng</div>
-             <div 
-               onClick={() => onNavigate('analytics')}
-               className="flex items-center gap-2 bg-green-50 p-2 rounded-xl border border-green-100 sm:border-none sm:p-0 text-green-700 cursor-pointer hover:bg-green-100 transition-all"
-               title="Xem thống kê chi tiết"
-             >
-               <CheckCircle size={14} className="text-green-600" /> {formatVND(totalProfit)}
-             </div>
+             {hasPerm('view_financials') && (
+               <div 
+                 onClick={() => onNavigate('analytics')}
+                 className="flex items-center gap-2 bg-green-50 p-2 rounded-xl border border-green-100 sm:border-none sm:p-0 text-green-700 cursor-pointer hover:bg-green-100 transition-all"
+                 title="Xem thống kê chi tiết"
+               >
+                 <CheckCircle size={14} className="text-green-600" /> {formatVND(totalProfit)}
+               </div>
+             )}
           </div>
           
           <div className="flex overflow-x-auto gap-3 sm:gap-x-4 sm:gap-y-2 mt-1 px-1 items-center scrollbar-hide pb-2 sm:pb-0">
@@ -936,7 +1015,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={Zap} title="Mới tạo hôm nay" count={groups.newToday.length} colorClass="text-orange-700" isCollapsed={!!collapsedGroups['newToday'] && !isSearching} onToggle={() => toggleGroup('newToday')} />
                 {(!collapsedGroups['newToday'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.newToday.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-orange-600" groupIcon={Zap} />)}
+                    {groups.newToday.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-orange-600" groupIcon={Zap} checkPermission={checkPermission} />)}
                   </div>
                 )}
               </div>
@@ -946,7 +1025,17 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={FileWarning} title="Chưa có Phác đồ" count={groups.noPlan.length} colorClass="text-red-700" isCollapsed={!!collapsedGroups['noPlan'] && !isSearching} onToggle={() => toggleGroup('noPlan')} />
                 {(!collapsedGroups['noPlan'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.noPlan.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={FileWarning} />)}
+                    {groups.noPlan.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={FileWarning} checkPermission={checkPermission} />)}
+                  </div>
+                )}
+              </div>
+            )}
+            {groups.deposit.length > 0 && (
+              <div id="group-deposit">
+                <GroupHeader icon={DollarSign} title="Đặt cọc" count={groups.deposit.length} colorClass="text-pink-700" isCollapsed={!!collapsedGroups['deposit'] && !isSearching} onToggle={() => toggleGroup('deposit')} />
+                {(!collapsedGroups['deposit'] || isSearching) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
+                    {groups.deposit.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-pink-600" groupIcon={DollarSign} checkPermission={checkPermission} />)}
                   </div>
                 )}
               </div>
@@ -956,7 +1045,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={AlertTriangle} title="Sắp hết hạn" count={groups.expiring.length} colorClass="text-amber-700" isCollapsed={!!collapsedGroups['expiring'] && !isSearching} onToggle={() => toggleGroup('expiring')} />
                 {(!collapsedGroups['expiring'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.expiring.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-amber-500" groupIcon={AlertTriangle} />)}
+                    {groups.expiring.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-amber-500" groupIcon={AlertTriangle} checkPermission={checkPermission} />)}
                   </div>
                 )}
               </div>
@@ -966,7 +1055,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={CheckCircle} title="Hoạt động" count={groups.active.length} colorClass="text-green-800" isCollapsed={!!collapsedGroups['active'] && !isSearching} onToggle={() => toggleGroup('active')} />
                 {(!collapsedGroups['active'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.active.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-green-600" groupIcon={CheckCircle} />)}
+                    {groups.active.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-green-600" groupIcon={CheckCircle} checkPermission={checkPermission} />)}
                   </div>
                 )}
               </div>
@@ -976,7 +1065,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={Clock} title="Chưa bắt đầu" count={groups.notStarted.length} colorClass="text-blue-800" isCollapsed={!!collapsedGroups['notStarted'] && !isSearching} onToggle={() => toggleGroup('notStarted')} />
                 {(!collapsedGroups['notStarted'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.notStarted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-blue-500" groupIcon={Clock} />)}
+                    {groups.notStarted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-blue-500" groupIcon={Clock} checkPermission={checkPermission} />)}
                   </div>
                 )}
               </div>
@@ -986,7 +1075,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={Archive} title="Đã kết thúc" count={groups.expired.length} colorClass="text-red-800" isCollapsed={!!collapsedGroups['expired'] && !isSearching} onToggle={() => toggleGroup('expired')} />
                 {(!collapsedGroups['expired'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.expired.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={Archive} />)}
+                    {groups.expired.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={Archive} checkPermission={checkPermission} />)}
                   </div>
                 )}
               </div>
@@ -996,7 +1085,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={Trash2} title="Đã xóa" count={groups.deleted.length} colorClass="text-gray-500" isCollapsed={!!collapsedGroups['deleted'] && !isSearching} onToggle={() => toggleGroup('deleted')} />
                 {(!collapsedGroups['deleted'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300 opacity-70 grayscale-[0.3]">
-                    {groups.deleted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-gray-400" groupIcon={Trash2} />)}
+                    {groups.deleted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-gray-400" groupIcon={Trash2} checkPermission={checkPermission} />)}
                   </div>
                 )}
               </div>
@@ -1146,7 +1235,7 @@ export const Dashboard: React.FC<{
                         >
                           <div className="flex flex-col">
                             <span className="text-[12px] font-bold text-gray-700 uppercase group-hover:text-blue-600">{p.ten_sp}</span>
-                            <span className="text-[10px] font-bold text-gray-400">{formatVND(p.gia_ban)}</span>
+                            {hasPerm('view_financials') && <span className="text-[10px] font-bold text-gray-400">{formatVND(p.gia_ban)}</span>}
                           </div>
                           <Plus size={14} className="text-blue-200 group-hover:text-blue-600" />
                         </div>
@@ -1188,11 +1277,13 @@ export const Dashboard: React.FC<{
                       <div className="text-[12px] font-black text-blue-900 uppercase">{item.ten_sp}</div>
                       <div className="flex items-center gap-4 mt-1">
                         <span className="text-[11px] font-bold text-gray-400">SL: <input type="number" className="w-8 bg-transparent outline-none font-bold text-blue-600 border-b border-blue-50 focus:border-blue-400" value={item.so_luong || 0} onChange={e => updateProductQty(item.id_sp, parseInt(e.target.value) || 0)} /></span>
-                        <span className="text-[11px] font-bold text-gray-400">GIÁ: <input type="text" className="w-20 bg-transparent outline-none font-bold text-blue-900 border-b border-blue-50 focus:border-blue-400" value={formatVND(item.don_gia || 0)} onChange={e => updateProductPrice(item.id_sp, parseInt(e.target.value.replace(/\D/g, '')) || 0)} /></span>
+                        {hasPerm('view_financials') && (
+                          <span className="text-[11px] font-bold text-gray-400">GIÁ: <input type="text" className="w-20 bg-transparent outline-none font-bold text-blue-900 border-b border-blue-50 focus:border-blue-400" value={formatVND(item.don_gia || 0)} onChange={e => updateProductPrice(item.id_sp, parseInt(e.target.value.replace(/\D/g, '')) || 0)} /></span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <span className="text-sm font-black text-blue-600">{formatVND(item.thanh_tien)}</span>
+                      {hasPerm('view_financials') && <span className="text-sm font-black text-blue-600">{formatVND(item.thanh_tien)}</span>}
                       <button onClick={() => toggleProduct(products.find(p => p.id_sp === item.id_sp)!)} className="text-red-200 hover:text-red-500 transition-all"><Trash2 size={16} /></button>
                     </div>
                   </div>
@@ -1205,17 +1296,75 @@ export const Dashboard: React.FC<{
                 )}
               </div>
 
-              <div className="mt-6 pt-6 border-t border-blue-100 flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">TỔNG THANH TOÁN</span>
-                  <input 
-                    type="text" 
-                    className="text-2xl font-black text-blue-600 bg-transparent outline-none border-b border-blue-100 focus:border-blue-400 w-full" 
-                    value={formatVND(formData.gia_tien || 0)} 
-                    onChange={e => setFormData({...formData, gia_tien: parseInt(e.target.value.replace(/\D/g, '')) || 0})} 
-                  />
+              {hasPerm('view_financials') && (
+                <div className="mt-6 pt-6 border-t border-blue-100 flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">TỔNG THANH TOÁN</span>
+                    <input 
+                      type="text" 
+                      className="text-2xl font-black text-blue-600 bg-transparent outline-none border-b border-blue-100 focus:border-blue-400 w-full" 
+                      value={formatVND(formData.gia_tien || 0)} 
+                      onChange={e => setFormData({...formData, gia_tien: parseInt(e.target.value.replace(/\D/g, '')) || 0})} 
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
+            </div>
+
+            {/* Đặt cọc section */}
+            <div className="bg-pink-50/50 rounded-3xl p-6 border border-pink-100 flex flex-col gap-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="w-5 h-5 text-pink-600 rounded border-pink-200 focus:ring-pink-500"
+                  checked={!!formData.is_deposit}
+                  onChange={e => {
+                    const checked = e.target.checked;
+                    let newProducts = formData.san_pham;
+                    let newGiaTien = formData.gia_tien;
+                    
+                    if (checked) {
+                      newProducts = [];
+                      newGiaTien = 0;
+                    } else {
+                      const targetProductId = 'SP1768731546380';
+                      const defaultProduct = products.find(p => p.id_sp === targetProductId && p.trang_thai === 1) || products.find(p => p.trang_thai === 1);
+                      if (defaultProduct) {
+                        newProducts = [{ id_sp: defaultProduct.id_sp, ten_sp: defaultProduct.ten_sp, so_luong: 1, don_gia: defaultProduct.gia_ban, gia_nhap: defaultProduct.gia_nhap, thanh_tien: defaultProduct.gia_ban }];
+                        newGiaTien = defaultProduct.gia_ban;
+                      }
+                    }
+
+                    setFormData({
+                      ...formData, 
+                      is_deposit: checked, 
+                      deposit_amount: checked ? (formData.deposit_amount || 500000) : 0,
+                      san_pham: newProducts,
+                      gia_tien: newGiaTien
+                    });
+                  }}
+                />
+                <span className="text-sm font-bold text-pink-900 uppercase tracking-wide flex items-center gap-2">
+                  <DollarSign size={16} className="text-pink-500" />
+                  Đã Đặt Cọc
+                </span>
+              </label>
+              
+              {formData.is_deposit && hasPerm('view_financials') && (
+                <div className="flex flex-col ml-8 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <span className="text-[10px] font-bold text-pink-400 uppercase tracking-widest mb-1">SỐ TIỀN CỌC</span>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="text" 
+                      className="text-xl font-black text-pink-600 bg-transparent outline-none border-b border-pink-200 focus:border-pink-500 w-32" 
+                      value={formatVND(formData.deposit_amount || 0)} 
+                      onChange={e => setFormData({...formData, deposit_amount: parseInt(e.target.value.replace(/\D/g, '')) || 0})} 
+                    />
+                    <span className="text-pink-600 font-bold text-sm">VNĐ</span>
+                  </div>
+                  <p className="text-[10px] text-pink-400 mt-2 italic">Tiền cọc này sẽ tự động được tính vào Tổng doanh thu (giá vốn = 0đ).</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1223,7 +1372,12 @@ export const Dashboard: React.FC<{
 
       <Modal
         isOpen={isCopyModalOpen}
-        onClose={() => { setIsCopyModalOpen(false); setCopySearchTerm(""); setTargetCustomerId(null); }}
+        onClose={() => { 
+          setIsCopyModalOpen(false); 
+          setCopySearchTerm(""); 
+          setTargetCustomerId(null); 
+          localStorage.setItem('mega_pinned_copy_students', JSON.stringify(pinnedIds));
+        }}
         title="CHỌN HỌC VIÊN ĐỂ COPY PHÁC ĐỒ"
         maxWidth="max-w-2xl"
       >
@@ -1240,13 +1394,7 @@ export const Dashboard: React.FC<{
           </div>
 
           <div className="max-h-[400px] overflow-y-auto custom-scrollbar flex flex-col gap-2">
-            {customers
-              .filter(c => c.video_date && (
-                c.customer_name.toLowerCase().includes(copySearchTerm.toLowerCase()) ||
-                c.sdt.includes(copySearchTerm)
-              ))
-              .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-              .map(c => (
+            {filteredCopyCustomers.map(c => (
                 <div 
                   key={c.customer_id}
                   onMouseEnter={() => api.getPlanEditorData(undefined, c.customer_id)}
@@ -1270,11 +1418,22 @@ export const Dashboard: React.FC<{
                   }}
                   className="flex items-center justify-between p-4 hover:bg-blue-50 rounded-2xl cursor-pointer border border-transparent hover:border-blue-100 transition-all group"
                 >
-                  <div className="flex flex-col">
-                    <span className="font-black text-blue-900 uppercase text-sm group-hover:text-blue-600">{c.customer_name}</span>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">SĐT: {c.sdt || '---'} | NGÀY: {formatDDMMYYYY(c.video_date)}</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button 
+                      onClick={(e) => togglePin(c.customer_id, e)}
+                      className={`p-2 rounded-xl transition-all hover:bg-gray-200 shrink-0 ${(optimisticPins[c.customer_id] !== undefined ? optimisticPins[c.customer_id] > 0 : !!c.raw_backup?.pinned_at) ? 'text-orange-500 bg-orange-50 hover:bg-orange-100' : 'text-gray-300 hover:text-gray-600'}`}
+                      title={(optimisticPins[c.customer_id] !== undefined ? optimisticPins[c.customer_id] > 0 : !!c.raw_backup?.pinned_at) ? "Bỏ ghim" : "Ghim lên đầu"}
+                    >
+                      <Pin size={16} className={(optimisticPins[c.customer_id] !== undefined ? optimisticPins[c.customer_id] > 0 : !!c.raw_backup?.pinned_at) ? "fill-current" : ""} />
+                    </button>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-black text-blue-900 uppercase text-sm group-hover:text-blue-600 truncate">{c.customer_name}</span>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">SĐT: {c.sdt || '---'} | NGÀY: {formatDDMMYYYY(c.video_date)}</span>
+                    </div>
                   </div>
-                  <CopyPlus size={18} className="text-gray-300 group-hover:text-blue-600" />
+                  <div className="p-2 text-gray-300 group-hover:text-blue-600 shrink-0">
+                    <CopyPlus size={18} />
+                  </div>
                 </div>
               ))}
             {customers.filter(c => c.video_date).length === 0 && (
