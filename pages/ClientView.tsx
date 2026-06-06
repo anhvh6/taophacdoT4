@@ -804,8 +804,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       const unlockDate = addDays(startDate, task.day - 1);
       setInfoModal({ 
         isOpen: true, 
-        title: "Bài này chưa mở đâu", 
-        message: `Lộ trình tập luyện được thiết kế theo từng ngày để đảm bảo hiệu quả. Hãy quay lại vào ngày ${formatDDMMYYYY(unlockDate)} để tiếp tục hành trình nhé!`, 
+        title: "Chưa đến ngày mở bài", 
+        message: `Bài học này sẽ được mở vào ngày ${formatDDMMYYYY(unlockDate)}. Vui lòng quay lại sau nhé!`, 
         type: "LOCKED" 
       });
       return;
@@ -1247,22 +1247,29 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     // Kiểm tra xem ngày này đã học chưa
                     const isAttended = (customer.raw_backup?.completed_days || []).includes(day);
                     
-                    // Ẩn các ngày chưa đến (nhưng vẫn giữ ngày 1 nếu chưa bắt đầu)
-                    const shouldHide = day > Math.max(1, allowedDay);
+                    // Hiển thị đến ngày hiện tại + 1 (ngày hôm sau), luôn hiện ngày 1 nếu chưa bắt đầu
+                    const shouldHide = day > Math.max(1, allowedDay + 1);
                     if (shouldHide) return null;
 
                     return (
                       <div 
                         key={day} 
                         onClick={() => { if(dayTasks.length === 0) handleTaskClick({day} as any) }} 
-                        className={`bg-white rounded-3xl border p-6 transition-all cursor-pointer ${isLocked ? 'opacity-40 blur-[1px] grayscale' : 'hover:border-blue-300'} ${isActive ? 'border-blue-600 ring-4 ring-blue-50 day-card-active' : 'border-blue-50'}`}
+                        className={`bg-white rounded-3xl border p-6 transition-all cursor-pointer hover:border-blue-300 ${isActive ? 'border-blue-600 ring-4 ring-blue-50 day-card-active' : 'border-blue-50'}`}
                       >
                         <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-2 uppercase tracking-widest ${isUnlocked && !isNotStarted ? 'text-blue-600' : 'text-gray-400'}`}>
                           Ngày {day}
                           {isAttended && <CheckCircle size={14} className="text-green-500" strokeWidth={3} />}
                         </div>
                         {dayTasks.length > 0 ? dayTasks.map((t, idx) => (
-                          <button key={idx} onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} className="w-full text-center py-2.5 text-[13px] font-bold hover:bg-blue-50 rounded-xl transition-colors mb-1" style={{ color: isMandatory(t) ? '#2563EB' : '#10B981' }}>{t.title}</button>
+                          <button 
+                            key={idx} 
+                            onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} 
+                            className="w-full text-center py-2.5 text-[13px] font-bold hover:bg-blue-50 rounded-xl transition-colors mb-1" 
+                            style={{ color: isLocked ? '#9CA3AF' : (isMandatory(t) ? '#2563EB' : '#10B981') }}
+                          >
+                            {t.title}
+                          </button>
                         )) : <div className="text-center text-[10px] text-gray-300 font-bold uppercase italic py-4">Nghỉ ngơi</div>}
                       </div>
                     );

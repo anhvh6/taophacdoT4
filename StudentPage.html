@@ -291,6 +291,9 @@
         const grid = document.getElementById('days-grid');
         let html = '';
         for(let i=1; i<=30; i++) {
+          // Chỉ hiển thị đến ngày hôm sau
+          if (i > Math.max(1, DATA.allowed_day + 1)) continue;
+
           const tasks = DATA.tasks.filter(t => t.day == i);
           tasks.sort((a, b) => (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true }));
           
@@ -299,11 +302,11 @@
           const isUnlocked = i <= DATA.allowed_day;
           
           html += `
-            <div class="day-card ${isActive ? 'active' : ''} ${isUnlocked ? 'unlocked' : ''} ${isLocked ? 'locked' : ''} ${i > 10 ? 'hidden-on-collapse' : ''}" onclick="handleDayClick(${i})">
+            <div class="day-card ${isActive ? 'active' : ''} ${isUnlocked ? 'unlocked' : ''} ${i > 10 ? 'hidden-on-collapse' : ''}" onclick="handleDayClick(${i})">
               <div class="day-header" style="color:${isUnlocked ? 'var(--brand-deep)' : '#94a3b8'}">Ngày ${i}</div>
               ${tasks.length ? tasks.map((t, idx) => `
                 <div class="task-item">
-                  <button class="task-trigger" style="color: ${String(t.type).toLowerCase().includes('bắt buộc') ? 'var(--brand-main)' : 'var(--brand-green)'}" onclick="event.stopPropagation(); showTask(${i}, ${idx})">
+                  <button class="task-trigger" style="color: ${isLocked ? '#9CA3AF' : (String(t.type).toLowerCase().includes('bắt buộc') ? 'var(--brand-main)' : 'var(--brand-green)')}" onclick="event.stopPropagation(); showTask(${i}, ${idx})">
                     ${t.title}
                   </button>
                 </div>
@@ -319,7 +322,7 @@
           const start = new Date(DATA.start);
           start.setDate(start.getDate() + (day - 1));
           const dateStr = start.getDate().toString().padStart(2,'0') + '/' + (start.getMonth()+1).toString().padStart(2,'0') + '/' + start.getFullYear();
-          showAlert("Bài này chưa mở đâu", `Lộ trình của bạn được thiết kế theo từng ngày để đảm bảo hiệu quả cao nhất. Hãy quay lại vào ngày <b>${dateStr}</b> để tiếp tục nhé!`);
+          showAlert("Chưa đến ngày mở bài", `Bài học này sẽ được mở vào ngày <b>${dateStr}</b>. Vui lòng quay lại sau nhé!`);
         }
       }
 
