@@ -97,6 +97,7 @@ export interface Customer {
   pending_email?: string;
   is_deposit?: boolean;
   deposit_amount?: number;
+  is_consultation?: boolean;
   // Fix: Added missing optional properties used in ClientView logic to satisfy TypeScript
   allowed_day?: number;
   access_state?: string;

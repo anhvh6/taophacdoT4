@@ -716,60 +716,69 @@ export const CustomerManagement: React.FC<{
                     )}
                  </div>
 
-                 {/* Đặt cọc section */}
+                 {/* Hẹn tư vấn & Đặt cọc section */}
                  <div className="bg-pink-50/50 rounded-3xl p-6 border border-pink-100 flex flex-col gap-4 mt-2">
-                   <label className="flex items-center gap-3 cursor-pointer">
+                   <label className="flex items-center gap-3 cursor-pointer w-fit">
                      <input 
                        type="checkbox" 
-                       className="w-5 h-5 text-pink-600 rounded border-pink-200 focus:ring-pink-500"
-                       checked={!!formData.is_deposit}
-                       onChange={e => {
-                         const checked = e.target.checked;
-                         let newProducts = formData.san_pham;
-                         let newGiaTien = formData.gia_tien;
-                         
-                         if (checked) {
-                           newProducts = [];
-                           newGiaTien = 0;
-                         } else {
-                           const targetProductId = 'SP1768731546380';
-                           const defaultProduct = products.find(p => p.id_sp === targetProductId && p.trang_thai === 1) || products.find(p => p.trang_thai === 1);
-                           if (defaultProduct) {
-                             newProducts = [{ id_sp: defaultProduct.id_sp, ten_sp: defaultProduct.ten_sp, so_luong: 1, don_gia: defaultProduct.gia_ban, gia_nhap: defaultProduct.gia_nhap, thanh_tien: defaultProduct.gia_ban }];
-                             newGiaTien = defaultProduct.gia_ban;
-                           }
-                         }
-
-                         setFormData({
-                           ...formData, 
-                           is_deposit: checked, 
-                           deposit_amount: checked ? (formData.deposit_amount || 500000) : 0,
-                           san_pham: newProducts,
-                           gia_tien: newGiaTien
-                         });
-                       }}
+                       className="w-5 h-5 text-purple-600 rounded border-purple-200 focus:ring-purple-500"
+                       checked={!!formData.is_consultation}
+                       onChange={e => setFormData({...formData, is_consultation: e.target.checked})}
                      />
-                     <span className="text-sm font-bold text-pink-900 uppercase tracking-wide flex items-center gap-2">
-                       <DollarSign size={16} className="text-pink-500" />
-                       Đã Đặt Cọc
+                     <span className="text-sm font-bold text-purple-900 uppercase tracking-wide flex items-center gap-2">
+                       Hẹn tư vấn
                      </span>
                    </label>
                    
-                   {formData.is_deposit && hasPerm('view_financials') && (
-                     <div className="flex flex-col ml-8 animate-in fade-in slide-in-from-top-2 duration-200">
-                       <span className="text-[10px] font-bold text-pink-400 uppercase tracking-widest mb-1">SỐ TIỀN CỌC</span>
-                       <div className="flex items-center gap-2">
+                   <div className="flex items-center gap-3">
+                     <label className="flex items-center gap-3 cursor-pointer w-fit">
+                       <input 
+                         type="checkbox" 
+                         className="w-5 h-5 text-pink-600 rounded border-pink-200 focus:ring-pink-500"
+                         checked={!!formData.is_deposit}
+                         onChange={e => {
+                           const checked = e.target.checked;
+                           let newProducts = formData.san_pham;
+                           let newGiaTien = formData.gia_tien;
+                           
+                           if (checked) {
+                             newProducts = [];
+                             newGiaTien = 0;
+                           } else {
+                             const targetProductId = 'SP1768731546380';
+                             const defaultProduct = products.find(p => p.id_sp === targetProductId && p.trang_thai === 1) || products.find(p => p.trang_thai === 1);
+                             if (defaultProduct) {
+                               newProducts = [{ id_sp: defaultProduct.id_sp, ten_sp: defaultProduct.ten_sp, so_luong: 1, don_gia: defaultProduct.gia_ban, gia_nhap: defaultProduct.gia_nhap, thanh_tien: defaultProduct.gia_ban }];
+                               newGiaTien = defaultProduct.gia_ban;
+                             }
+                           }
+
+                           setFormData({
+                             ...formData, 
+                             is_deposit: checked, 
+                             deposit_amount: checked ? (formData.deposit_amount || 500000) : 0,
+                             san_pham: newProducts,
+                             gia_tien: newGiaTien
+                           });
+                         }}
+                       />
+                       <span className="text-sm font-bold text-pink-900 uppercase tracking-wide flex items-center gap-2">
+                         <DollarSign size={16} className="text-pink-500" />
+                         Đã Đặt Cọc{formData.is_deposit ? ":" : ""}
+                       </span>
+                     </label>
+                     {formData.is_deposit && hasPerm('view_financials') && (
+                       <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
                          <input 
                            type="text" 
-                           className="text-xl font-black text-pink-600 bg-transparent outline-none border-b border-pink-200 focus:border-pink-500 w-32" 
+                           className="text-lg font-black text-pink-600 bg-transparent outline-none border-b border-pink-200 focus:border-pink-500 w-32" 
                            value={formatVND(formData.deposit_amount || 0)} 
                            onChange={e => setFormData({...formData, deposit_amount: parseInt(e.target.value.replace(/\D/g, '')) || 0})} 
                          />
                          <span className="text-pink-600 font-bold text-sm">VNĐ</span>
                        </div>
-                       <p className="text-[10px] text-pink-400 mt-2 italic">Tiền cọc này sẽ tự động được tính vào Tổng doanh thu (giá vốn = 0đ).</p>
-                     </div>
-                   )}
+                     )}
+                   </div>
                  </div>
               </div>
             </div>

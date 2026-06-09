@@ -137,9 +137,14 @@ const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, pro
       className={`relative flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 ${cardGradientClass} rounded-[1.5rem] transition-all hover:shadow-xl hover:-translate-y-1 group cursor-pointer shadow-sm overflow-hidden`}
     >
       <div className="absolute inset-0 bg-white/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-      {customer.is_deposit && (
+      {customer.is_deposit && !customer.is_consultation && (
         <div className="absolute top-3 right-3 text-red-500 bg-red-50 rounded-full p-1 border border-red-100 shadow-sm z-20" title="Đã đặt cọc">
           <DollarSign size={14} strokeWidth={2.5} />
+        </div>
+      )}
+      {customer.is_consultation && (
+        <div className="absolute top-3 right-3 text-purple-500 bg-purple-50 rounded-full p-1 border border-purple-100 shadow-sm z-20" title="Hẹn tư vấn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-volume-2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
         </div>
       )}
       <div className="flex items-center gap-4 w-full sm:w-auto">
@@ -266,6 +271,7 @@ export const Dashboard: React.FC<{
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [videoOpenFilter, setVideoOpenFilter] = useState<boolean>(false);
+  const [dashboardFilter, setDashboardFilter] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
     'expired': true,
@@ -648,7 +654,23 @@ export const Dashboard: React.FC<{
                           String(c.ma_vd || '').toLowerCase().includes(term) || 
                           String(c.sdt || '').includes(searchTerm);
       
-      if (term) return matchSearch;
+      let matchFilter = true;
+      if (dashboardFilter) {
+        if (dashboardFilter === 'new') matchFilter = toISODateKey(c.created_at) === todayStr;
+        else if (dashboardFilter === 'noPlan') matchFilter = !c.video_date || String(c.video_date).trim() === "";
+        else if (dashboardFilter === 'consultation') matchFilter = !!c.is_consultation;
+        else if (dashboardFilter === 'deposit') matchFilter = !!c.is_deposit;
+        else if (dashboardFilter === 'active') {
+          const { currentDay, daysLeft } = calcInfo(c);
+          matchFilter = !!c.video_date && String(c.video_date).trim() !== "" && currentDay >= 1 && daysLeft >= 0 && daysLeft > 5;
+        }
+        else if (dashboardFilter === 'expiring') {
+          const { daysLeft } = calcInfo(c);
+          matchFilter = daysLeft >= 0 && daysLeft <= 5;
+        }
+      }
+
+      if (term) return matchSearch && matchFilter;
 
       let matchVideoOpen = true;
       if (videoOpenFilter) {
@@ -691,6 +713,7 @@ export const Dashboard: React.FC<{
     const deleted: Customer[] = [];
     const newToday: Customer[] = [];
     const deposit: Customer[] = [];
+    const consultation: Customer[] = [];
     const expiring: Customer[] = [];
     const noPlan: Customer[] = [];
     const active: Customer[] = [];
@@ -714,7 +737,9 @@ export const Dashboard: React.FC<{
 
       if (isNewToday) newToday.push(c);
 
-      if (c.is_deposit) {
+      if (c.is_consultation) {
+        if (matchDate) consultation.push(c);
+      } else if (c.is_deposit) {
         if (matchDate) deposit.push(c);
       } else if (!hasPlan) {
         if (matchDate) noPlan.push(c);
@@ -737,6 +762,7 @@ export const Dashboard: React.FC<{
     // Sort each group
     deleted.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
     newToday.sort((a, b) => getCreationTime(b) - getCreationTime(a));
+    consultation.sort((a, b) => getCreationTime(b) - getCreationTime(a));
     deposit.sort((a, b) => getCreationTime(b) - getCreationTime(a));
     expiring.sort((a, b) => calcInfo(a).daysLeft - calcInfo(b).daysLeft);
     noPlan.sort((a, b) => getCreationTime(b) - getCreationTime(a));
@@ -744,7 +770,7 @@ export const Dashboard: React.FC<{
     notStarted.sort((a, b) => calcInfo(a).start.getTime() - calcInfo(b).start.getTime());
     expired.sort((a, b) => (calcInfo(b).start.getTime() + (b.duration_days || 0) * 86400000) - (calcInfo(a).start.getTime() + (a.duration_days || 0) * 86400000));
 
-    return { newToday, deposit, noPlan, expiring, active, notStarted, expired, deleted };
+    return { newToday, consultation, deposit, noPlan, expiring, active, notStarted, expired, deleted };
   }, [filteredBySearch, todayStr, dateFrom, dateTo, searchTerm, videoOpenFilter]);
 
   const summaryStats = useMemo(() => {
@@ -760,6 +786,8 @@ export const Dashboard: React.FC<{
     return { 
       new: groups.newToday.length, 
       noPlan: groups.noPlan.length,
+      consultation: groups.consultation.length,
+      deposit: groups.deposit.length,
       active: totalActiveCount, // This is the "Tổng số phác đồ đang hoạt động" independent of date filter
       expiring: groups.expiring.length, 
       total: customers.filter(c => c.status !== CustomerStatus.DELETED).length
@@ -937,10 +965,12 @@ export const Dashboard: React.FC<{
       <div className="flex flex-col gap-4 sm:gap-6 pb-20">
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 sm:gap-x-8 sm:gap-y-2 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-blue-900 px-1 py-1">
-             <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-blue-50 sm:border-none sm:p-0"><Zap size={14} className="text-orange-500" /> {summaryStats.new} Mới</div>
-             <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-blue-50 sm:border-none sm:p-0"><FileWarning size={14} className="text-red-500" /> {summaryStats.noPlan} Chưa có PĐ</div>
-             <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-blue-50 sm:border-none sm:p-0"><CheckCircle size={14} className="text-green-500" /> {summaryStats.active} Hoạt động</div>
-             <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-blue-50 sm:border-none sm:p-0"><AlertTriangle size={14} className="text-orange-400" /> {summaryStats.expiring} Sắp hết hạn</div>
+             <div onClick={() => setDashboardFilter(dashboardFilter === 'new' ? null : 'new')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'new' ? 'bg-orange-50 sm:bg-transparent text-orange-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><Zap size={14} className="text-orange-500" /> {summaryStats.new} Mới</div>
+             <div onClick={() => setDashboardFilter(dashboardFilter === 'noPlan' ? null : 'noPlan')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'noPlan' ? 'bg-red-50 sm:bg-transparent text-red-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><FileWarning size={14} className="text-red-500" /> {summaryStats.noPlan} Chưa có PĐ</div>
+             <div onClick={() => setDashboardFilter(dashboardFilter === 'consultation' ? null : 'consultation')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'consultation' ? 'bg-purple-50 sm:bg-transparent text-purple-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><Phone size={14} className="text-purple-500" /> {summaryStats.consultation} Hẹn TV</div>
+             <div onClick={() => setDashboardFilter(dashboardFilter === 'deposit' ? null : 'deposit')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'deposit' ? 'bg-pink-50 sm:bg-transparent text-pink-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><DollarSign size={14} className="text-pink-500" /> {summaryStats.deposit} Đặt cọc</div>
+             <div onClick={() => setDashboardFilter(dashboardFilter === 'active' ? null : 'active')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'active' ? 'bg-green-50 sm:bg-transparent text-green-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><CheckCircle size={14} className="text-green-500" /> {summaryStats.active} Hoạt động</div>
+             <div onClick={() => setDashboardFilter(dashboardFilter === 'expiring' ? null : 'expiring')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'expiring' ? 'bg-amber-50 sm:bg-transparent text-amber-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><AlertTriangle size={14} className="text-orange-400" /> {summaryStats.expiring} Sắp hết hạn</div>
              <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-blue-50 sm:border-none sm:p-0"><Clock size={14} className="text-blue-500" /> {summaryStats.total} Tổng</div>
              {hasPerm('view_financials') && (
                <div 
@@ -1036,6 +1066,16 @@ export const Dashboard: React.FC<{
                 {(!collapsedGroups['deposit'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
                     {groups.deposit.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-pink-600" groupIcon={DollarSign} checkPermission={checkPermission} />)}
+                  </div>
+                )}
+              </div>
+            )}
+            {groups.consultation.length > 0 && (
+              <div id="group-consultation">
+                <GroupHeader icon={Phone} title="Hẹn tư vấn" count={groups.consultation.length} colorClass="text-purple-700" isCollapsed={!!collapsedGroups['consultation'] && !isSearching} onToggle={() => toggleGroup('consultation')} />
+                {(!collapsedGroups['consultation'] || isSearching) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
+                    {groups.consultation.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-purple-600" groupIcon={Phone} checkPermission={checkPermission} />)}
                   </div>
                 )}
               </div>
