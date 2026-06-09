@@ -215,7 +215,7 @@ export const customerService = {
       'trang_thai', 'ma_vd', 'note', 'chewing_status', 'start_date', 
       'status', 'sidebar_blocks_json', 'app_title', 'app_slogan',
       'require_google_auth', 'require_device_limit', 'pending_email', 'video_date',
-      'is_deposit', 'deposit_amount'
+      'is_deposit', 'deposit_amount', 'is_consultation'
     ];
 
     fields.forEach(field => {
