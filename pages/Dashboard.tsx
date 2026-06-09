@@ -143,7 +143,7 @@ const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, pro
         </div>
       )}
       {customer.is_consultation && (
-        <div className="absolute top-3 right-3 text-purple-500 bg-purple-50 rounded-full p-1 border border-purple-100 shadow-sm z-20" title="Hẹn tư vấn">
+        <div className="absolute top-3 right-3 text-purple-500 bg-purple-50 rounded-full p-1 border border-purple-100 shadow-sm z-20" title="Chưa tư vấn">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-volume-2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
         </div>
       )}
@@ -967,7 +967,7 @@ export const Dashboard: React.FC<{
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3 sm:gap-x-8 sm:gap-y-2 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-blue-900 px-1 py-1">
              <div onClick={() => setDashboardFilter(dashboardFilter === 'new' ? null : 'new')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'new' ? 'bg-orange-50 sm:bg-transparent text-orange-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><Zap size={14} className="text-orange-500" /> {summaryStats.new} Mới</div>
              <div onClick={() => setDashboardFilter(dashboardFilter === 'noPlan' ? null : 'noPlan')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'noPlan' ? 'bg-red-50 sm:bg-transparent text-red-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><FileWarning size={14} className="text-red-500" /> {summaryStats.noPlan} Chưa có PĐ</div>
-             <div onClick={() => setDashboardFilter(dashboardFilter === 'consultation' ? null : 'consultation')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'consultation' ? 'bg-purple-50 sm:bg-transparent text-purple-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><Phone size={14} className="text-purple-500" /> {summaryStats.consultation} Hẹn TV</div>
+             <div onClick={() => setDashboardFilter(dashboardFilter === 'consultation' ? null : 'consultation')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'consultation' ? 'bg-purple-50 sm:bg-transparent text-purple-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><Phone size={14} className="text-purple-500" /> {summaryStats.consultation} Chưa TV</div>
              <div onClick={() => setDashboardFilter(dashboardFilter === 'deposit' ? null : 'deposit')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'deposit' ? 'bg-pink-50 sm:bg-transparent text-pink-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><DollarSign size={14} className="text-pink-500" /> {summaryStats.deposit} Đặt cọc</div>
              <div onClick={() => setDashboardFilter(dashboardFilter === 'active' ? null : 'active')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'active' ? 'bg-green-50 sm:bg-transparent text-green-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><CheckCircle size={14} className="text-green-500" /> {summaryStats.active} Hoạt động</div>
              <div onClick={() => setDashboardFilter(dashboardFilter === 'expiring' ? null : 'expiring')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'expiring' ? 'bg-amber-50 sm:bg-transparent text-amber-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><AlertTriangle size={14} className="text-orange-400" /> {summaryStats.expiring} Sắp hết hạn</div>
@@ -1072,7 +1072,7 @@ export const Dashboard: React.FC<{
             )}
             {groups.consultation.length > 0 && (
               <div id="group-consultation">
-                <GroupHeader icon={Phone} title="Hẹn tư vấn" count={groups.consultation.length} colorClass="text-purple-700" isCollapsed={!!collapsedGroups['consultation'] && !isSearching} onToggle={() => toggleGroup('consultation')} />
+                <GroupHeader icon={Phone} title="Chưa tư vấn" count={groups.consultation.length} colorClass="text-purple-700" isCollapsed={!!collapsedGroups['consultation'] && !isSearching} onToggle={() => toggleGroup('consultation')} />
                 {(!collapsedGroups['consultation'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
                     {groups.consultation.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-purple-600" groupIcon={Phone} checkPermission={checkPermission} />)}
@@ -1351,7 +1351,7 @@ export const Dashboard: React.FC<{
               )}
             </div>
 
-            {/* Hẹn tư vấn & Đặt cọc section */}
+            {/* Chưa tư vấn & Đặt cọc section */}
             <div className="bg-pink-50/50 rounded-3xl p-6 border border-pink-100 flex flex-col gap-4">
               <label className="flex items-center gap-3 cursor-pointer w-fit">
                 <input 
@@ -1361,7 +1361,7 @@ export const Dashboard: React.FC<{
                   onChange={e => setFormData({...formData, is_consultation: e.target.checked})}
                 />
                 <span className="text-sm font-bold text-purple-900 uppercase tracking-wide flex items-center gap-2">
-                  Hẹn tư vấn
+                  Chưa tư vấn
                 </span>
               </label>
               

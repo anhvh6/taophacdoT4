@@ -716,7 +716,7 @@ export const CustomerManagement: React.FC<{
                     )}
                  </div>
 
-                 {/* Hẹn tư vấn & Đặt cọc section */}
+                 {/* Chưa tư vấn & Đặt cọc section */}
                  <div className="bg-pink-50/50 rounded-3xl p-6 border border-pink-100 flex flex-col gap-4 mt-2">
                    <label className="flex items-center gap-3 cursor-pointer w-fit">
                      <input 
@@ -726,7 +726,7 @@ export const CustomerManagement: React.FC<{
                        onChange={e => setFormData({...formData, is_consultation: e.target.checked})}
                      />
                      <span className="text-sm font-bold text-purple-900 uppercase tracking-wide flex items-center gap-2">
-                       Hẹn tư vấn
+                       Chưa tư vấn
                      </span>
                    </label>
                    
