@@ -103,7 +103,8 @@ export default async function handler(req: any, res: any) {
   const sha256 = crypto.createHash('sha256').update(hashString).digest('hex');
   const tokenUrlParam = sha256;
 
-  const signed_embed_url = `https://iframe.mediadelivery.net/embed/${BUNNY_LIBRARY_ID}/${video_id}?token=${tokenUrlParam}&expires=${expires}&autoplay=false&responsive=true`;
+  // Sử dụng tên miền phụ video.phacdo.com để lách chặn thay vì dùng mặc định của BunnyCDN
+  const signed_embed_url = `https://video.phacdo.com/embed/${BUNNY_LIBRARY_ID}/${video_id}?token=${tokenUrlParam}&expires=${expires}&autoplay=false&responsive=true`;
 
   // Insert Log if table exists (ignore error if table does not exist)
   if (authUserId || customer) {
