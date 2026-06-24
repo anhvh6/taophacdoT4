@@ -66,10 +66,10 @@ export const normalizeCustomer = (item: any): Customer => {
     };
   };
 
-/** Domain public cho học viên (tách khỏi admin). Mặc định phacdo.vercel.app */
+/** Domain public cho học viên (tách khỏi admin). Mặc định https://phacdo.com */
 export const getClientPublicOrigin = () => {
   const env = (import.meta as any).env?.VITE_CLIENT_PUBLIC_URL as string | undefined;
-  const fallback = 'https://phacdo.vercel.app';
+  const fallback = 'https://phacdo.com';
   return (env && env.trim() ? env.trim() : fallback).replace(/\/$/, '');
 };
 
