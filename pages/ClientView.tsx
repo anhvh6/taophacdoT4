@@ -12,6 +12,7 @@ import { ImmersiveChat } from '../components/ImmersiveChat';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
+import ReactPlayer from 'react-player';
 
 const isFlagEnabled = (value: any, fallback = true) => {
   if (value === undefined || value === null) return fallback;
@@ -424,7 +425,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
              const { data } = await supabase.functions.invoke('get-bunny-video-token', {
                  body: { video_id: trimmedLink, customer_id: dbCustomerId, token: dbToken }
              });
-             if (data?.signed_embed_url) setPlayingVideo(data.signed_embed_url);
+             // Bypass iframe block bằng cách dùng thẳng link m3u8
+             if (data?.signed_embed_url) setPlayingVideo(`https://video.phacdo.com/${trimmedLink}/playlist.m3u8`);
          } catch(e) {}
          return;
       }
@@ -552,7 +554,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             }
 
             if (data?.signed_embed_url) {
-                setPlayingVideo(data.signed_embed_url);
+                // Sử dụng custom player với link video trực tiếp
+                setPlayingVideo(`https://video.phacdo.com/${trimmedLink}/playlist.m3u8`);
                 if (isStudent) {
                     customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
                     markAttendanceLocally(dayNum);
@@ -1683,13 +1686,26 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
              <button onClick={() => setPlayingVideo(null)} className="bg-white/20 hover:bg-white/40 p-4 rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-xl"><X size={20}/></button>
            </div>
            <div className="flex-1 flex items-center justify-center p-0 md:p-10 w-full h-full">
-              <iframe 
-                 src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
-                 className="w-full h-full max-w-[1400px] mx-auto md:rounded-[2rem] shadow-2xl border-none outline-none bg-black"
-                 loading="lazy" 
-                 allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
-                 allowFullScreen
-              ></iframe>
+              {playingVideo.endsWith('.m3u8') ? (
+                 <div className="w-full h-full max-w-[1400px] mx-auto md:rounded-[2rem] shadow-2xl overflow-hidden bg-black flex items-center justify-center">
+                    <ReactPlayer 
+                       url={playingVideo} 
+                       controls 
+                       width="100%" 
+                       height="100%" 
+                       playing 
+                       config={{ file: { forceHLS: true } }}
+                    />
+                 </div>
+              ) : (
+                 <iframe 
+                    src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
+                    className="w-full h-full max-w-[1400px] mx-auto md:rounded-[2rem] shadow-2xl border-none outline-none bg-black"
+                    loading="lazy" 
+                    allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
+                    allowFullScreen
+                 ></iframe>
+              )}
            </div>
          </div>
       )}
