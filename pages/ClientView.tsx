@@ -12,7 +12,41 @@ import { ImmersiveChat } from '../components/ImmersiveChat';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
-import ReactPlayer from 'react-player';
+import Hls from 'hls.js';
+
+const HlsVideoPlayer = ({ url }: { url: string }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  
+  useEffect(() => {
+    let hls: Hls | null = null;
+    if (Hls.isSupported() && videoRef.current) {
+      hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(videoRef.current);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
+      });
+    } else if (videoRef.current && videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+      videoRef.current.src = url;
+      videoRef.current.addEventListener('loadedmetadata', () => {
+        videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
+      });
+    }
+    return () => {
+      if (hls) hls.destroy();
+    };
+  }, [url]);
+
+  return (
+    <video 
+      ref={videoRef} 
+      controls 
+      className="w-full h-full max-w-[1400px] mx-auto md:rounded-[2rem] shadow-2xl bg-black outline-none"
+      playsInline
+      autoPlay
+    />
+  );
+};
 
 const isFlagEnabled = (value: any, fallback = true) => {
   if (value === undefined || value === null) return fallback;
@@ -1687,15 +1721,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
            </div>
            <div className="flex-1 flex items-center justify-center p-0 md:p-10 w-full h-full">
               {playingVideo.endsWith('.m3u8') ? (
-                 <div className="w-full h-full max-w-[1400px] mx-auto md:rounded-[2rem] shadow-2xl overflow-hidden bg-black flex items-center justify-center">
-                    <ReactPlayer 
-                       url={playingVideo} 
-                       controls 
-                       width="100%" 
-                       height="100%" 
-                       playing 
-                       config={{ file: { forceHLS: true } }}
-                    />
+                 <div className="w-full h-full max-w-[1400px] mx-auto flex items-center justify-center">
+                    <HlsVideoPlayer url={playingVideo} />
                  </div>
               ) : (
                  <iframe 
