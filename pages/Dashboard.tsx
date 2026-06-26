@@ -942,7 +942,7 @@ export const Dashboard: React.FC<{
                <Package size={14} className="mr-1.5" /> SP
             </Button>
           )}
-          {hasPerm('view_plan') && (
+          {hasPerm('save_template') && (
             <Button variant="secondary" size="sm" onClick={() => onNavigate('video-groups')}>
               <List size={14} className="mr-1.5" /> PĐ mẫu
             </Button>

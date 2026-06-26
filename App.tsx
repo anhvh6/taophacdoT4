@@ -453,7 +453,7 @@ const App: React.FC = () => {
     const pagePermissions: Record<string, string> = {
       management: 'view_students',
       products: 'view_products',
-      'video-groups': 'view_plan',
+      'video-groups': 'save_template',
       analytics: 'view_reports',
       'plan-editor': 'view_plan',
       permissions: 'super_admin_only',
