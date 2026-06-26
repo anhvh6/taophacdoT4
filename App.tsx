@@ -470,10 +470,18 @@ const App: React.FC = () => {
       } else {
         // Wait until rolePermissions are loaded before checking
         if (rolePermissions.length > 0) {
-          const hasPerm = rolePermissions.some(rp => 
-            rp.role_name.toLowerCase() === adminRole?.toLowerCase() &&
-            rp.permission_code.toLowerCase() === requiredPerm.toLowerCase()
-          );
+          let hasPerm = false;
+          if (currentPage === 'plan-editor') {
+            hasPerm = rolePermissions.some(rp => 
+              rp.role_name.toLowerCase() === adminRole?.toLowerCase() &&
+              ['view_plan', 'edit_plan', 'add_student'].includes(rp.permission_code.toLowerCase())
+            );
+          } else {
+            hasPerm = rolePermissions.some(rp => 
+              rp.role_name.toLowerCase() === adminRole?.toLowerCase() &&
+              rp.permission_code.toLowerCase() === requiredPerm.toLowerCase()
+            );
+          }
           if (!hasPerm) {
             window.location.hash = '#/dashboard';
             setGlobalToast('Bạn không có quyền truy cập trang này');
@@ -663,7 +671,8 @@ const App: React.FC = () => {
               loading={loading}
               onUpsert={handleUpsertCustomer}
               onDelete={handleDeleteCustomer}
-              checkPermission={checkPermission}
+              checkPermission={(perm) => checkPermission(perm, adminRole)}
+              currentUserRole={adminRole || 'super_admin'}
             />
           )}
           {currentPage === 'plan-editor' && (
