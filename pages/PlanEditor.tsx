@@ -1075,13 +1075,15 @@ export const PlanEditor: React.FC<{
                   <CopyPlus size={16} />
                 </button>
                 <button onClick={() => onNavigate('management', { customerId: customer.customer_id })} className="p-2 hover:bg-white rounded-lg text-purple-600 transition-all" title="Quản lý"><UserPlus size={16} /></button>
-                <button 
-                  onClick={customer.status === CustomerStatus.DELETED ? handleRestore : handleDelete} 
-                  className={`p-2 rounded-lg transition-all ${customer.status === CustomerStatus.DELETED ? 'hover:bg-green-50 text-green-600' : 'hover:bg-red-50 text-red-500'}`}
-                  title={customer.status === CustomerStatus.DELETED ? "Khôi phục" : "Xóa"}
-                >
-                  {customer.status === CustomerStatus.DELETED ? <RotateCcw size={16} /> : <Trash2 size={16} />}
-                </button>
+                {hasPerm('delete_student') && (
+                  <button 
+                    onClick={customer.status === CustomerStatus.DELETED ? handleRestore : handleDelete} 
+                    className={`p-2 rounded-lg transition-all ${customer.status === CustomerStatus.DELETED ? 'hover:bg-green-50 text-green-600' : 'hover:bg-red-50 text-red-500'}`}
+                    title={customer.status === CustomerStatus.DELETED ? "Khôi phục" : "Xóa"}
+                  >
+                    {customer.status === CustomerStatus.DELETED ? <RotateCcw size={16} /> : <Trash2 size={16} />}
+                  </button>
+                )}
               </div>
             </div>
           )}

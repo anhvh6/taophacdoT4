@@ -797,7 +797,7 @@ export const CustomerManagement: React.FC<{
 
           <div className="p-6 sm:p-8 bg-blue-50/50 border-t border-blue-50 flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 shrink-0">
             <div>
-              {!isNew && (
+              {!isNew && hasPerm('delete_student') && (
                 <Button 
                   variant="ghost" 
                   className="text-red-500 hover:bg-red-50"
