@@ -616,18 +616,23 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       }
     } else {
       setToast("Cảnh báo: Video này là liên kết ngoài, không được bảo vệ chống tải.");
+      let finalLink = link;
+      if (finalLink && typeof finalLink === 'string') {
+        finalLink = finalLink.replace('vz-371142c2-906.b-cdn.net', 'video.phacdo.com');
+      }
+
       if (newTab) {
         try {
-          newTab.location.href = link;
+          newTab.location.href = finalLink;
           if (isStudent) {
               customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
               markAttendanceLocally(dayNum);
           }
         } catch (e) {
-          window.location.href = link;
+          window.location.href = finalLink;
         }
       } else {
-        window.location.href = link;
+        window.location.href = finalLink;
       }
     }
   };
@@ -1148,7 +1153,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                  {block.is_chat ? (
                     <button onClick={() => setIsImmersiveOpen(true)} className={`w-full py-4 rounded-full font-black text-[10px] uppercase flex items-center justify-center gap-2 transition-all active:scale-95 ${block.type === 'dark' ? 'bg-white text-[#1E3A8A] hover:bg-blue-50' : 'bg-[#1E3A8A] text-white hover:bg-blue-900'}`}>💬 Chat cùng chuyên gia</button>
                  ) : block.video_link ? (
-                    <button onClick={() => window.open(block.video_link, '_blank')} className={`w-full py-3.5 text-[11px] font-black rounded-full flex items-center justify-center gap-2 transition-all active:scale-95 ${block.type === 'dark' ? 'bg-white text-[#1E3A8A] hover:bg-blue-50' : 'bg-[#1E3A8A] text-white hover:bg-blue-900'}`}>▶ Xem hướng dẫn video</button>
+                    <button onClick={() => {
+                        let finalUrl = block.video_link;
+                        if (finalUrl && typeof finalUrl === 'string') {
+                            finalUrl = finalUrl.replace('vz-371142c2-906.b-cdn.net', 'video.phacdo.com');
+                        }
+                        window.open(finalUrl, '_blank');
+                    }} className={`w-full py-3.5 text-[11px] font-black rounded-full flex items-center justify-center gap-2 transition-all active:scale-95 ${block.type === 'dark' ? 'bg-white text-[#1E3A8A] hover:bg-blue-50' : 'bg-[#1E3A8A] text-white hover:bg-blue-900'}`}>▶ Xem hướng dẫn video</button>
                  ) : null}
                </div>
              ))}
