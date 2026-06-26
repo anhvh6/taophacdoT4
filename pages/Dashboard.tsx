@@ -1156,7 +1156,7 @@ export const Dashboard: React.FC<{
         footer={
           <div className="flex justify-between items-center w-full">
             <div>
-              {formData.customer_id && (
+              {formData.customer_id && currentUserRole !== 'coach' && (
                 <Button 
                   variant="ghost" 
                   className="text-red-500 hover:bg-red-50"
@@ -1212,6 +1212,7 @@ export const Dashboard: React.FC<{
                 label="Email" 
                 placeholder="example@mail.com" 
                 value={formData.email} 
+                disabled={!!formData.customer_id && currentUserRole === 'coach'}
                 onChange={e => setFormData({ ...formData, email: e.target.value })} 
               />
             </div>
@@ -1711,27 +1712,33 @@ export const Dashboard: React.FC<{
                             </div>
                           </div>
                           <div className="flex items-center justify-between pt-3 border-t border-orange-100/50 mt-2">
-                             <div className="flex items-center gap-2">
-                               <Toggle 
-                                 checked={draftEmailApproved} 
-                                 onChange={setDraftEmailApproved} 
-                               />
-                               <span className="text-[10px] font-black text-green-600 uppercase">Duyệt thay đổi</span>
-                             </div>
-                             <button 
-                               onClick={() => {
-                                 if (confirm("Xóa yêu cầu đổi Email này?")) {
-                                   onUpsert({ customer_id: emailReq.customer_id, pending_email: '' });
-                                   setPendingRequests(prev => prev.filter(r => !(r.customer_id === detailCustomerId && r.type === 'email')));
-                                   if (!pendingRequests.some(r => r.customer_id === detailCustomerId && r.type !== 'email')) {
-                                      setDetailCustomerId(null);
-                                   }
-                                 }
-                               }}
-                               className="text-red-400 hover:text-red-600 p-1"
-                             >
-                               <X size={16} />
-                             </button>
+                             {currentUserRole !== 'coach' ? (
+                               <>
+                                 <div className="flex items-center gap-2">
+                                   <Toggle 
+                                     checked={draftEmailApproved} 
+                                     onChange={setDraftEmailApproved} 
+                                   />
+                                   <span className="text-[10px] font-black text-green-600 uppercase">Duyệt thay đổi</span>
+                                 </div>
+                                 <button 
+                                   onClick={() => {
+                                     if (confirm("Xóa yêu cầu đổi Email này?")) {
+                                       onUpsert({ customer_id: emailReq.customer_id, pending_email: '' });
+                                       setPendingRequests(prev => prev.filter(r => !(r.customer_id === detailCustomerId && r.type === 'email')));
+                                       if (!pendingRequests.some(r => r.customer_id === detailCustomerId && r.type !== 'email')) {
+                                          setDetailCustomerId(null);
+                                       }
+                                     }
+                                   }}
+                                   className="text-red-400 hover:text-red-600 p-1"
+                                 >
+                                   <X size={16} />
+                                 </button>
+                               </>
+                             ) : (
+                               <span className="text-[10px] font-black text-orange-500 uppercase">Chỉ Admin mới có quyền duyệt</span>
+                             )}
                           </div>
                         </div>
                       </div>
@@ -1771,25 +1778,33 @@ export const Dashboard: React.FC<{
                                     <td className="py-3 text-gray-500">{formatDDMMYYYY(dev.created_at)}</td>
                                     <td className="py-3 text-gray-500">{dev.approved_at ? formatDDMMYYYY(dev.approved_at) : '---'}</td>
                                     <td className="py-3 text-center">
-                                      <Toggle 
-                                        checked={isApproved} 
-                                        onChange={(val) => setDraftDevices(prev => ({ ...prev, [dev.id]: val }))} 
-                                      />
+                                      {currentUserRole !== 'coach' ? (
+                                        <Toggle 
+                                          checked={isApproved} 
+                                          onChange={(val) => setDraftDevices(prev => ({ ...prev, [dev.id]: val }))} 
+                                        />
+                                      ) : (
+                                        <span className={`text-[10px] font-bold ${isApproved ? 'text-green-500' : 'text-red-500'}`}>
+                                          {isApproved ? 'Đã duyệt' : 'Chưa duyệt'}
+                                        </span>
+                                      )}
                                     </td>
                                     <td className="py-3 text-right">
-                                      <button 
-                                        onClick={() => {
-                                          if (confirm("Xóa thiết bị này?")) {
-                                            customerService.deleteDevice(dev.id).then(() => {
-                                              setCustomerDevices(prev => prev.filter(d => d.id !== dev.id));
-                                              setPendingRequests(prev => prev.filter(r => !(r.type === 'device' && r.id === dev.id)));
-                                            });
-                                          }
-                                        }}
-                                        className="text-red-300 hover:text-red-500"
-                                      >
-                                        <X size={14} />
-                                      </button>
+                                      {currentUserRole !== 'coach' && (
+                                        <button 
+                                          onClick={() => {
+                                            if (confirm("Xóa thiết bị này?")) {
+                                              customerService.deleteDevice(dev.id).then(() => {
+                                                setCustomerDevices(prev => prev.filter(d => d.id !== dev.id));
+                                                setPendingRequests(prev => prev.filter(r => !(r.type === 'device' && r.id === dev.id)));
+                                              });
+                                            }
+                                          }}
+                                          className="text-red-300 hover:text-red-500"
+                                        >
+                                          <X size={14} />
+                                        </button>
+                                      )}
                                     </td>
                                   </tr>
                                 );
@@ -1800,9 +1815,11 @@ export const Dashboard: React.FC<{
                       )}
                     </div>
 
-                    <Button variant="primary" className="w-full py-4 rounded-3xl uppercase text-xs font-black tracking-widest shadow-xl" onClick={handleSave}>
-                       Lưu thay đổi
-                    </Button>
+                    {currentUserRole !== 'coach' && (
+                      <Button variant="primary" className="w-full py-4 rounded-3xl uppercase text-xs font-black tracking-widest shadow-xl" onClick={handleSave}>
+                         Lưu thay đổi
+                      </Button>
+                    )}
                   </div>
                 );
               })()}

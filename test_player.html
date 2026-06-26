@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <script src='https://unpkg.com/react@18/umd/react.development.js'></script>
+  <script src='https://unpkg.com/react-dom@18/umd/react-dom.development.js'></script>
+  <script src='https://unpkg.com/react-player/dist/ReactPlayer.standalone.js'></script>
+  <div id='root'></div>
+  <script>
+    const e = React.createElement;
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(e(ReactPlayer, {
+      url: 'https://video.phacdo.com/36120940-53c0-4dbd-a051-761cd7787e70/playlist.m3u8',
+      controls: true,
+      playing: true
+    }));
+  </script>
+</body>
+</html>

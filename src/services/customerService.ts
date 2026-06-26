@@ -224,6 +224,11 @@ export const customerService = {
       }
     });
 
+    // Fix empty strings for date fields to avoid Supabase errors
+    if (dbPayload.video_date === "") dbPayload.video_date = null;
+    if (dbPayload.start_date === "") dbPayload.start_date = null;
+    if (dbPayload.end_date === "") dbPayload.end_date = null;
+
     // Special handling for legacy/derived fields
     if (payload.is_customized !== undefined) {
       dbPayload.is_customized = !!payload.is_customized;

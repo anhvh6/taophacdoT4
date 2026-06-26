@@ -18,6 +18,7 @@
     "@types/express": "^5.0.6",
     "crypto-js": "^4.2.0",
     "express": "^5.2.1",
+    "hls.js": "^1.6.16",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^0.562.0",
     "puppeteer": "^24.40.0",

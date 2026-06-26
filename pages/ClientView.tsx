@@ -84,7 +84,7 @@ const getOrCreateDeviceId = async (customerId: string) => {
   return randomId;
 };
 
-export const ClientView: React.FC<{ customerId: string; token?: string; onNavigate?: (page: string, params?: any) => void; isAdmin?: boolean }> = ({ customerId, token, onNavigate, isAdmin }) => {
+export const ClientView: React.FC<{ customerId: string; token?: string; onNavigate?: (page: string, params?: any) => void; isAdmin?: boolean; adminRole?: string | null }> = ({ customerId, token, onNavigate, isAdmin, adminRole }) => {
   const [customer, setCustomer] = useState<Customer | any>(null);
   const [tasks, setTasks] = useState<ExerciseTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -425,6 +425,18 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     const isExternalUrl = typeof trimmedLink === "string" && /^https?:\/\//i.test(trimmedLink) && !trimmedLink.includes('mediadelivery.net');
     
     let newTab: Window | null = null;
+
+    if (isAdmin && adminRole === 'coach') {
+      setInfoModal({
+        isOpen: true,
+        title: "BỊ TỪ CHỐI",
+        message: "Bạn không có quyền xem video của học viên.",
+        type: "WARNING",
+        color: "red"
+      });
+      return;
+    }
+
     if (isExternalUrl && !onNavigate && !skipAuthCheck) {
       try {
         newTab = window.open('about:blank', '_blank');
@@ -1154,6 +1166,16 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     <button onClick={() => setIsImmersiveOpen(true)} className={`w-full py-4 rounded-full font-black text-[10px] uppercase flex items-center justify-center gap-2 transition-all active:scale-95 ${block.type === 'dark' ? 'bg-white text-[#1E3A8A] hover:bg-blue-50' : 'bg-[#1E3A8A] text-white hover:bg-blue-900'}`}>💬 Chat cùng chuyên gia</button>
                  ) : block.video_link ? (
                     <button onClick={() => {
+                        if (isAdmin && adminRole === 'coach') {
+                            setInfoModal({
+                                isOpen: true,
+                                title: "BỊ TỪ CHỐI",
+                                message: "Bạn không có quyền xem video của học viên.",
+                                type: "WARNING",
+                                color: "red"
+                            });
+                            return;
+                        }
                         let finalUrl = block.video_link;
                         if (finalUrl && typeof finalUrl === 'string') {
                             finalUrl = finalUrl.replace('vz-371142c2-906.b-cdn.net', 'video.phacdo.com');

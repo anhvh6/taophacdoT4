@@ -615,6 +615,7 @@ const App: React.FC = () => {
         token={pageParams.token}
         onNavigate={isAdmin ? navigate : undefined}
         isAdmin={isAdmin}
+        adminRole={adminRole}
       />
     );
   }
@@ -675,6 +676,7 @@ const App: React.FC = () => {
               products={products}
               onUpsert={handleUpsertCustomer}
               onDelete={handleDeleteCustomer}
+              currentUserRole={adminRole || 'super_admin'}
             />
           )}
           {currentPage === 'products' && (
