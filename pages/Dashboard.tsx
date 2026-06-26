@@ -1156,7 +1156,7 @@ export const Dashboard: React.FC<{
         footer={
           <div className="flex justify-between items-center w-full">
             <div>
-              {formData.customer_id && currentUserRole !== 'qlhv' && (
+              {formData.customer_id && hasPerm('delete_student') && (
                 <Button 
                   variant="ghost" 
                   className="text-red-500 hover:bg-red-50"
@@ -1212,7 +1212,7 @@ export const Dashboard: React.FC<{
                 label="Email" 
                 placeholder="example@mail.com" 
                 value={formData.email} 
-                disabled={!!formData.customer_id && currentUserRole === 'qlhv'}
+                disabled={!!formData.customer_id && !hasPerm('edit_email')}
                 onChange={e => setFormData({ ...formData, email: e.target.value })} 
               />
             </div>
@@ -1712,7 +1712,7 @@ export const Dashboard: React.FC<{
                             </div>
                           </div>
                           <div className="flex items-center justify-between pt-3 border-t border-orange-100/50 mt-2">
-                             {currentUserRole !== 'qlhv' ? (
+                             {hasPerm('approve_email') ? (
                                <>
                                  <div className="flex items-center gap-2">
                                    <Toggle 
@@ -1778,7 +1778,7 @@ export const Dashboard: React.FC<{
                                     <td className="py-3 text-gray-500">{formatDDMMYYYY(dev.created_at)}</td>
                                     <td className="py-3 text-gray-500">{dev.approved_at ? formatDDMMYYYY(dev.approved_at) : '---'}</td>
                                     <td className="py-3 text-center">
-                                      {currentUserRole !== 'qlhv' ? (
+                                      {hasPerm('approve_device') ? (
                                         <Toggle 
                                           checked={isApproved} 
                                           onChange={(val) => setDraftDevices(prev => ({ ...prev, [dev.id]: val }))} 
@@ -1790,7 +1790,7 @@ export const Dashboard: React.FC<{
                                       )}
                                     </td>
                                     <td className="py-3 text-right">
-                                      {currentUserRole !== 'qlhv' && (
+                                      {hasPerm('approve_device') && (
                                         <button 
                                           onClick={() => {
                                             if (confirm("Xóa thiết bị này?")) {
@@ -1815,7 +1815,7 @@ export const Dashboard: React.FC<{
                       )}
                     </div>
 
-                    {currentUserRole !== 'qlhv' && (
+                    {hasPerm('delete_device') && (
                       <Button variant="primary" className="w-full py-4 rounded-3xl uppercase text-xs font-black tracking-widest shadow-xl" onClick={handleSave}>
                          Lưu thay đổi
                       </Button>

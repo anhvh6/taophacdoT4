@@ -624,6 +624,7 @@ const App: React.FC = () => {
         onNavigate={isAdmin ? navigate : undefined}
         isAdmin={isAdmin}
         adminRole={adminRole}
+        checkPermission={(perm) => checkPermission(perm, adminRole)}
       />
     );
   }
@@ -686,6 +687,7 @@ const App: React.FC = () => {
               onUpsert={handleUpsertCustomer}
               onDelete={handleDeleteCustomer}
               currentUserRole={adminRole || 'super_admin'}
+              checkPermission={(perm) => checkPermission(perm, adminRole)}
             />
           )}
           {currentPage === 'products' && (

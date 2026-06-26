@@ -72,7 +72,11 @@ insert into permissions (code, display_name) values
   ('view_reports', 'Xem báo cáo truy cập'),
   ('view_financials', 'Xem doanh thu tài chính'),
   ('manage_admins', 'Quản lý tài khoản Admin'),
-  ('system_settings', 'Cấu hình hệ thống')
+  ('system_settings', 'Cấu hình hệ thống'),
+  ('view_video', 'Mở / xem video của học viên'),
+  ('edit_email', 'Thay đổi thông tin Email'),
+  ('approve_email', 'Phê duyệt yêu cầu đổi Email'),
+  ('manage_security', 'Sửa thanh công cụ bảo mật')
 on conflict (code) do update set display_name = excluded.display_name;
 
 -- Seed Mapping
@@ -94,7 +98,11 @@ insert into role_permissions (role_name, permission_code) values
   ('coach', 'view_devices'),
   ('coach', 'approve_device'),
   ('coach', 'view_products'),
-  ('coach', 'view_reports')
+  ('coach', 'view_reports'),
+  ('coach', 'view_video'),
+  ('coach', 'edit_email'),
+  ('coach', 'approve_email'),
+  ('coach', 'manage_security')
 on conflict do nothing;
 
 -- Operational Staff (Không có các quyền view_reports, view_financials, manage_admins, system_settings)

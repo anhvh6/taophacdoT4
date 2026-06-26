@@ -480,14 +480,14 @@ export const CustomerManagement: React.FC<{
                       label="EMAIL" 
                       name="email" 
                       value={formData.email} 
-                      disabled={!!formData.customer_id && currentUserRole === 'qlhv'}
+                      disabled={!!formData.customer_id && checkPermission && !checkPermission('edit_email')}
                       onChange={e => setFormData({...formData, email: e.target.value})} 
                     />
                     {customer.pending_email && (
                       <div className="absolute -bottom-14 left-0 right-0 bg-orange-50 border border-orange-100 p-2 rounded-xl z-10 flex flex-col gap-1 shadow-sm">
                         <div className="flex items-center justify-between">
                           <span className="text-[9px] font-black text-orange-600 uppercase">Yêu cầu đổi sang:</span>
-                          {currentUserRole !== 'qlhv' ? (
+                          {(!checkPermission || checkPermission('approve_email')) ? (
                             <button 
                               onClick={async () => {
                                 if (confirm(`Phê duyệt đổi Email từ ${customer.email} sang ${customer.pending_email}?`)) {

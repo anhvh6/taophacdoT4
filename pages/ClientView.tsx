@@ -84,7 +84,7 @@ const getOrCreateDeviceId = async (customerId: string) => {
   return randomId;
 };
 
-export const ClientView: React.FC<{ customerId: string; token?: string; onNavigate?: (page: string, params?: any) => void; isAdmin?: boolean; adminRole?: string | null }> = ({ customerId, token, onNavigate, isAdmin, adminRole }) => {
+export const ClientView: React.FC<{ customerId: string; token?: string; onNavigate?: (page: string, params?: any) => void; isAdmin?: boolean; adminRole?: string | null; checkPermission?: (perm: string) => boolean }> = ({ customerId, token, onNavigate, isAdmin, adminRole, checkPermission }) => {
   const [customer, setCustomer] = useState<Customer | any>(null);
   const [tasks, setTasks] = useState<ExerciseTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -426,7 +426,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     
     let newTab: Window | null = null;
 
-    if (isAdmin && adminRole === 'qlhv') {
+    if (isAdmin && (checkPermission ? !checkPermission('view_video') : adminRole === 'qlhv')) {
       setInfoModal({
         isOpen: true,
         title: "BỊ TỪ CHỐI",
@@ -1166,7 +1166,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     <button onClick={() => setIsImmersiveOpen(true)} className={`w-full py-4 rounded-full font-black text-[10px] uppercase flex items-center justify-center gap-2 transition-all active:scale-95 ${block.type === 'dark' ? 'bg-white text-[#1E3A8A] hover:bg-blue-50' : 'bg-[#1E3A8A] text-white hover:bg-blue-900'}`}>💬 Chat cùng chuyên gia</button>
                  ) : block.video_link ? (
                     <button onClick={() => {
-                        if (isAdmin && adminRole === 'qlhv') {
+                        if (isAdmin && (checkPermission ? !checkPermission('view_video') : adminRole === 'qlhv')) {
                             setInfoModal({
                                 isOpen: true,
                                 title: "BỊ TỪ CHỐI",

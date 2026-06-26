@@ -275,7 +275,10 @@ export const PlanEditor: React.FC<{
   products: Product[];
   onUpsert: (payload: Partial<Customer>, tasks?: any) => Promise<any>;
   onDelete: (id: string) => Promise<any>;
-}> = ({ onNavigate, customerId, templateId, returnTo, draftCustomer, products, onUpsert, onDelete }) => {
+  currentUserRole?: string;
+  checkPermission?: (perm: string) => boolean;
+}> = ({ onNavigate, customerId, templateId, returnTo, draftCustomer, products, onUpsert, onDelete, currentUserRole = 'super_admin', checkPermission }) => {
+  const hasPerm = (perm: string) => checkPermission ? checkPermission(perm) : true;
   const isEditMode = !!customerId;
   
   const [customer, setCustomer] = useState<Partial<Customer>>({
@@ -1339,8 +1342,8 @@ export const PlanEditor: React.FC<{
                     <input 
                       type="checkbox" 
                       className="sr-only peer" 
-                      checked={currentUserRole === 'qlhv' ? true : isFlagEnabled(customer.require_google_auth, true)}
-                      disabled={currentUserRole === 'qlhv'}
+                      checked={!hasPerm('manage_security') ? true : isFlagEnabled(customer.require_google_auth, true)}
+                      disabled={!hasPerm('manage_security')}
                       onChange={e => setCustomer({...customer, require_google_auth: e.target.checked})}
                     />
                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -1356,8 +1359,8 @@ export const PlanEditor: React.FC<{
                     <input 
                       type="checkbox" 
                       className="sr-only peer" 
-                      checked={currentUserRole === 'qlhv' ? true : isFlagEnabled(customer.require_device_limit, true)}
-                      disabled={currentUserRole === 'qlhv'}
+                      checked={!hasPerm('manage_security') ? true : isFlagEnabled(customer.require_device_limit, true)}
+                      disabled={!hasPerm('manage_security')}
                       onChange={e => setCustomer({...customer, require_device_limit: e.target.checked})}
                     />
                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
