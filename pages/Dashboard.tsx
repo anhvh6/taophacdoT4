@@ -35,6 +35,7 @@ interface CustomerCardProps {
   groupColor: string;
   groupIcon: any;
   checkPermission?: (perm: string) => boolean;
+  onFilterCreator?: (email: string) => void;
 }
 
 const getCategory = (c: Customer, products: Product[], productMap?: Map<string, Product>): 'orange' | 'green' | 'gray' | 'brown' | null => {
@@ -137,16 +138,27 @@ const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, pro
       className={`relative flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 ${cardGradientClass} rounded-[1.5rem] transition-all hover:shadow-xl hover:-translate-y-1 group cursor-pointer shadow-sm overflow-hidden`}
     >
       <div className="absolute inset-0 bg-white/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-      {customer.is_deposit && !customer.is_consultation && (
-        <div className="absolute top-3 right-3 text-red-500 bg-red-50 rounded-full p-1 border border-red-100 shadow-sm z-20" title="Đã đặt cọc">
-          <DollarSign size={14} strokeWidth={2.5} />
-        </div>
-      )}
-      {customer.is_consultation && (
-        <div className="absolute top-3 right-3 text-purple-500 bg-purple-50 rounded-full p-1 border border-purple-100 shadow-sm z-20" title="Chưa tư vấn">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-volume-2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-        </div>
-      )}
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-20">
+        {customer.creator_email && (
+          <div 
+            onClick={(e) => { e.stopPropagation(); if(checkPermission?.('super_admin_only') || checkPermission?.('view_students')) checkPermission ? onFilterCreator?.(customer.creator_email!) : onFilterCreator?.(customer.creator_email!); }}
+            className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center text-[10px] font-bold border border-blue-200 cursor-pointer hover:scale-110 transition-transform shadow-sm"
+            title={`Người tạo: ${customer.creator_email}`}
+          >
+            {customer.creator_email.substring(0, 2).toUpperCase()}
+          </div>
+        )}
+        {customer.is_deposit && !customer.is_consultation && (
+          <div className="text-red-500 bg-red-50 rounded-full p-1 border border-red-100 shadow-sm" title="Đã đặt cọc">
+            <DollarSign size={14} strokeWidth={2.5} />
+          </div>
+        )}
+        {customer.is_consultation && (
+          <div className="text-purple-500 bg-purple-50 rounded-full p-1 border border-purple-100 shadow-sm" title="Chưa tư vấn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+          </div>
+        )}
+      </div>
       <div className="flex items-center gap-4 w-full sm:w-auto">
         <div 
           onClick={(e) => { e.stopPropagation(); onDetail(customer.customer_id); }}
@@ -271,6 +283,7 @@ export const Dashboard: React.FC<{
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [videoOpenFilter, setVideoOpenFilter] = useState<boolean>(false);
+  const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [dashboardFilter, setDashboardFilter] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
@@ -670,7 +683,12 @@ export const Dashboard: React.FC<{
         }
       }
 
-      if (term) return matchSearch && matchFilter;
+      let matchCreator = true;
+      if (creatorFilter) {
+        matchCreator = c.creator_email === creatorFilter;
+      }
+
+      if (term) return matchSearch && matchFilter && matchCreator;
 
       let matchVideoOpen = true;
       if (videoOpenFilter) {
@@ -694,9 +712,9 @@ export const Dashboard: React.FC<{
         }
       }
 
-      return matchSearch && matchVideoOpen;
+      return matchSearch && matchVideoOpen && matchFilter && matchCreator;
     });
-  }, [customers, searchTerm, videoOpenFilter, products, productMap]);
+  }, [customers, searchTerm, videoOpenFilter, products, productMap, creatorFilter, dashboardFilter]);
 
   // Helper function for sorting by most recent creation (using full timestamp)
   const getCreationTime = (c: Customer) => {
@@ -1021,6 +1039,7 @@ export const Dashboard: React.FC<{
                     setDateFrom(def.from); 
                     setDateTo(def.to); 
                     setVideoOpenFilter(false); 
+                    setCreatorFilter(null);
                   }} 
                   className="text-gray-400 hover:text-red-500 transition-all active:scale-90" 
                   title="Xóa bộ lọc"
@@ -1045,7 +1064,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={Zap} title="Mới tạo hôm nay" count={groups.newToday.length} colorClass="text-orange-700" isCollapsed={!!collapsedGroups['newToday'] && !isSearching} onToggle={() => toggleGroup('newToday')} />
                 {(!collapsedGroups['newToday'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.newToday.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-orange-600" groupIcon={Zap} checkPermission={checkPermission} />)}
+                    {groups.newToday.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-orange-600" groupIcon={Zap} checkPermission={checkPermission} onFilterCreator={setCreatorFilter} />)}
                   </div>
                 )}
               </div>
@@ -1055,7 +1074,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={FileWarning} title="Chưa có Phác đồ" count={groups.noPlan.length} colorClass="text-red-700" isCollapsed={!!collapsedGroups['noPlan'] && !isSearching} onToggle={() => toggleGroup('noPlan')} />
                 {(!collapsedGroups['noPlan'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.noPlan.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={FileWarning} checkPermission={checkPermission} />)}
+                    {groups.noPlan.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={FileWarning} checkPermission={checkPermission} onFilterCreator={setCreatorFilter} />)}
                   </div>
                 )}
               </div>
@@ -1065,7 +1084,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={DollarSign} title="Đặt cọc" count={groups.deposit.length} colorClass="text-pink-700" isCollapsed={!!collapsedGroups['deposit'] && !isSearching} onToggle={() => toggleGroup('deposit')} />
                 {(!collapsedGroups['deposit'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.deposit.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-pink-600" groupIcon={DollarSign} checkPermission={checkPermission} />)}
+                    {groups.deposit.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-pink-600" groupIcon={DollarSign} checkPermission={checkPermission} onFilterCreator={setCreatorFilter} />)}
                   </div>
                 )}
               </div>
@@ -1075,7 +1094,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={Phone} title="Chưa tư vấn" count={groups.consultation.length} colorClass="text-purple-700" isCollapsed={!!collapsedGroups['consultation'] && !isSearching} onToggle={() => toggleGroup('consultation')} />
                 {(!collapsedGroups['consultation'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.consultation.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-purple-600" groupIcon={Phone} checkPermission={checkPermission} />)}
+                    {groups.consultation.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-purple-600" groupIcon={Phone} checkPermission={checkPermission} onFilterCreator={setCreatorFilter} />)}
                   </div>
                 )}
               </div>
@@ -1085,7 +1104,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={AlertTriangle} title="Sắp hết hạn" count={groups.expiring.length} colorClass="text-amber-700" isCollapsed={!!collapsedGroups['expiring'] && !isSearching} onToggle={() => toggleGroup('expiring')} />
                 {(!collapsedGroups['expiring'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.expiring.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-amber-500" groupIcon={AlertTriangle} checkPermission={checkPermission} />)}
+                    {groups.expiring.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-amber-500" groupIcon={AlertTriangle} checkPermission={checkPermission} onFilterCreator={setCreatorFilter} />)}
                   </div>
                 )}
               </div>
@@ -1095,7 +1114,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={CheckCircle} title="Hoạt động" count={groups.active.length} colorClass="text-green-800" isCollapsed={!!collapsedGroups['active'] && !isSearching} onToggle={() => toggleGroup('active')} />
                 {(!collapsedGroups['active'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.active.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-green-600" groupIcon={CheckCircle} checkPermission={checkPermission} />)}
+                    {groups.active.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-green-600" groupIcon={CheckCircle} checkPermission={checkPermission} onFilterCreator={setCreatorFilter} />)}
                   </div>
                 )}
               </div>
@@ -1105,7 +1124,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={Clock} title="Chưa bắt đầu" count={groups.notStarted.length} colorClass="text-blue-800" isCollapsed={!!collapsedGroups['notStarted'] && !isSearching} onToggle={() => toggleGroup('notStarted')} />
                 {(!collapsedGroups['notStarted'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.notStarted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-blue-500" groupIcon={Clock} checkPermission={checkPermission} />)}
+                    {groups.notStarted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-blue-500" groupIcon={Clock} checkPermission={checkPermission} onFilterCreator={setCreatorFilter} />)}
                   </div>
                 )}
               </div>
@@ -1115,7 +1134,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={Archive} title="Đã kết thúc" count={groups.expired.length} colorClass="text-red-800" isCollapsed={!!collapsedGroups['expired'] && !isSearching} onToggle={() => toggleGroup('expired')} />
                 {(!collapsedGroups['expired'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.expired.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={Archive} checkPermission={checkPermission} />)}
+                    {groups.expired.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={Archive} checkPermission={checkPermission} onFilterCreator={setCreatorFilter} />)}
                   </div>
                 )}
               </div>
@@ -1125,7 +1144,7 @@ export const Dashboard: React.FC<{
                 <GroupHeader icon={Trash2} title="Đã xóa" count={groups.deleted.length} colorClass="text-gray-500" isCollapsed={!!collapsedGroups['deleted'] && !isSearching} onToggle={() => toggleGroup('deleted')} />
                 {(!collapsedGroups['deleted'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300 opacity-70 grayscale-[0.3]">
-                    {groups.deleted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-gray-400" groupIcon={Trash2} checkPermission={checkPermission} />)}
+                    {groups.deleted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-gray-400" groupIcon={Trash2} checkPermission={checkPermission} onFilterCreator={setCreatorFilter} />)}
                   </div>
                 )}
               </div>

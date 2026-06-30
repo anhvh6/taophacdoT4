@@ -287,7 +287,11 @@ const App: React.FC = () => {
     const isNew = existingIdx === -1;
     
     try {
-      const result = await customerService.upsertCustomer(payload, tasks);
+      const finalPayload = { ...payload };
+      if (isNew && !finalPayload.creator_email && session?.user?.email) {
+        finalPayload.creator_email = session.user.email;
+      }
+      const result = await customerService.upsertCustomer(finalPayload, tasks);
       setCustomers(prev => {
         const existingIdx = prev.findIndex(c => c.customer_id === result.customer_id);
         let next;

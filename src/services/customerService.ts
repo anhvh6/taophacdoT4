@@ -62,7 +62,8 @@ export const normalizeCustomer = (item: any): Customer => {
       require_google_auth: parseFlag(item.require_google_auth, true),
       require_device_limit: parseFlag(item.require_device_limit, true),
       pending_email: item.pending_email || "",
-      raw_backup: rawBackup
+      raw_backup: rawBackup,
+      creator_email: rawBackup.creator_email || ""
     };
   };
 
@@ -200,13 +201,23 @@ export const customerService = {
 
     const link = generateCustomerLink(customerId, token);
 
+    let rawBackup = existingData?.raw_backup || {};
+    if (typeof rawBackup === 'string') {
+      try { rawBackup = JSON.parse(rawBackup); } catch(e) {}
+    }
+    
+    if (payload.creator_email) {
+      rawBackup.creator_email = payload.creator_email;
+    }
+
     // Build DB payload by merging existing and new (only if defined)
     const dbPayload: any = {
       ...(existingData || {}),
       customer_id: customerId,
       token: token,
       link: link,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      raw_backup: rawBackup
     };
 
     // Only update fields that are present in the payload
