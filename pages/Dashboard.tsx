@@ -55,7 +55,7 @@ const getCategory = (c: Customer, products: Product[], productMap?: Map<string, 
   return null;
 };
 
-const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, productMap, onEdit, onPreview, onDuplicate, onCopyPlan, onDetail, onCopyLink, onCopyName, groupColor, groupIcon: GroupIcon, checkPermission }) => {
+const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, productMap, onEdit, onPreview, onDuplicate, onCopyPlan, onDetail, onCopyLink, onCopyName, groupColor, groupIcon: GroupIcon, checkPermission, onFilterCreator }) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
