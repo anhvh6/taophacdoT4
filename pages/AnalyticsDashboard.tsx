@@ -281,6 +281,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
     }
   }, [customers, growthViewType, growthMonth, growthYear]);
 
+  const totalGrowthStudents = useMemo(() => {
+    return growthData.reduce((acc, curr) => acc + curr.students, 0);
+  }, [growthData]);
+
   const pieData = [
     { name: 'Đang hoạt động', value: stats.statusCounts.active, color: '#10B981', statusKey: 'active' },
     { name: 'Sắp hết hạn', value: stats.statusCounts.expiring, color: '#F59E0B', statusKey: 'expiring' },
@@ -552,8 +556,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
                 <div>
                   <h3 className="text-lg font-black text-blue-900 uppercase tracking-tight">Tăng trưởng học viên</h3>
                   <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">
-                    {growthViewType === 'monthly' ? 'Số lượng học viên mới đăng ký theo tháng' : `Số lượng học viên mới đăng ký trong tháng ${growthMonth + 1}/${growthYear}`}
+                    {growthViewType === 'monthly' ? `Số lượng học viên mới đăng ký năm ${growthYear}` : `Số lượng học viên mới đăng ký trong tháng ${growthMonth + 1}/${growthYear}`}
                   </p>
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                    <span>Tổng số học viên mới:</span>
+                    <span className="text-sm font-black">{totalGrowthStudents}</span>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <select
