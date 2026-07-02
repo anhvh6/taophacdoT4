@@ -52,6 +52,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
   const [timeRange, setTimeRange] = useState<'month' | 'quarter' | 'year'>('month');
   const [loginTimeRange, setLoginTimeRange] = useState<'day' | 'week' | 'month'>('day');
   
+  const [growthViewType, setGrowthViewType] = useState<'monthly' | 'daily'>('monthly');
+  const [growthMonth, setGrowthMonth] = useState<number>(new Date().getMonth());
+  const [growthYear, setGrowthYear] = useState<number>(new Date().getFullYear());
+  
   const loginStats = useMemo(() => {
     const activeCustomers = customers.filter(c => c.status !== CustomerStatus.DELETED);
     const now = new Date();
@@ -245,6 +249,37 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
       totalStudents: activeCustomers.length
     };
   }, [customers, products]);
+
+  const growthData = useMemo(() => {
+    const activeCustomers = customers.filter(c => c.status !== CustomerStatus.DELETED);
+    
+    if (growthViewType === 'monthly') {
+      const data = Array.from({ length: 12 }, (_, i) => ({
+        name: `T${i + 1}`,
+        students: 0
+      }));
+      activeCustomers.forEach(c => {
+        const createdDate = parseVNDate(c.created_at) || new Date();
+        if (createdDate.getFullYear() === growthYear) {
+          data[createdDate.getMonth()].students += 1;
+        }
+      });
+      return data;
+    } else {
+      const daysInMonth = new Date(growthYear, growthMonth + 1, 0).getDate();
+      const data = Array.from({ length: daysInMonth }, (_, i) => ({
+        name: `${i + 1}`,
+        students: 0
+      }));
+      activeCustomers.forEach(c => {
+        const createdDate = parseVNDate(c.created_at) || new Date();
+        if (createdDate.getFullYear() === growthYear && createdDate.getMonth() === growthMonth) {
+          data[createdDate.getDate() - 1].students += 1;
+        }
+      });
+      return data;
+    }
+  }, [customers, growthViewType, growthMonth, growthYear]);
 
   const pieData = [
     { name: 'Đang hoạt động', value: stats.statusCounts.active, color: '#10B981', statusKey: 'active' },
@@ -513,13 +548,48 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Activity Comparison */}
           <Card className="lg:col-span-2 p-8 bg-white border-blue-50 shadow-sm">
-             <div className="mb-8">
-                <h3 className="text-lg font-black text-blue-900 uppercase tracking-tight">Tăng trưởng học viên</h3>
-                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Số lượng học viên mới đăng ký theo tháng</p>
+             <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
+                <div>
+                  <h3 className="text-lg font-black text-blue-900 uppercase tracking-tight">Tăng trưởng học viên</h3>
+                  <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">
+                    {growthViewType === 'monthly' ? 'Số lượng học viên mới đăng ký theo tháng' : `Số lượng học viên mới đăng ký trong tháng ${growthMonth + 1}/${growthYear}`}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={growthViewType}
+                    onChange={(e) => setGrowthViewType(e.target.value as any)}
+                    className="text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="monthly">Theo tháng</option>
+                    <option value="daily">Theo ngày</option>
+                  </select>
+                  {growthViewType === 'daily' && (
+                    <select
+                      value={growthMonth}
+                      onChange={(e) => setGrowthMonth(Number(e.target.value))}
+                      className="text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <option key={i} value={i}>Tháng {i + 1}</option>
+                      ))}
+                    </select>
+                  )}
+                  <select
+                    value={growthYear}
+                    onChange={(e) => setGrowthYear(Number(e.target.value))}
+                    className="text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    {Array.from({ length: 5 }, (_, i) => {
+                      const y = new Date().getFullYear() - i;
+                      return <option key={y} value={y}>Năm {y}</option>;
+                    })}
+                  </select>
+                </div>
               </div>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.monthlyData}>
+                  <BarChart data={growthData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                     <XAxis 
                       dataKey="name" 
@@ -541,9 +611,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
                       dataKey="students" 
                       fill="#3B82F6" 
                       radius={[4, 4, 0, 0]} 
-                      barSize={16}
+                      barSize={growthViewType === 'monthly' ? 16 : 8}
                       name="Học viên mới" 
-                      label={{ position: 'top', fill: '#1E3A8A', fontSize: 10, fontWeight: 800 }}
+                      label={{ position: 'top', fill: '#1E3A8A', fontSize: 10, fontWeight: 800, formatter: (val: number) => val > 0 ? val : '' }}
                     />
                   </BarChart>
                 </ResponsiveContainer>
