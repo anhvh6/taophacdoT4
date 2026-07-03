@@ -16,10 +16,7 @@ import Hls from 'hls.js';
 
 const HlsVideoPlayer = ({ url }: { url: string }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [errorLevel, setErrorLevel] = useState(() => {
-    const saved = sessionStorage.getItem('phacdo_working_server');
-    return saved ? parseInt(saved, 10) : 0;
-  });
+  const [errorLevel, setErrorLevel] = useState(0);
 
   const [loadingMsg, setLoadingMsg] = useState("Đang kết nối máy chủ...");
 
@@ -56,17 +53,16 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
     if (Hls.isSupported() && videoRef.current) {
       hls = new Hls({
          maxMaxBufferLength: 30,
-         manifestLoadingMaxRetry: 1,
-         manifestLoadingTimeOut: 3000,
-         levelLoadingMaxRetry: 1,
-         levelLoadingTimeOut: 3000,
-         fragLoadingTimeOut: 3000,
+         manifestLoadingMaxRetry: 0,
+         manifestLoadingTimeOut: 1500,
+         levelLoadingMaxRetry: 0,
+         levelLoadingTimeOut: 1500,
+         fragLoadingTimeOut: 1500,
       });
       hls.loadSource(currentUrl);
       hls.attachMedia(videoRef.current);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoadingMsg("");
-        sessionStorage.setItem('phacdo_working_server', errorLevel.toString());
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -97,7 +93,6 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       videoRef.current.addEventListener('loadedmetadata', () => {
         clearTimeout(safariTimeout);
         setLoadingMsg("");
-        sessionStorage.setItem('phacdo_working_server', errorLevel.toString());
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
 
@@ -106,7 +101,7 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
          if (videoRef.current && videoRef.current.readyState === 0) {
             onSafariError();
          }
-      }, 4000);
+      }, 1500);
     }
     return () => {
       if (hls) hls.destroy();
@@ -116,9 +111,6 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
   // Nếu tất cả server trực tiếp đều lỗi, chuyển sang dùng Iframe
   if (errorLevel >= fallbackUrls.length && fallbackEmbedUrl) {
     const fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
-    
-    // Lưu lại trạng thái Iframe để các video sau mở Iframe ngay lập tức (không phải chờ 6s)
-    sessionStorage.setItem('phacdo_working_server', fallbackUrls.length.toString());
 
     return (
        <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto bg-black md:rounded-[2rem] shadow-2xl overflow-hidden">
