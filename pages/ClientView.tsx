@@ -19,50 +19,57 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
   const [errorLevel, setErrorLevel] = useState(() => {
     const saved = localStorage.getItem('phacdo_video_error_level');
     return saved ? parseInt(saved, 10) : 0;
-  }); 
+  });
+
+  const [loadingMsg, setLoadingMsg] = useState("Đang kết nối máy chủ...");
+
+  let token = '';
+  let expires = '';
+  let libraryId = '';
+  let videoId = '';
+  try {
+    const urlObj = new URL(url, window.location.origin || 'https://phacdo.com');
+    token = urlObj.searchParams.get('token') || '';
+    expires = urlObj.searchParams.get('expires') || '';
+    const fallbackEmbed = urlObj.searchParams.get('fallback_embed') || '';
+    libraryId = fallbackEmbed.split('/embed/')[1]?.split('/')[0] || '644769';
+    videoId = urlObj.pathname.split('/')[1];
+  } catch (e) {}
+
+  const fallbackUrls = [
+    `https://video.phacdo.com/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
+    `https://vz-371142c2-906.b-cdn.net/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
+    `https://video.bunnycdn.com/play/${libraryId}/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
+    `https://iframe.mediadelivery.net/play/${libraryId}/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
+    `https://player.mediadelivery.net/play/${libraryId}/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
+  ];
 
   const handleNextFallback = () => {
     setErrorLevel(prev => {
-       const next = prev + 1;
+       const next = (prev + 1) % fallbackUrls.length;
        localStorage.setItem('phacdo_video_error_level', next.toString());
        return next;
     });
   };
 
-  let cleanUrl = url;
-  let fallbackEmbedUrl = '';
-  try {
-    const urlObj = new URL(url, window.location.origin || 'https://phacdo.com');
-    fallbackEmbedUrl = urlObj.searchParams.get('fallback_embed') || '';
-    if (fallbackEmbedUrl) {
-      urlObj.searchParams.delete('fallback_embed');
-    }
-    cleanUrl = urlObj.toString();
-  } catch (e) {
-    // fallback if URL parsing fails
-  }
-
   useEffect(() => {
-    if (errorLevel >= 2) return;
-    
-    let currentUrl = cleanUrl;
-    if (errorLevel === 1) {
-       currentUrl = cleanUrl.replace('video.phacdo.com', 'vz-371142c2-906.b-cdn.net');
-    }
+    const currentUrl = fallbackUrls[errorLevel % fallbackUrls.length];
+    setLoadingMsg(`Đang thử máy chủ ${errorLevel + 1}/${fallbackUrls.length}...`);
     
     let hls: Hls | null = null;
     if (Hls.isSupported() && videoRef.current) {
       hls = new Hls({
          maxMaxBufferLength: 30,
          manifestLoadingMaxRetry: 1,
-         manifestLoadingTimeOut: 4000,
+         manifestLoadingTimeOut: 3000,
          levelLoadingMaxRetry: 1,
-         levelLoadingTimeOut: 4000,
-         fragLoadingTimeOut: 4000,
+         levelLoadingTimeOut: 3000,
+         fragLoadingTimeOut: 3000,
       });
       hls.loadSource(currentUrl);
       hls.attachMedia(videoRef.current);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setLoadingMsg("");
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -83,62 +90,32 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       videoRef.current.src = currentUrl;
       videoRef.current.onerror = () => handleNextFallback();
       videoRef.current.addEventListener('loadedmetadata', () => {
+        setLoadingMsg("");
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
     }
     return () => {
       if (hls) hls.destroy();
     };
-  }, [cleanUrl, errorLevel]);
-
-  // Nút reset để xoá cache nếu người dùng muốn thử lại mạng cũ
-  const handleReset = () => {
-    localStorage.removeItem('phacdo_video_error_level');
-    setErrorLevel(0);
-  };
-
-  if (errorLevel >= 2 && fallbackEmbedUrl) {
-    let fallbackIframe = fallbackEmbedUrl;
-    if (errorLevel % 3 === 2) fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
-    if (errorLevel % 3 === 0) fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'video.bunnycdn.com');
-    if (errorLevel % 3 === 1) fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'player.mediadelivery.net');
-
-    return (
-       <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto">
-         <iframe 
-            key={fallbackIframe}
-            src={fallbackIframe}
-            className="w-full h-full md:rounded-[2rem] shadow-2xl border-none outline-none bg-black"
-            loading="lazy" 
-            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
-            allowFullScreen
-         ></iframe>
-         <div className="absolute top-4 left-4 z-[9999] flex gap-2">
-           <button 
-             onClick={handleNextFallback}
-             className="bg-red-500/80 hover:bg-red-600 text-white px-4 py-2 rounded-xl backdrop-blur-md transition-all shadow-xl font-medium text-sm border border-red-400"
-           >
-             Lỗi video? Đổi máy chủ ({errorLevel - 1})
-           </button>
-           <button 
-             onClick={handleReset}
-             className="bg-gray-500/80 hover:bg-gray-600 text-white px-3 py-2 rounded-xl backdrop-blur-md transition-all shadow-xl text-sm border border-gray-400"
-             title="Khôi phục máy chủ mặc định"
-           >
-             Khôi phục
-           </button>
-         </div>
-       </div>
-    );
-  }
+  }, [url, errorLevel]);
 
   return (
-    <video 
-      ref={videoRef} 
-      controls 
-      className="w-full h-full max-w-[1400px] mx-auto md:rounded-[2rem] shadow-2xl bg-black outline-none"
-      playsInline
-    />
+    <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto bg-black md:rounded-[2rem] shadow-2xl overflow-hidden">
+      {loadingMsg && (
+        <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/80 backdrop-blur-sm">
+           <div className="flex flex-col items-center gap-4">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-white/80 font-medium">{loadingMsg}</p>
+           </div>
+        </div>
+      )}
+      <video 
+        ref={videoRef} 
+        controls 
+        className="w-full h-full outline-none"
+        playsInline
+      />
+    </div>
   );
 };
 
