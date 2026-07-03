@@ -1828,7 +1828,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
              <button onClick={() => setPlayingVideo(null)} className="bg-white/20 hover:bg-white/40 p-4 rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-xl"><X size={20}/></button>
            </div>
            <div className="flex-1 flex items-center justify-center p-0 md:p-10 w-full h-full">
-              {playingVideo.endsWith('.m3u8') ? (
+              {playingVideo.includes('.m3u8') ? (
                  <div className="w-full h-full max-w-[1400px] mx-auto flex items-center justify-center">
                     <HlsVideoPlayer url={playingVideo} />
                  </div>
