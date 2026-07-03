@@ -126,6 +126,12 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
 
     return (
        <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto bg-black md:rounded-[2rem] shadow-2xl overflow-hidden">
+         {/* Cảnh báo mạng bị chặn để người dùng không tưởng hệ thống bị lỗi */}
+         <div className="absolute top-4 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
+            <div className="bg-red-500/90 text-white text-xs sm:text-sm px-4 py-2 rounded-xl shadow-lg backdrop-blur-md text-center border border-red-400 max-w-lg">
+               ⚠️ <b>Nhà mạng của bạn đang chặn máy chủ video.</b><br/>Hệ thống đang dùng luồng dự phòng. Nếu vẫn đen màn hình, vui lòng dùng 4G hoặc VPN.
+            </div>
+         </div>
          <iframe 
             src={fallbackIframe}
             className="w-full h-full border-none outline-none bg-black"
