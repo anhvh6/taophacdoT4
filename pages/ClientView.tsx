@@ -16,7 +16,18 @@ import Hls from 'hls.js';
 
 const HlsVideoPlayer = ({ url }: { url: string }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [errorLevel, setErrorLevel] = useState(0); 
+  const [errorLevel, setErrorLevel] = useState(() => {
+    const saved = localStorage.getItem('phacdo_video_error_level');
+    return saved ? parseInt(saved, 10) : 0;
+  }); 
+
+  const handleNextFallback = () => {
+    setErrorLevel(prev => {
+       const next = prev + 1;
+       localStorage.setItem('phacdo_video_error_level', next.toString());
+       return next;
+    });
+  };
 
   let cleanUrl = url;
   let fallbackEmbedUrl = '';
@@ -43,8 +54,11 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
     if (Hls.isSupported() && videoRef.current) {
       hls = new Hls({
          maxMaxBufferLength: 30,
-         manifestLoadingMaxRetry: 2,
-         levelLoadingMaxRetry: 2,
+         manifestLoadingMaxRetry: 1,
+         manifestLoadingTimeOut: 4000,
+         levelLoadingMaxRetry: 1,
+         levelLoadingTimeOut: 4000,
+         fragLoadingTimeOut: 4000,
       });
       hls.loadSource(currentUrl);
       hls.attachMedia(videoRef.current);
@@ -56,7 +70,7 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               console.warn("HLS Network Error, attempting fallback...", data);
-              setErrorLevel(prev => prev + 1);
+              handleNextFallback();
               hls?.destroy();
               break;
             default:
@@ -67,7 +81,7 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       });
     } else if (videoRef.current && videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
       videoRef.current.src = currentUrl;
-      videoRef.current.onerror = () => setErrorLevel(prev => prev + 1);
+      videoRef.current.onerror = () => handleNextFallback();
       videoRef.current.addEventListener('loadedmetadata', () => {
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
@@ -76,6 +90,12 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       if (hls) hls.destroy();
     };
   }, [cleanUrl, errorLevel]);
+
+  // Nút reset để xoá cache nếu người dùng muốn thử lại mạng cũ
+  const handleReset = () => {
+    localStorage.removeItem('phacdo_video_error_level');
+    setErrorLevel(0);
+  };
 
   if (errorLevel >= 2 && fallbackEmbedUrl) {
     let fallbackIframe = fallbackEmbedUrl;
@@ -93,12 +113,21 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
             allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
             allowFullScreen
          ></iframe>
-         <button 
-           onClick={() => setErrorLevel(prev => prev + 1)}
-           className="absolute top-4 left-4 z-[9999] bg-red-500/80 hover:bg-red-600 text-white px-4 py-2 rounded-xl backdrop-blur-md transition-all shadow-xl font-medium text-sm border border-red-400"
-         >
-           Lỗi video? Bấm đổi máy chủ ({errorLevel - 1})
-         </button>
+         <div className="absolute top-4 left-4 z-[9999] flex gap-2">
+           <button 
+             onClick={handleNextFallback}
+             className="bg-red-500/80 hover:bg-red-600 text-white px-4 py-2 rounded-xl backdrop-blur-md transition-all shadow-xl font-medium text-sm border border-red-400"
+           >
+             Lỗi video? Đổi máy chủ ({errorLevel - 1})
+           </button>
+           <button 
+             onClick={handleReset}
+             className="bg-gray-500/80 hover:bg-gray-600 text-white px-3 py-2 rounded-xl backdrop-blur-md transition-all shadow-xl text-sm border border-gray-400"
+             title="Khôi phục máy chủ mặc định"
+           >
+             Khôi phục
+           </button>
+         </div>
        </div>
     );
   }
