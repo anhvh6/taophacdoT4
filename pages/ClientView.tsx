@@ -16,11 +16,15 @@ import Hls from 'hls.js';
 
 const HlsVideoPlayer = ({ url }: { url: string }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [activeMode, setActiveMode] = useState<'racing' | 'hls' | 'iframe'>('racing');
-  const [activeUrl, setActiveUrl] = useState<string>('');
-  const [raceAttempts, setRaceAttempts] = useState(1);
-
   const [loadingMsg, setLoadingMsg] = useState("Đang kết nối máy chủ...");
+  const [activeMode, setActiveMode] = useState<'racing' | 'hls' | 'iframe'>(() => {
+     const cachedMode = localStorage.getItem('phacdo_best_server_mode');
+     return (cachedMode as 'racing' | 'hls' | 'iframe') || 'racing';
+  });
+  const [activeServerIndex, setActiveServerIndex] = useState<number>(() => {
+     return parseInt(localStorage.getItem('phacdo_best_server_index') || '-1', 10);
+  });
+  const [activeUrl, setActiveUrl] = useState<string>('');
 
   let token = '';
   let expires = '';
@@ -41,31 +45,32 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
     `https://vz-371142c2-906.b-cdn.net/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
   ];
 
+  // Nếu đã học được đường truyền tối ưu từ video trước, dùng luôn
+  useEffect(() => {
+     if (activeMode === 'hls' && activeServerIndex >= 0 && activeServerIndex < fallbackUrls.length) {
+        setActiveUrl(fallbackUrls[activeServerIndex]);
+     }
+  }, [activeMode, activeServerIndex, videoId, token, expires]);
+
   useEffect(() => {
     let isMounted = true;
-    let retryTimer: NodeJS.Timeout;
 
     if (activeMode === 'racing') {
-      if (raceAttempts === 1) {
-         setLoadingMsg("Đang tối ưu đường truyền siêu tốc...");
-      } else {
-         setLoadingMsg(`Đang tìm đường mạng dự phòng (Thử lại lần ${raceAttempts}/10)...`);
-      }
+      setLoadingMsg("Đang tự động tối ưu và tìm đường truyền ổn định nhất...");
       
-      const testUrl = (testUrl: string) => {
-         // Thêm tham số ngẫu nhiên để tránh trình duyệt cache kết nối bị lỗi
-         const bypassCacheUrl = `${testUrl}&retry=${Date.now()}_${Math.random()}`;
-         return new Promise<string>((resolve, reject) => {
+      const testUrl = (testUrl: string, index: number) => {
+         const bypassCacheUrl = `${testUrl}&retry=${Date.now()}`;
+         return new Promise<{url: string, index: number}>((resolve, reject) => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => {
                controller.abort();
                reject(new Error("Timeout"));
-            }, 5000); // 5 seconds max per attempt
+            }, 3000); // Tối đa 3 giây
 
             fetch(bypassCacheUrl, { method: 'GET', signal: controller.signal })
                .then(res => {
                   clearTimeout(timeoutId);
-                  if (res.ok) resolve(testUrl); // Trả về URL gốc, không chứa param bypass cache
+                  if (res.ok) resolve({ url: testUrl, index }); 
                   else reject(new Error("HTTP " + res.status));
                })
                .catch(err => {
@@ -75,32 +80,28 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
          });
       };
 
-      Promise.any(fallbackUrls.map(testUrl))
-         .then(workingUrl => {
+      Promise.any(fallbackUrls.map((url, index) => testUrl(url, index)))
+         .then(({ url: workingUrl, index: workingIndex }) => {
             if (isMounted) {
+               setActiveServerIndex(workingIndex);
                setActiveUrl(workingUrl);
                setActiveMode('hls');
+               // Tự học: Lưu lại đường truyền tốt nhất vào CSDL cục bộ
+               localStorage.setItem('phacdo_best_server_mode', 'hls');
+               localStorage.setItem('phacdo_best_server_index', workingIndex.toString());
             }
          })
          .catch(() => {
             if (isMounted) {
-               if (raceAttempts < 10) {
-                  // Thử lại sau 1.5 giây nếu bị nhà mạng chặn
-                  retryTimer = setTimeout(() => {
-                     setRaceAttempts(prev => prev + 1);
-                  }, 1500);
-               } else {
-                  setActiveMode('iframe');
-               }
+               setActiveMode('iframe');
+               // Tự học: Lưu lại Iframe là giải pháp tốt nhất cho mạng này
+               localStorage.setItem('phacdo_best_server_mode', 'iframe');
             }
          });
     }
 
-    return () => { 
-       isMounted = false; 
-       clearTimeout(retryTimer); 
-    };
-  }, [url, activeMode, raceAttempts]);
+    return () => { isMounted = false; };
+  }, [url, activeMode]);
 
   useEffect(() => {
     if (activeMode !== 'hls' || !activeUrl) return;
@@ -121,12 +122,19 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       hls.on(Hls.Events.ERROR, (event, data) => {
         if (data.fatal) {
            console.warn("HLS Error during playback", data);
-           setActiveMode('iframe'); // If it fails during playback, go to iframe
+           // Nếu đường truyền đã lưu bị lỗi, xoá bộ nhớ và nhảy sang iframe
+           localStorage.removeItem('phacdo_best_server_mode');
+           localStorage.removeItem('phacdo_best_server_index');
+           setActiveMode('iframe'); 
         }
       });
     } else if (videoRef.current && videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
       videoRef.current.src = activeUrl;
-      videoRef.current.onerror = () => setActiveMode('iframe');
+      videoRef.current.onerror = () => {
+         localStorage.removeItem('phacdo_best_server_mode');
+         localStorage.removeItem('phacdo_best_server_index');
+         setActiveMode('iframe');
+      };
       videoRef.current.addEventListener('loadedmetadata', () => {
         setLoadingMsg("");
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
@@ -144,12 +152,6 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
 
     return (
        <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto bg-black md:rounded-[2rem] shadow-2xl overflow-hidden">
-         {/* Cảnh báo mạng bị chặn để người dùng không tưởng hệ thống bị lỗi */}
-         <div className="absolute top-4 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
-            <div className="bg-red-500/90 text-white text-xs sm:text-sm px-4 py-2 rounded-xl shadow-lg backdrop-blur-md text-center border border-red-400 max-w-lg">
-               ⚠️ <b>Nhà mạng của bạn đang chặn máy chủ video.</b><br/>Hệ thống đang dùng luồng dự phòng. Nếu vẫn đen màn hình, vui lòng dùng 4G hoặc VPN.
-            </div>
-         </div>
          <iframe 
             src={fallbackIframe}
             className="w-full h-full border-none outline-none bg-black"
