@@ -39,22 +39,21 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
   const fallbackUrls = [
     `https://video.phacdo.com/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
     `https://vz-371142c2-906.b-cdn.net/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
-    `https://video.bunnycdn.com/play/${libraryId}/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
-    `https://iframe.mediadelivery.net/play/${libraryId}/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
-    `https://player.mediadelivery.net/play/${libraryId}/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
   ];
 
   const handleNextFallback = () => {
     setErrorLevel(prev => {
-       const next = (prev + 1) % fallbackUrls.length;
+       const next = prev + 1;
        localStorage.setItem('phacdo_video_error_level', next.toString());
        return next;
     });
   };
 
   useEffect(() => {
-    const currentUrl = fallbackUrls[errorLevel % fallbackUrls.length];
-    setLoadingMsg(`Đang thử máy chủ ${errorLevel + 1}/${fallbackUrls.length}...`);
+    if (errorLevel >= fallbackUrls.length) return;
+
+    const currentUrl = fallbackUrls[errorLevel];
+    setLoadingMsg(`Đang thử đường truyền ${errorLevel + 1}/${fallbackUrls.length}...`);
     
     let hls: Hls | null = null;
     if (Hls.isSupported() && videoRef.current) {
@@ -99,13 +98,46 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
     };
   }, [url, errorLevel]);
 
+  // Nút reset để xoá cache nếu người dùng muốn thử lại mạng cũ
+  const handleReset = () => {
+    localStorage.removeItem('phacdo_video_error_level');
+    setErrorLevel(0);
+  };
+
+  // Nếu tất cả server trực tiếp đều lỗi (hoặc đã được lưu là lỗi), chuyển sang dùng Iframe
+  if (errorLevel >= fallbackUrls.length && fallbackEmbedUrl) {
+    const fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
+    
+    return (
+       <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto bg-black md:rounded-[2rem] shadow-2xl overflow-hidden">
+         <iframe 
+            src={fallbackIframe}
+            className="w-full h-full border-none outline-none bg-black"
+            loading="lazy" 
+            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
+            allowFullScreen
+         ></iframe>
+         <div className="absolute top-4 left-4 z-[9999] flex gap-2">
+           <button 
+             onClick={handleReset}
+             className="bg-gray-500/80 hover:bg-gray-600 text-white px-3 py-2 rounded-xl backdrop-blur-md transition-all shadow-xl text-sm border border-gray-400"
+             title="Khôi phục máy chủ mặc định nếu bạn đã đổi mạng WiFi/4G"
+           >
+             Khôi phục cài đặt mạng gốc
+           </button>
+         </div>
+       </div>
+    );
+  }
+
   return (
     <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto bg-black md:rounded-[2rem] shadow-2xl overflow-hidden">
       {loadingMsg && (
-        <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/80 backdrop-blur-sm">
+        <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/80 backdrop-blur-sm pointer-events-none">
            <div className="flex flex-col items-center gap-4">
               <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
               <p className="text-white/80 font-medium">{loadingMsg}</p>
+              <p className="text-white/50 text-sm mt-2">Hệ thống đang tự động tối ưu đường truyền...</p>
            </div>
         </div>
       )}
