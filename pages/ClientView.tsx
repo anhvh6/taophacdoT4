@@ -27,12 +27,13 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
   let expires = '';
   let libraryId = '';
   let videoId = '';
+  let fallbackEmbedUrl = '';
   try {
     const urlObj = new URL(url, window.location.origin || 'https://phacdo.com');
     token = urlObj.searchParams.get('token') || '';
     expires = urlObj.searchParams.get('expires') || '';
-    const fallbackEmbed = urlObj.searchParams.get('fallback_embed') || '';
-    libraryId = fallbackEmbed.split('/embed/')[1]?.split('/')[0] || '644769';
+    fallbackEmbedUrl = urlObj.searchParams.get('fallback_embed') || '';
+    libraryId = fallbackEmbedUrl.split('/embed/')[1]?.split('/')[0] || '644769';
     videoId = urlObj.pathname.split('/')[1];
   } catch (e) {}
 
