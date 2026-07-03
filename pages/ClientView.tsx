@@ -14,24 +14,29 @@ import { jwtDecode } from 'jwt-decode';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
 import Hls from 'hls.js';
 
-const HlsVideoPlayer = ({ url }: { url: string }) => {
+const HlsVideoPlayerCore = ({ 
+  url, 
+  serverIndex, 
+  initialTime, 
+  retryCount,
+  onError 
+}: { 
+  url: string, 
+  serverIndex: number, 
+  initialTime: number, 
+  retryCount: number,
+  onError: (time: number) => void 
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [loadingMsg, setLoadingMsg] = useState("Đang kết nối máy chủ...");
-  const [activeServerIndex, setActiveServerIndex] = useState(0);
-  const [retryCount, setRetryCount] = useState(0);
-  const [savedTime, setSavedTime] = useState(0);
+  const [loadingMsg, setLoadingMsg] = useState(retryCount > 0 ? `Đang tự động vượt tường lửa nhà mạng (Lần ${retryCount})...` : "Đang kết nối máy chủ...");
 
   let token = '';
   let expires = '';
-  let libraryId = '';
   let videoId = '';
-  let fallbackEmbedUrl = '';
   try {
     const urlObj = new URL(url, window.location.origin || 'https://phacdo.com');
     token = urlObj.searchParams.get('token') || '';
     expires = urlObj.searchParams.get('expires') || '';
-    fallbackEmbedUrl = urlObj.searchParams.get('fallback_embed') || '';
-    libraryId = fallbackEmbedUrl.split('/embed/')[1]?.split('/')[0] || '644769';
     videoId = urlObj.pathname.split('/')[1];
   } catch (e) {}
 
@@ -40,27 +45,20 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
     `https://vz-371142c2-906.b-cdn.net/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
   ];
 
-  // Nếu đã học được đường truyền tối ưu từ video trước, dùng luôn
   useEffect(() => {
     let isMounted = true;
     let hls: Hls | null = null;
-    let retryTimer: NodeJS.Timeout;
+    let errorHandled = false;
 
-    const currentUrl = fallbackUrls[activeServerIndex];
-    const bypassCacheUrl = `${currentUrl}&retry=${Date.now()}`;
+    const currentUrl = fallbackUrls[serverIndex];
+    const bypassCacheUrl = `${currentUrl}&retry=${Date.now()}_${Math.random()}`;
 
-    const handleNetworkError = () => {
-      if (!isMounted) return;
-      if (videoRef.current && videoRef.current.currentTime > 0) {
-         setSavedTime(videoRef.current.currentTime);
-      }
-      setLoadingMsg(`Đang tự động vượt tường lửa nhà mạng (Lần ${retryCount + 1})...`);
-      
-      retryTimer = setTimeout(() => {
-         if (!isMounted) return;
-         setRetryCount(prev => prev + 1);
-         setActiveServerIndex(prev => (prev + 1) % fallbackUrls.length);
-      }, 1500);
+    const triggerError = () => {
+      if (!isMounted || errorHandled) return;
+      errorHandled = true;
+      const currentTime = videoRef.current ? videoRef.current.currentTime : 0;
+      // Triggers full remount in parent
+      onError(currentTime);
     };
 
     if (Hls.isSupported() && videoRef.current) {
@@ -71,30 +69,27 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (!isMounted) return;
         setLoadingMsg("");
-        setRetryCount(0); // Reset số lần thử khi thành công
-        if (savedTime > 0 && videoRef.current) {
-           videoRef.current.currentTime = savedTime;
+        if (initialTime > 0 && videoRef.current) {
+           videoRef.current.currentTime = initialTime;
         }
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
 
       hls.on(Hls.Events.ERROR, (event, data) => {
         if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-           console.warn("HLS Network Error, auto-switching server...", data);
-           handleNetworkError();
+           console.warn("HLS Network Error, forcing full remount...", data);
+           triggerError();
         }
       });
     } else if (videoRef.current && videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-      // Hỗ trợ Safari iOS
       videoRef.current.src = bypassCacheUrl;
-      videoRef.current.onerror = handleNetworkError;
+      videoRef.current.onerror = triggerError;
       
       const onLoadedMetadata = () => {
         if (!isMounted) return;
         setLoadingMsg("");
-        setRetryCount(0);
-        if (savedTime > 0 && videoRef.current) {
-           videoRef.current.currentTime = savedTime;
+        if (initialTime > 0 && videoRef.current) {
+           videoRef.current.currentTime = initialTime;
         }
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       };
@@ -102,36 +97,15 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       videoRef.current.addEventListener('loadedmetadata', onLoadedMetadata);
       return () => {
          isMounted = false;
-         clearTimeout(retryTimer);
-         if (videoRef.current) {
-            videoRef.current.removeEventListener('loadedmetadata', onLoadedMetadata);
-         }
+         if (videoRef.current) videoRef.current.removeEventListener('loadedmetadata', onLoadedMetadata);
       };
     }
     
     return () => {
       isMounted = false;
-      clearTimeout(retryTimer);
       if (hls) hls.destroy();
     };
-  }, [activeServerIndex]);
-
-  // Nếu thử native HLS thất bại quá 12 lần (tương đương ~20 giây), dùng Iframe làm phương án cuối cùng
-  if (retryCount > 12 && fallbackEmbedUrl) {
-    const fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
-
-    return (
-       <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto bg-black md:rounded-[2rem] shadow-2xl overflow-hidden">
-         <iframe 
-            src={fallbackIframe}
-            className="w-full h-full border-none outline-none bg-black"
-            loading="lazy" 
-            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
-            allowFullScreen
-         ></iframe>
-       </div>
-    );
-  }
+  }, [serverIndex]);
 
   return (
     <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto bg-black md:rounded-[2rem] shadow-2xl overflow-hidden">
@@ -140,19 +114,43 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
            <div className="flex flex-col items-center gap-4">
               <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
               <p className="text-white/80 font-medium">{loadingMsg}</p>
-              <p className="text-white/50 text-sm mt-2">Hệ thống đang tự động tối ưu đường truyền...</p>
+              <p className="text-white/50 text-sm mt-2">Hệ thống đang mô phỏng "tắt đi mở lại" để lách tường lửa...</p>
            </div>
         </div>
       )}
-      <video 
-        ref={videoRef} 
-        controls 
-        className="w-full h-full outline-none"
-        playsInline
-      />
+      <video ref={videoRef} controls className="w-full h-full outline-none" playsInline />
     </div>
   );
 };
+
+const HlsVideoPlayer = ({ url }: { url: string }) => {
+  const [mountKey, setMountKey] = useState(0);
+  const [serverIndex, setServerIndex] = useState(0);
+  const [savedTime, setSavedTime] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
+
+  const handleFatalError = (currentTime: number) => {
+     setSavedTime(currentTime);
+     setServerIndex(prev => (prev + 1) % 2); // 2 is fallbackUrls.length
+     setRetryCount(prev => prev + 1);
+     
+     // Force a full component remount to destroy poisoned TCP sockets
+     setTimeout(() => {
+        setMountKey(k => k + 1);
+     }, 1500); // Wait 1.5s before remounting to prevent rapid looping
+  };
+
+  return (
+     <HlsVideoPlayerCore 
+        key={mountKey} 
+        url={url} 
+        serverIndex={serverIndex} 
+        initialTime={savedTime} 
+        retryCount={retryCount}
+        onError={handleFatalError} 
+     />
+  );
+}
 
 const isFlagEnabled = (value: any, fallback = true) => {
   if (value === undefined || value === null) return fallback;
