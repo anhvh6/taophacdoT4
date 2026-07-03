@@ -16,18 +16,58 @@ import Hls from 'hls.js';
 
 const HlsVideoPlayer = ({ url }: { url: string }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  
+  const [errorLevel, setErrorLevel] = useState(0); 
+
+  let cleanUrl = url;
+  let fallbackEmbedUrl = '';
+  try {
+    const urlObj = new URL(url, window.location.origin || 'https://phacdo.com');
+    fallbackEmbedUrl = urlObj.searchParams.get('fallback_embed') || '';
+    if (fallbackEmbedUrl) {
+      urlObj.searchParams.delete('fallback_embed');
+    }
+    cleanUrl = urlObj.toString();
+  } catch (e) {
+    // fallback if URL parsing fails
+  }
+
   useEffect(() => {
+    if (errorLevel >= 2) return;
+    
+    let currentUrl = cleanUrl;
+    if (errorLevel === 1) {
+       currentUrl = cleanUrl.replace('video.phacdo.com', 'vz-371142c2-906.b-cdn.net');
+    }
+    
     let hls: Hls | null = null;
     if (Hls.isSupported() && videoRef.current) {
-      hls = new Hls();
-      hls.loadSource(url);
+      hls = new Hls({
+         maxMaxBufferLength: 30,
+         manifestLoadingMaxRetry: 2,
+         levelLoadingMaxRetry: 2,
+      });
+      hls.loadSource(currentUrl);
       hls.attachMedia(videoRef.current);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.warn("HLS Network Error, attempting fallback...", data);
+              setErrorLevel(prev => prev + 1);
+              hls?.destroy();
+              break;
+            default:
+              hls?.destroy();
+              break;
+          }
+        }
+      });
     } else if (videoRef.current && videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-      videoRef.current.src = url;
+      videoRef.current.src = currentUrl;
+      videoRef.current.onerror = () => setErrorLevel(prev => prev + 1);
       videoRef.current.addEventListener('loadedmetadata', () => {
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
@@ -35,7 +75,20 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
     return () => {
       if (hls) hls.destroy();
     };
-  }, [url]);
+  }, [cleanUrl, errorLevel]);
+
+  if (errorLevel >= 2 && fallbackEmbedUrl) {
+    const fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
+    return (
+       <iframe 
+          src={fallbackIframe}
+          className="w-full h-full max-w-[1400px] mx-auto md:rounded-[2rem] shadow-2xl border-none outline-none bg-black"
+          loading="lazy" 
+          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
+          allowFullScreen
+       ></iframe>
+    );
+  }
 
   return (
     <video 
@@ -43,7 +96,6 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       controls 
       className="w-full h-full max-w-[1400px] mx-auto md:rounded-[2rem] shadow-2xl bg-black outline-none"
       playsInline
-      autoPlay
     />
   );
 };
@@ -471,8 +523,21 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
              const { data } = await supabase.functions.invoke('get-bunny-video-token', {
                  body: { video_id: trimmedLink, customer_id: dbCustomerId, token: dbToken }
              });
-             // Bypass iframe block bằng cách dùng thẳng link m3u8
-             if (data?.signed_embed_url) setPlayingVideo(`https://video.phacdo.com/${trimmedLink}/playlist.m3u8`);
+             // Bypass iframe block bằng cách dùng thẳng link m3u8 có kèm token
+             if (data?.signed_embed_url) {
+                 let finalUrl = `https://video.phacdo.com/${trimmedLink}/playlist.m3u8`;
+                 try {
+                     const hlsUrlObj = new URL(`https://video.phacdo.com/${trimmedLink}/playlist.m3u8`);
+                     const urlObj = new URL(data.signed_embed_url);
+                     const t = urlObj.searchParams.get('token');
+                     const e = urlObj.searchParams.get('expires');
+                     if (t) hlsUrlObj.searchParams.set('token', t);
+                     if (e) hlsUrlObj.searchParams.set('expires', e);
+                     hlsUrlObj.searchParams.set('fallback_embed', data.signed_embed_url);
+                     finalUrl = hlsUrlObj.toString();
+                 } catch (err) {}
+                 setPlayingVideo(finalUrl);
+             }
          } catch(e) {}
          return;
       }
@@ -601,7 +666,21 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
             if (data?.signed_embed_url) {
                 // Sử dụng custom player với link video trực tiếp
-                setPlayingVideo(`https://video.phacdo.com/${trimmedLink}/playlist.m3u8`);
+                let finalHlsUrl = `https://video.phacdo.com/${trimmedLink}/playlist.m3u8`;
+                try {
+                    const hlsUrlObj = new URL(finalHlsUrl);
+                    const urlObj = new URL(data.signed_embed_url);
+                    const tokenParam = urlObj.searchParams.get('token');
+                    const expiresParam = urlObj.searchParams.get('expires');
+                    if (tokenParam) hlsUrlObj.searchParams.set('token', tokenParam);
+                    if (expiresParam) hlsUrlObj.searchParams.set('expires', expiresParam);
+                    hlsUrlObj.searchParams.set('fallback_embed', data.signed_embed_url);
+                    finalHlsUrl = hlsUrlObj.toString();
+                } catch (e) {
+                    console.warn("Failed to parse signed_embed_url", e);
+                }
+                
+                setPlayingVideo(finalHlsUrl);
                 if (isStudent) {
                     customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
                     markAttendanceLocally(dayNum);
@@ -718,18 +797,16 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           }
         }
 
-        // Logic: Tự động cập nhật TOÀN BỘ nội dung mới nhất từ Lich phac do mỗi khi click
-        let syncOccurred = false;
+        // Logic: Lấy nội dung mới nhất từ Lich phac do mỗi khi click
         if (currentTask) {
           const videoDate = customerData.video_date || customerData.Video_date;
           if (videoDate) {
-            console.log(`User clicked a task. REPLACING ENTIRE PLAN with master plan...`);
+            console.log(`User clicked a task. Merging with latest master plan to display latest content...`);
             const masterTasks = await planService.getMasterPlan(videoDate);
             
             if (masterTasks && masterTasks.length > 0) {
-              // Thay thế toàn bộ phác đồ bằng dữ liệu từ master plan
+              // Thay thế tạm thời phác đồ hiển thị bằng dữ liệu từ master plan để người dùng xem bản cập nhật
               planTasks = masterTasks;
-              syncOccurred = true;
             }
           }
         }
@@ -742,22 +819,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           });
         setTasks(cleanTasks);
 
-        // Ghi lại DB và Cache để lần sau mở ra vẫn là nội dung mới nhất
-        if (syncOccurred && actualId) {
-          try {
-            await customPlanService.saveCustomPlan(actualId, planTasks);
-            console.log("Saved synced tasks back to Lịch trình");
-            
-            // Cập nhật lại cache
-            localStorage.setItem(`phacdo_cache_${customerId}`, JSON.stringify({
-              customer: customerData,
-              tasks: cleanTasks,
-              timestamp: Date.now()
-            }));
-          } catch (e) {
-            console.error("Failed to persist synced tasks:", e);
-          }
-        }
+        // Lưu vào cache cho lần sau (không ghi đè db để tránh Supabase Timeout)
+        localStorage.setItem(`phacdo_cache_${customerId}`, JSON.stringify({
+          customer: customerData,
+          tasks: cleanTasks,
+          timestamp: Date.now()
+        }));
         
         if (selectedTask) {
           const updated = cleanTasks.find(t => t.day === selectedTask.day && t.title === selectedTask.title);
