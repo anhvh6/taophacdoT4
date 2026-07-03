@@ -18,6 +18,7 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [activeMode, setActiveMode] = useState<'racing' | 'hls' | 'iframe'>('racing');
   const [activeUrl, setActiveUrl] = useState<string>('');
+  const [raceAttempts, setRaceAttempts] = useState(1);
 
   const [loadingMsg, setLoadingMsg] = useState("Đang kết nối máy chủ...");
 
@@ -42,22 +43,29 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
 
   useEffect(() => {
     let isMounted = true;
+    let retryTimer: NodeJS.Timeout;
 
     if (activeMode === 'racing') {
-      setLoadingMsg("Đang tối ưu đường truyền siêu tốc...");
+      if (raceAttempts === 1) {
+         setLoadingMsg("Đang tối ưu đường truyền siêu tốc...");
+      } else {
+         setLoadingMsg(`Đang tìm đường mạng dự phòng (Thử lại lần ${raceAttempts}/10)...`);
+      }
       
       const testUrl = (testUrl: string) => {
+         // Thêm tham số ngẫu nhiên để tránh trình duyệt cache kết nối bị lỗi
+         const bypassCacheUrl = `${testUrl}&retry=${Date.now()}_${Math.random()}`;
          return new Promise<string>((resolve, reject) => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => {
                controller.abort();
                reject(new Error("Timeout"));
-            }, 6000); // 6 seconds max for a slow 3G network
+            }, 5000); // 5 seconds max per attempt
 
-            fetch(testUrl, { method: 'GET', signal: controller.signal })
+            fetch(bypassCacheUrl, { method: 'GET', signal: controller.signal })
                .then(res => {
                   clearTimeout(timeoutId);
-                  if (res.ok) resolve(testUrl);
+                  if (res.ok) resolve(testUrl); // Trả về URL gốc, không chứa param bypass cache
                   else reject(new Error("HTTP " + res.status));
                })
                .catch(err => {
@@ -76,13 +84,23 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
          })
          .catch(() => {
             if (isMounted) {
-               setActiveMode('iframe');
+               if (raceAttempts < 10) {
+                  // Thử lại sau 1.5 giây nếu bị nhà mạng chặn
+                  retryTimer = setTimeout(() => {
+                     setRaceAttempts(prev => prev + 1);
+                  }, 1500);
+               } else {
+                  setActiveMode('iframe');
+               }
             }
          });
     }
 
-    return () => { isMounted = false; };
-  }, [url, activeMode]);
+    return () => { 
+       isMounted = false; 
+       clearTimeout(retryTimer); 
+    };
+  }, [url, activeMode, raceAttempts]);
 
   useEffect(() => {
     if (activeMode !== 'hls' || !activeUrl) return;
