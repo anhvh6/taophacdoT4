@@ -19,16 +19,22 @@ const HlsVideoPlayerCore = ({
   serverIndex, 
   initialTime, 
   retryCount,
-  onError 
+  fallbackEmbedUrl,
+  onError,
+  onForceReload
 }: { 
   url: string, 
   serverIndex: number, 
   initialTime: number, 
   retryCount: number,
-  onError: (time: number) => void 
+  fallbackEmbedUrl: string,
+  onError: (time: number) => void,
+  onForceReload: () => void
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [loadingMsg, setLoadingMsg] = useState(retryCount > 0 ? `Đang tự động vượt tường lửa nhà mạng (Lần ${retryCount})...` : "Đang kết nối máy chủ...");
+  const [loadingMsg, setLoadingMsg] = useState(retryCount > 0 ? `Đang lách tường lửa nhà mạng (Lần ${retryCount}/3)...` : "Đang kết nối máy chủ...");
+  const [useIframe, setUseIframe] = useState(false);
+  const [iframeTimeout, setIframeTimeout] = useState(false);
 
   let token = '';
   let expires = '';
@@ -57,8 +63,12 @@ const HlsVideoPlayerCore = ({
       if (!isMounted || errorHandled) return;
       errorHandled = true;
       const currentTime = videoRef.current ? videoRef.current.currentTime : 0;
-      // Triggers full remount in parent
-      onError(currentTime);
+      
+      if (retryCount >= 3) {
+         setUseIframe(true);
+      } else {
+         onError(currentTime);
+      }
     };
 
     if (Hls.isSupported() && videoRef.current) {
@@ -105,7 +115,44 @@ const HlsVideoPlayerCore = ({
       isMounted = false;
       if (hls) hls.destroy();
     };
-  }, [serverIndex]);
+  }, [serverIndex, retryCount]);
+
+  useEffect(() => {
+     let timer: NodeJS.Timeout;
+     if (useIframe) {
+        timer = setTimeout(() => {
+           setIframeTimeout(true);
+        }, 8000); // Sau 8 giây nếu iframe vẫn đen, hiện nút tải lại
+     }
+     return () => clearTimeout(timer);
+  }, [useIframe]);
+
+  if (useIframe && fallbackEmbedUrl) {
+    const fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
+    return (
+       <div className="w-full h-full relative flex flex-col items-center justify-center bg-black md:rounded-[2rem] shadow-2xl overflow-hidden group">
+         <iframe 
+            src={fallbackIframe}
+            className="w-full h-full border-none outline-none bg-black"
+            loading="lazy" 
+            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
+            allowFullScreen
+         ></iframe>
+         
+         {iframeTimeout && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+               <button 
+                  onClick={onForceReload}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-full flex items-center gap-2 shadow-lg transform transition active:scale-95"
+               >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  Tải lại kết nối
+               </button>
+            </div>
+         )}
+       </div>
+    );
+  }
 
   return (
     <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto bg-black md:rounded-[2rem] shadow-2xl overflow-hidden">
@@ -114,7 +161,7 @@ const HlsVideoPlayerCore = ({
            <div className="flex flex-col items-center gap-4">
               <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
               <p className="text-white/80 font-medium">{loadingMsg}</p>
-              <p className="text-white/50 text-sm mt-2">Hệ thống đang mô phỏng "tắt đi mở lại" để lách tường lửa...</p>
+              <p className="text-white/50 text-sm mt-2 text-center px-4">Hệ thống đang tự động tối ưu để vượt qua kiểm duyệt của nhà mạng...</p>
            </div>
         </div>
       )}
@@ -134,11 +181,23 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
      setServerIndex(prev => (prev + 1) % 2); // 2 is fallbackUrls.length
      setRetryCount(prev => prev + 1);
      
-     // Force a full component remount to destroy poisoned TCP sockets
+     // Chờ 2.5s để tránh bị firewall hoặc CDN block vì spam request (DDoS protection)
      setTimeout(() => {
         setMountKey(k => k + 1);
-     }, 1500); // Wait 1.5s before remounting to prevent rapid looping
+     }, 2500); 
   };
+
+  const handleForceReload = () => {
+     setSavedTime(0);
+     setRetryCount(0);
+     setServerIndex(0);
+     setMountKey(k => k + 1);
+  };
+
+  let fallbackEmbedUrl = '';
+  try {
+     fallbackEmbedUrl = new URL(url).searchParams.get('fallback_embed') || '';
+  } catch(e) {}
 
   return (
      <HlsVideoPlayerCore 
@@ -147,7 +206,9 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
         serverIndex={serverIndex} 
         initialTime={savedTime} 
         retryCount={retryCount}
+        fallbackEmbedUrl={fallbackEmbedUrl}
         onError={handleFatalError} 
+        onForceReload={handleForceReload}
      />
   );
 }
