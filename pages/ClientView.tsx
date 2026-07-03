@@ -85,22 +85,41 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       });
     } else if (videoRef.current && videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
       videoRef.current.src = currentUrl;
-      videoRef.current.onerror = () => handleNextFallback();
+      
+      let safariTimeout: NodeJS.Timeout;
+      const onSafariError = () => {
+         clearTimeout(safariTimeout);
+         handleNextFallback();
+      };
+      
+      videoRef.current.onerror = onSafariError;
+      
       videoRef.current.addEventListener('loadedmetadata', () => {
+        clearTimeout(safariTimeout);
         setLoadingMsg("");
         sessionStorage.setItem('phacdo_working_server', errorLevel.toString());
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
+
+      // Safari fallback timeout (phòng trường hợp Safari không bắn ra event error mà cứ quay tròn)
+      safariTimeout = setTimeout(() => {
+         if (videoRef.current && videoRef.current.readyState === 0) {
+            onSafariError();
+         }
+      }, 4000);
     }
     return () => {
       if (hls) hls.destroy();
     };
   }, [url, errorLevel]);
 
-  // Nếu tất cả server trực tiếp đều lỗi (hoặc đã được lưu là lỗi), chuyển sang dùng Iframe
+  // Nếu tất cả server trực tiếp đều lỗi, chuyển sang dùng Iframe
   if (errorLevel >= fallbackUrls.length && fallbackEmbedUrl) {
     const fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
     
+    // Lưu lại trạng thái Iframe để các video sau mở Iframe ngay lập tức (không phải chờ 6s)
+    sessionStorage.setItem('phacdo_working_server', fallbackUrls.length.toString());
+
     return (
        <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto bg-black md:rounded-[2rem] shadow-2xl overflow-hidden">
          <iframe 
