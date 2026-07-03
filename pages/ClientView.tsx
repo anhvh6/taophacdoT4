@@ -16,7 +16,8 @@ import Hls from 'hls.js';
 
 const HlsVideoPlayer = ({ url }: { url: string }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [errorLevel, setErrorLevel] = useState(0);
+  const [activeMode, setActiveMode] = useState<'racing' | 'hls' | 'iframe'>('racing');
+  const [activeUrl, setActiveUrl] = useState<string>('');
 
   const [loadingMsg, setLoadingMsg] = useState("Đang kết nối máy chủ...");
 
@@ -39,27 +40,61 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
     `https://vz-371142c2-906.b-cdn.net/${videoId}/playlist.m3u8?token=${token}&expires=${expires}`,
   ];
 
-  const handleNextFallback = () => {
-    setErrorLevel(prev => prev + 1);
-  };
+  useEffect(() => {
+    let isMounted = true;
+
+    if (activeMode === 'racing') {
+      setLoadingMsg("Đang tối ưu đường truyền siêu tốc...");
+      
+      const testUrl = (testUrl: string) => {
+         return new Promise<string>((resolve, reject) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+               controller.abort();
+               reject(new Error("Timeout"));
+            }, 6000); // 6 seconds max for a slow 3G network
+
+            fetch(testUrl, { method: 'GET', signal: controller.signal })
+               .then(res => {
+                  clearTimeout(timeoutId);
+                  if (res.ok) resolve(testUrl);
+                  else reject(new Error("HTTP " + res.status));
+               })
+               .catch(err => {
+                  clearTimeout(timeoutId);
+                  reject(err);
+               });
+         });
+      };
+
+      Promise.any(fallbackUrls.map(testUrl))
+         .then(workingUrl => {
+            if (isMounted) {
+               setActiveUrl(workingUrl);
+               setActiveMode('hls');
+            }
+         })
+         .catch(() => {
+            if (isMounted) {
+               setActiveMode('iframe');
+            }
+         });
+    }
+
+    return () => { isMounted = false; };
+  }, [url, activeMode]);
 
   useEffect(() => {
-    if (errorLevel >= fallbackUrls.length) return;
+    if (activeMode !== 'hls' || !activeUrl) return;
 
-    const currentUrl = fallbackUrls[errorLevel];
-    setLoadingMsg(`Đang thử đường truyền ${errorLevel + 1}/${fallbackUrls.length}...`);
-    
+    setLoadingMsg("Đang kết nối luồng video...");
     let hls: Hls | null = null;
+    
     if (Hls.isSupported() && videoRef.current) {
       hls = new Hls({
          maxMaxBufferLength: 30,
-         manifestLoadingMaxRetry: 0,
-         manifestLoadingTimeOut: 1500,
-         levelLoadingMaxRetry: 0,
-         levelLoadingTimeOut: 1500,
-         fragLoadingTimeOut: 1500,
       });
-      hls.loadSource(currentUrl);
+      hls.loadSource(activeUrl);
       hls.attachMedia(videoRef.current);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoadingMsg("");
@@ -67,49 +102,26 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       });
       hls.on(Hls.Events.ERROR, (event, data) => {
         if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              console.warn("HLS Network Error, attempting fallback...", data);
-              handleNextFallback();
-              hls?.destroy();
-              break;
-            default:
-              hls?.destroy();
-              break;
-          }
+           console.warn("HLS Error during playback", data);
+           setActiveMode('iframe'); // If it fails during playback, go to iframe
         }
       });
     } else if (videoRef.current && videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-      videoRef.current.src = currentUrl;
-      
-      let safariTimeout: NodeJS.Timeout;
-      const onSafariError = () => {
-         clearTimeout(safariTimeout);
-         handleNextFallback();
-      };
-      
-      videoRef.current.onerror = onSafariError;
-      
+      videoRef.current.src = activeUrl;
+      videoRef.current.onerror = () => setActiveMode('iframe');
       videoRef.current.addEventListener('loadedmetadata', () => {
-        clearTimeout(safariTimeout);
         setLoadingMsg("");
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
-
-      // Safari fallback timeout (phòng trường hợp Safari không bắn ra event error mà cứ quay tròn)
-      safariTimeout = setTimeout(() => {
-         if (videoRef.current && videoRef.current.readyState === 0) {
-            onSafariError();
-         }
-      }, 1500);
     }
+    
     return () => {
       if (hls) hls.destroy();
     };
-  }, [url, errorLevel]);
+  }, [activeMode, activeUrl]);
 
   // Nếu tất cả server trực tiếp đều lỗi, chuyển sang dùng Iframe
-  if (errorLevel >= fallbackUrls.length && fallbackEmbedUrl) {
+  if (activeMode === 'iframe' && fallbackEmbedUrl) {
     const fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
 
     return (
