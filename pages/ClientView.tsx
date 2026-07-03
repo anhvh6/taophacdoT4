@@ -97,12 +97,6 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
     };
   }, [url, errorLevel]);
 
-  // Nút reset để xoá cache nếu người dùng muốn thử lại mạng cũ
-  const handleReset = () => {
-    sessionStorage.removeItem('phacdo_working_server');
-    setErrorLevel(0);
-  };
-
   // Nếu tất cả server trực tiếp đều lỗi (hoặc đã được lưu là lỗi), chuyển sang dùng Iframe
   if (errorLevel >= fallbackUrls.length && fallbackEmbedUrl) {
     const fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
@@ -116,15 +110,6 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
             allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
             allowFullScreen
          ></iframe>
-         <div className="absolute top-4 left-4 z-[9999] flex gap-2">
-           <button 
-             onClick={handleReset}
-             className="bg-gray-500/80 hover:bg-gray-600 text-white px-3 py-2 rounded-xl backdrop-blur-md transition-all shadow-xl text-sm border border-gray-400"
-             title="Khôi phục máy chủ mặc định nếu bạn đã đổi mạng WiFi/4G"
-           >
-             Khôi phục cài đặt mạng gốc
-           </button>
-         </div>
        </div>
     );
   }
