@@ -17,7 +17,7 @@ import Hls from 'hls.js';
 const HlsVideoPlayer = ({ url }: { url: string }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [errorLevel, setErrorLevel] = useState(() => {
-    const saved = localStorage.getItem('phacdo_video_error_level');
+    const saved = sessionStorage.getItem('phacdo_working_server');
     return saved ? parseInt(saved, 10) : 0;
   });
 
@@ -43,11 +43,7 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
   ];
 
   const handleNextFallback = () => {
-    setErrorLevel(prev => {
-       const next = prev + 1;
-       localStorage.setItem('phacdo_video_error_level', next.toString());
-       return next;
-    });
+    setErrorLevel(prev => prev + 1);
   };
 
   useEffect(() => {
@@ -70,6 +66,7 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       hls.attachMedia(videoRef.current);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoadingMsg("");
+        sessionStorage.setItem('phacdo_working_server', errorLevel.toString());
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
       hls.on(Hls.Events.ERROR, (event, data) => {
@@ -91,6 +88,7 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
       videoRef.current.onerror = () => handleNextFallback();
       videoRef.current.addEventListener('loadedmetadata', () => {
         setLoadingMsg("");
+        sessionStorage.setItem('phacdo_working_server', errorLevel.toString());
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
     }
@@ -101,7 +99,7 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
 
   // Nút reset để xoá cache nếu người dùng muốn thử lại mạng cũ
   const handleReset = () => {
-    localStorage.removeItem('phacdo_video_error_level');
+    sessionStorage.removeItem('phacdo_working_server');
     setErrorLevel(0);
   };
 
