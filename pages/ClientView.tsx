@@ -17,14 +17,9 @@ import Hls from 'hls.js';
 const HlsVideoPlayer = ({ url }: { url: string }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loadingMsg, setLoadingMsg] = useState("Đang kết nối máy chủ...");
-  const [activeMode, setActiveMode] = useState<'racing' | 'hls' | 'iframe'>(() => {
-     const cachedMode = localStorage.getItem('phacdo_best_server_mode');
-     return (cachedMode as 'racing' | 'hls' | 'iframe') || 'racing';
-  });
-  const [activeServerIndex, setActiveServerIndex] = useState<number>(() => {
-     return parseInt(localStorage.getItem('phacdo_best_server_index') || '-1', 10);
-  });
-  const [activeUrl, setActiveUrl] = useState<string>('');
+  const [activeServerIndex, setActiveServerIndex] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
+  const [savedTime, setSavedTime] = useState(0);
 
   let token = '';
   let expires = '';
@@ -47,107 +42,82 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
 
   // Nếu đã học được đường truyền tối ưu từ video trước, dùng luôn
   useEffect(() => {
-     if (activeMode === 'hls' && activeServerIndex >= 0 && activeServerIndex < fallbackUrls.length) {
-        setActiveUrl(fallbackUrls[activeServerIndex]);
-     }
-  }, [activeMode, activeServerIndex, videoId, token, expires]);
-
-  useEffect(() => {
     let isMounted = true;
-
-    if (activeMode === 'racing') {
-      setLoadingMsg("Đang tự động tối ưu và tìm đường truyền ổn định nhất...");
-      
-      const testUrl = (testUrl: string, index: number) => {
-         const bypassCacheUrl = `${testUrl}&retry=${Date.now()}`;
-         return new Promise<{url: string, index: number}>((resolve, reject) => {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => {
-               controller.abort();
-               reject(new Error("Timeout"));
-            }, 3000); // Tối đa 3 giây
-
-            fetch(bypassCacheUrl, { method: 'GET', signal: controller.signal })
-               .then(res => {
-                  clearTimeout(timeoutId);
-                  if (res.ok) resolve({ url: testUrl, index }); 
-                  else reject(new Error("HTTP " + res.status));
-               })
-               .catch(err => {
-                  clearTimeout(timeoutId);
-                  reject(err);
-               });
-         });
-      };
-
-      Promise.any(fallbackUrls.map((url, index) => testUrl(url, index)))
-         .then(({ url: workingUrl, index: workingIndex }) => {
-            if (isMounted) {
-               setActiveServerIndex(workingIndex);
-               setActiveUrl(workingUrl);
-               setActiveMode('hls');
-               // Tự học: Lưu lại đường truyền tốt nhất vào CSDL cục bộ
-               localStorage.setItem('phacdo_best_server_mode', 'hls');
-               localStorage.setItem('phacdo_best_server_index', workingIndex.toString());
-            }
-         })
-         .catch(() => {
-            if (isMounted) {
-               setActiveMode('iframe');
-               // Tự học: Lưu lại Iframe là giải pháp tốt nhất cho mạng này
-               localStorage.setItem('phacdo_best_server_mode', 'iframe');
-            }
-         });
-    }
-
-    return () => { isMounted = false; };
-  }, [url, activeMode]);
-
-  useEffect(() => {
-    if (activeMode !== 'hls' || !activeUrl) return;
-
-    setLoadingMsg("Đang kết nối luồng video...");
     let hls: Hls | null = null;
-    
+    let retryTimer: NodeJS.Timeout;
+
+    const currentUrl = fallbackUrls[activeServerIndex];
+    const bypassCacheUrl = `${currentUrl}&retry=${Date.now()}`;
+
+    const handleNetworkError = () => {
+      if (!isMounted) return;
+      if (videoRef.current && videoRef.current.currentTime > 0) {
+         setSavedTime(videoRef.current.currentTime);
+      }
+      setLoadingMsg(`Đang tự động vượt tường lửa nhà mạng (Lần ${retryCount + 1})...`);
+      
+      retryTimer = setTimeout(() => {
+         if (!isMounted) return;
+         setRetryCount(prev => prev + 1);
+         setActiveServerIndex(prev => (prev + 1) % fallbackUrls.length);
+      }, 1500);
+    };
+
     if (Hls.isSupported() && videoRef.current) {
-      hls = new Hls({
-         maxMaxBufferLength: 30,
-      });
-      hls.loadSource(activeUrl);
+      hls = new Hls({ maxMaxBufferLength: 30 });
+      hls.loadSource(bypassCacheUrl);
       hls.attachMedia(videoRef.current);
+      
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (!isMounted) return;
         setLoadingMsg("");
+        setRetryCount(0); // Reset số lần thử khi thành công
+        if (savedTime > 0 && videoRef.current) {
+           videoRef.current.currentTime = savedTime;
+        }
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
       });
+
       hls.on(Hls.Events.ERROR, (event, data) => {
-        if (data.fatal) {
-           console.warn("HLS Error during playback", data);
-           // Nếu đường truyền đã lưu bị lỗi, xoá bộ nhớ và nhảy sang iframe
-           localStorage.removeItem('phacdo_best_server_mode');
-           localStorage.removeItem('phacdo_best_server_index');
-           setActiveMode('iframe'); 
+        if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+           console.warn("HLS Network Error, auto-switching server...", data);
+           handleNetworkError();
         }
       });
     } else if (videoRef.current && videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-      videoRef.current.src = activeUrl;
-      videoRef.current.onerror = () => {
-         localStorage.removeItem('phacdo_best_server_mode');
-         localStorage.removeItem('phacdo_best_server_index');
-         setActiveMode('iframe');
-      };
-      videoRef.current.addEventListener('loadedmetadata', () => {
+      // Hỗ trợ Safari iOS
+      videoRef.current.src = bypassCacheUrl;
+      videoRef.current.onerror = handleNetworkError;
+      
+      const onLoadedMetadata = () => {
+        if (!isMounted) return;
         setLoadingMsg("");
+        setRetryCount(0);
+        if (savedTime > 0 && videoRef.current) {
+           videoRef.current.currentTime = savedTime;
+        }
         videoRef.current?.play().catch(() => console.log("Auto-play prevented"));
-      });
+      };
+      
+      videoRef.current.addEventListener('loadedmetadata', onLoadedMetadata);
+      return () => {
+         isMounted = false;
+         clearTimeout(retryTimer);
+         if (videoRef.current) {
+            videoRef.current.removeEventListener('loadedmetadata', onLoadedMetadata);
+         }
+      };
     }
     
     return () => {
+      isMounted = false;
+      clearTimeout(retryTimer);
       if (hls) hls.destroy();
     };
-  }, [activeMode, activeUrl]);
+  }, [activeServerIndex]);
 
-  // Nếu tất cả server trực tiếp đều lỗi, chuyển sang dùng Iframe
-  if (activeMode === 'iframe' && fallbackEmbedUrl) {
+  // Nếu thử native HLS thất bại quá 12 lần (tương đương ~20 giây), dùng Iframe làm phương án cuối cùng
+  if (retryCount > 12 && fallbackEmbedUrl) {
     const fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
 
     return (
