@@ -78,15 +78,28 @@ const HlsVideoPlayer = ({ url }: { url: string }) => {
   }, [cleanUrl, errorLevel]);
 
   if (errorLevel >= 2 && fallbackEmbedUrl) {
-    const fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
+    let fallbackIframe = fallbackEmbedUrl;
+    if (errorLevel % 3 === 2) fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'iframe.mediadelivery.net');
+    if (errorLevel % 3 === 0) fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'video.bunnycdn.com');
+    if (errorLevel % 3 === 1) fallbackIframe = fallbackEmbedUrl.replace('video.phacdo.com', 'player.mediadelivery.net');
+
     return (
-       <iframe 
-          src={fallbackIframe}
-          className="w-full h-full max-w-[1400px] mx-auto md:rounded-[2rem] shadow-2xl border-none outline-none bg-black"
-          loading="lazy" 
-          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
-          allowFullScreen
-       ></iframe>
+       <div className="w-full h-full relative flex flex-col items-center justify-center max-w-[1400px] mx-auto">
+         <iframe 
+            key={fallbackIframe}
+            src={fallbackIframe}
+            className="w-full h-full md:rounded-[2rem] shadow-2xl border-none outline-none bg-black"
+            loading="lazy" 
+            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
+            allowFullScreen
+         ></iframe>
+         <button 
+           onClick={() => setErrorLevel(prev => prev + 1)}
+           className="absolute top-4 left-4 z-[9999] bg-red-500/80 hover:bg-red-600 text-white px-4 py-2 rounded-xl backdrop-blur-md transition-all shadow-xl font-medium text-sm border border-red-400"
+         >
+           Lỗi video? Bấm đổi máy chủ ({errorLevel - 1})
+         </button>
+       </div>
     );
   }
 
@@ -273,11 +286,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         });
       
       setTasks(cleanTasks);
-
-      // Nếu có sync, ghi lại vào DB để lần sau mở ra vẫn là nội dung mới nhất
-      if (syncOccurred && actualId) {
-        customPlanService.saveCustomPlan(actualId, planTasks).catch(e => console.error("Failed to persist auto-synced tasks:", e));
-      }
 
       // Lưu vào cache cho lần sau
       safeSetLocalStorage(`phacdo_cache_${customerId}`, JSON.stringify({
