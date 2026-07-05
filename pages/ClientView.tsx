@@ -2001,9 +2001,19 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
       {/* 🚀 THE BUNNY FULLSCREEN VIDEO MODAL */}
       {playingVideo && (
-         <div id="bunny-fullscreen-modal" className="fixed inset-0 z-[9000] bg-black flex flex-col animate-in fade-in duration-300">
-           <div className="absolute top-6 right-6 z-10 flex gap-4">
-
+         <div id="bunny-fullscreen-modal" className="fixed inset-0 z-[9000] bg-black flex flex-col animate-in fade-in duration-300" onMouseMove={() => {
+            const btn = document.getElementById('bunny-close-btn');
+            if (btn) {
+               btn.style.opacity = '1';
+               btn.style.pointerEvents = 'auto';
+               if ((window as any).bunnyCloseTimeout) clearTimeout((window as any).bunnyCloseTimeout);
+               (window as any).bunnyCloseTimeout = setTimeout(() => {
+                  btn.style.opacity = '0';
+                  btn.style.pointerEvents = 'none';
+               }, 3000);
+            }
+         }}>
+           <div id="bunny-close-btn" className="absolute top-6 right-6 z-[9999] flex gap-4 transition-opacity duration-300">
              <button onClick={() => {
                 setPlayingVideo(null);
                 try {
@@ -2026,9 +2036,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
                         className="w-full h-full md:rounded-[2rem] shadow-2xl border-none outline-none bg-black"
                         loading="lazy" 
-                        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
+                        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
                         sandbox="allow-scripts allow-same-origin allow-presentation"
-                        allowFullScreen
                      ></iframe>
                      
                      {/* OVERLAYS TO HIDE YOUTUBE BRANDING (Title, Author, Copy Link, Logo) */}
