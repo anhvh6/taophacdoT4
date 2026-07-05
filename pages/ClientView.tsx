@@ -13,7 +13,13 @@ import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
 import Hls from 'hls.js';
-import ReactPlayer from 'react-player';
+
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: () => void;
+  }
+}
 
 // ==========================================
 // 🚀 CUSTOM YOUTUBE PLAYER COMPONENT
@@ -24,7 +30,10 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isReady, setIsReady] = useState(false);
+  
+  const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
+  const progressInterval = useRef<any>(null);
 
   const formatTime = (seconds: number) => {
     if (isNaN(seconds)) return '0:00';
@@ -33,22 +42,98 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // Extract video ID from embed URL if necessary
-  const getCleanUrl = (rawUrl: string) => {
-     if (rawUrl.includes('/embed/')) {
-        const match = rawUrl.match(/embed\/([^?]+)/);
-        if (match && match[1]) {
-           return `https://www.youtube.com/watch?v=${match[1]}`;
+  // Extract video ID safely
+  const videoId = url.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|v=))([\w-]{11})/)?.[1] || url.match(/embed\/([^?]+)/)?.[1];
+
+  useEffect(() => {
+    if (!videoId || !containerRef.current) return;
+
+    const initPlayer = () => {
+      playerRef.current = new window.YT.Player(containerRef.current, {
+        videoId,
+        playerVars: {
+          controls: 0,
+          rel: 0,
+          showinfo: 0,
+          modestbranding: 1,
+          iv_load_policy: 3,
+          fs: 0,
+          disablekb: 1,
+          playsinline: 1,
+          autoplay: 1,
+          origin: window.location.origin
+        },
+        events: {
+          onReady: (e: any) => {
+            setIsReady(true);
+            setDuration(e.target.getDuration());
+            e.target.playVideo();
+          },
+          onStateChange: (e: any) => {
+            if (e.data === 1) setPlaying(true); // PLAYING
+            if (e.data === 2 || e.data === 0) setPlaying(false); // PAUSED or ENDED
+          }
         }
+      });
+    };
+
+    if (!window.YT || !window.YT.Player) {
+      const tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
+      window.onYouTubeIframeAPIReady = initPlayer;
+    } else {
+      initPlayer();
+    }
+
+    return () => {
+      if (playerRef.current && playerRef.current.destroy) {
+        playerRef.current.destroy();
+      }
+      clearInterval(progressInterval.current);
+    };
+  }, [videoId]);
+
+  // Sync progress
+  useEffect(() => {
+    if (!isReady || !playing) {
+       clearInterval(progressInterval.current);
+       return;
+    }
+    progressInterval.current = setInterval(() => {
+      if (playerRef.current && playerRef.current.getCurrentTime && duration > 0) {
+        setPlayed(playerRef.current.getCurrentTime() / duration);
+      }
+    }, 1000);
+    return () => clearInterval(progressInterval.current);
+  }, [isReady, playing, duration]);
+
+  const togglePlay = () => {
+     if (!playerRef.current) return;
+     if (playing) {
+        playerRef.current.pauseVideo();
+     } else {
+        playerRef.current.playVideo();
      }
-     return rawUrl;
   };
-  
-  const cleanUrl = getCleanUrl(url);
+
+  const handleSeek = (pos: number) => {
+     if (!playerRef.current || duration === 0) return;
+     playerRef.current.seekTo(pos * duration, true);
+     setPlayed(pos);
+  };
+
+  const handleSpeedChange = (speed: number) => {
+     setPlaybackRate(speed);
+     if (playerRef.current && playerRef.current.setPlaybackRate) {
+        playerRef.current.setPlaybackRate(speed);
+     }
+  };
 
   return (
     <div className="relative w-full h-full max-w-[1400px] mx-auto bg-black flex flex-col group md:rounded-[1rem] overflow-hidden">
-      <div className="flex-1 w-full h-full flex items-center justify-center cursor-pointer relative" onClick={() => setPlaying(!playing)}>
+      <div className="flex-1 w-full h-full flex items-center justify-center cursor-pointer relative" onClick={togglePlay}>
         
         {/* Loading Spinner */}
         {!isReady && (
@@ -57,37 +142,9 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
            </div>
         )}
 
-        {/* Render ReactPlayer with pointer-events-none to block native clicks and overlays */}
+        {/* Render Native Iframe Wrapper */}
         <div className={`w-full h-full pointer-events-none transition-opacity duration-500 ${isReady ? 'opacity-100' : 'opacity-0'}`}>
-          <ReactPlayer
-            ref={playerRef}
-            url={cleanUrl}
-            width="100%"
-            height="100%"
-            playing={playing}
-            controls={false}
-            playbackRate={playbackRate}
-            onProgress={(s) => setPlayed(s.played)}
-            onDuration={(d) => setDuration(d)}
-            onReady={() => setIsReady(true)}
-            onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
-            onEnded={() => setPlaying(false)}
-            playsinline={true}
-            config={{
-               youtube: {
-                  playerVars: {
-                     showinfo: 0,
-                     rel: 0,
-                     modestbranding: 1,
-                     iv_load_policy: 3,
-                     fs: 0,
-                     disablekb: 1,
-                     origin: typeof window !== 'undefined' ? window.location.origin : ''
-                  }
-               }
-            }}
-          />
+          <div ref={containerRef} className="w-full h-full border-none outline-none" />
         </div>
       </div>
       
@@ -96,7 +153,7 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
          className="absolute bottom-0 left-0 right-0 h-[80px] bg-gradient-to-t from-black/90 to-transparent flex items-end pb-4 px-6 gap-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 pointer-events-auto z-[1000]"
          onClick={(e) => e.stopPropagation()}
       >
-         <button onClick={() => setPlaying(!playing)} className="text-white hover:scale-110 transition active:scale-95 bg-white/20 p-2 rounded-full backdrop-blur-md">
+         <button onClick={togglePlay} className="text-white hover:scale-110 transition active:scale-95 bg-white/20 p-2 rounded-full backdrop-blur-md">
             {playing ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor" className="ml-1"/>}
          </button>
          
@@ -105,11 +162,9 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
          </div>
          
          <div className="flex-1 flex items-center h-full group/slider relative cursor-pointer" onClick={(e) => {
-            if (!playerRef.current) return;
             const rect = e.currentTarget.getBoundingClientRect();
             const pos = (e.clientX - rect.left) / rect.width;
-            playerRef.current.seekTo(pos);
-            setPlayed(pos); // Optimistic UI update
+            handleSeek(pos);
          }}>
             <div className="w-full h-1.5 bg-white/30 rounded-full relative overflow-hidden">
                <div className="absolute top-0 left-0 h-full bg-[#0068ff]" style={{ width: `${played * 100}%` }}></div>
@@ -120,7 +175,7 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
             <span className="text-white/70 text-xs mr-1 font-medium">Tốc độ:</span>
             <select 
                value={playbackRate} 
-               onChange={(e) => setPlaybackRate(parseFloat(e.target.value))}
+               onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
                className="bg-transparent text-white border-none outline-none text-sm font-bold cursor-pointer appearance-none text-center"
                style={{ WebkitAppearance: 'none' }}
             >
