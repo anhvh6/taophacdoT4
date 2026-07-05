@@ -606,7 +606,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
       const match = url.match(regExp);
       if (match && match[2].length === 11) {
-        return `https://www.youtube.com/embed/${match[2]}?autoplay=1&rel=0&modestbranding=1&controls=0&showinfo=0&iv_load_policy=3&disablekb=1&fs=1&playsinline=1`;
+        return `https://www.youtube.com/embed/${match[2]}?autoplay=1&rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&fs=1&playsinline=1`;
       }
       return null;
     };
@@ -2027,17 +2027,18 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         className="w-full h-full md:rounded-[2rem] shadow-2xl border-none outline-none bg-black"
                         loading="lazy" 
                         allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
+                        sandbox="allow-scripts allow-same-origin allow-presentation"
                         allowFullScreen
                      ></iframe>
                      
-                     {/* OVERLAYS TO HIDE YOUTUBE BRANDING (Title, Author, Logo, Copy Link) */}
+                     {/* OVERLAYS TO HIDE YOUTUBE BRANDING (Title, Author) */}
                      {playingVideo.includes('youtube.com') && (
                         <>
-                           {/* Top overlay to hide Title and Author */}
-                           <div className="absolute top-0 left-0 right-0 h-[80px] bg-black z-[100] pointer-events-none md:rounded-t-[2rem]"></div>
-                           
-                           {/* Bottom overlay to hide YouTube logo and Copy Link */}
-                           <div className="absolute bottom-0 left-0 right-0 h-[70px] bg-black z-[100] pointer-events-none md:rounded-b-[2rem]"></div>
+                           {/* Top overlay to visually hide Title and Author, and block physical clicks */}
+                           <div 
+                             className="absolute top-0 left-0 right-0 h-[80px] bg-black z-[100] md:rounded-t-[2rem] cursor-default" 
+                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                           ></div>
                         </>
                      )}
                  </div>
