@@ -185,7 +185,17 @@ export const api = {
       }
     }
 
-    return { customer, tasks: (tasks || []) };
+    const deduplicate = (list: any[]) => {
+      const seen = new Set();
+      return list.filter(t => {
+        const key = `${t.day}-${(t.title || "").trim()}-${(t.link || "").trim()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    };
+
+    return { customer, tasks: deduplicate(tasks || []) };
   },
 
   assignCourseVideos: youtubeAccessService.assignCourseVideos,

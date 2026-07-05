@@ -386,9 +386,19 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         }
       }
 
-      const cleanTasks = (planTasks || [])
-        .filter(task => !task.is_deleted && task.day <= 30)
-        .sort((a, b) => {
+      const deduplicate = (list: any[]) => {
+        const seen = new Set();
+        return list.filter(t => {
+          const key = `${t.day}-${(t.title || "").trim()}-${(t.link || "").trim()}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      };
+
+      const cleanTasks = deduplicate(planTasks || [])
+        .filter((task: any) => !task.is_deleted && task.day <= 30)
+        .sort((a: any, b: any) => {
           if (a.day !== b.day) return a.day - b.day;
           return (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true });
         });
