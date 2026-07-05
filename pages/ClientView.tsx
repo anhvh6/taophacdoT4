@@ -115,7 +115,7 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
   useEffect(() => {
     let timeout: any;
     if (playing && showControls) {
-       timeout = setTimeout(() => setShowControls(false), 2500);
+       timeout = setTimeout(() => setShowControls(false), 5000);
     }
     return () => clearTimeout(timeout);
   }, [playing, showControls]);
@@ -164,10 +164,10 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
         <div className="absolute inset-0 z-[100]"></div>
 
         {/* Cover top area to hide YouTube title, avatar, and share button with a smooth gradient */}
-        <div className="absolute top-0 left-0 right-0 h-[90px] bg-gradient-to-b from-black via-black/90 to-transparent z-[120] pointer-events-none opacity-90"></div>
+        <div className={`absolute top-0 left-0 right-0 h-[90px] bg-gradient-to-b from-black via-black/90 to-transparent z-[120] pointer-events-none transition-opacity duration-500 ${showControls ? 'opacity-90' : 'opacity-0'}`}></div>
         
         {/* Cover bottom area to hide YouTube logo */}
-        <div className="absolute bottom-0 left-0 right-0 h-[60px] bg-gradient-to-t from-black via-black/90 to-transparent z-[120] pointer-events-none opacity-90"></div>
+        <div className={`absolute bottom-0 left-0 right-0 h-[60px] bg-gradient-to-t from-black via-black/90 to-transparent z-[120] pointer-events-none transition-opacity duration-500 ${showControls ? 'opacity-90' : 'opacity-0'}`}></div>
       </div>
       
       {/* Custom Control Bar */}
@@ -183,14 +183,47 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
             {formatTime(played * duration)} / {formatTime(duration)}
          </div>
          
-         <div className="flex-1 flex items-center h-full group/slider relative cursor-pointer" onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const pos = (e.clientX - rect.left) / rect.width;
-            handleSeek(pos);
-         }}>
-            <div className="w-full h-1.5 bg-white/30 rounded-full relative overflow-hidden">
-               <div className="absolute top-0 left-0 h-full bg-[#0068ff]" style={{ width: `${played * 100}%` }}></div>
-            </div>
+         <div className="flex-1 flex items-center relative py-2">
+            <input 
+               type="range" 
+               min={0} 
+               max={0.999999} 
+               step="any"
+               value={played}
+               onChange={(e) => handleSeek(parseFloat(e.target.value))}
+               onMouseDown={() => setShowControls(true)}
+               onTouchStart={() => setShowControls(true)}
+               className="w-full h-1.5 bg-white/30 rounded-full appearance-none cursor-pointer outline-none relative z-10"
+               style={{
+                  background: `linear-gradient(to right, #0068ff ${played * 100}%, rgba(255,255,255,0.3) ${played * 100}%)`
+               }}
+            />
+            <style>
+               {`
+                  input[type=range]::-webkit-slider-thumb {
+                     -webkit-appearance: none;
+                     height: 16px;
+                     width: 16px;
+                     border-radius: 50%;
+                     background: #ffffff;
+                     cursor: pointer;
+                     box-shadow: 0 0 10px rgba(0,0,0,0.5);
+                     transition: transform 0.1s;
+                  }
+                  input[type=range]::-webkit-slider-thumb:active {
+                     transform: scale(1.3);
+                  }
+                  input[type=range]::-moz-range-thumb {
+                     height: 16px;
+                     width: 16px;
+                     border-radius: 50%;
+                     background: #ffffff;
+                     cursor: pointer;
+                     border: none;
+                     box-shadow: 0 0 10px rgba(0,0,0,0.5);
+                  }
+               `}
+            </style>
          </div>
          
          <div className="flex items-center bg-white/10 rounded-lg px-2 py-1 backdrop-blur-md">
