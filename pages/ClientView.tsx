@@ -95,6 +95,8 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
     };
   }, [videoId]);
 
+  const [showControls, setShowControls] = useState(true);
+
   // Sync progress
   useEffect(() => {
     if (!isReady || !playing) {
@@ -109,7 +111,17 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
     return () => clearInterval(progressInterval.current);
   }, [isReady, playing, duration]);
 
-  const togglePlay = () => {
+  // Auto-hide controls
+  useEffect(() => {
+    let timeout: any;
+    if (playing && showControls) {
+       timeout = setTimeout(() => setShowControls(false), 2500);
+    }
+    return () => clearTimeout(timeout);
+  }, [playing, showControls]);
+
+  const handleVideoTap = () => {
+     setShowControls(true);
      if (!playerRef.current) return;
      if (playing) {
         playerRef.current.pauseVideo();
@@ -132,8 +144,8 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
   };
 
   return (
-    <div className="relative w-full h-full max-w-[1400px] mx-auto bg-black flex flex-col group md:rounded-[1rem] overflow-hidden">
-      <div className="flex-1 w-full h-full flex items-center justify-center cursor-pointer relative" onClick={togglePlay}>
+    <div className="relative w-full h-full max-w-[1400px] mx-auto bg-black flex flex-col group md:rounded-[1rem] overflow-hidden" onMouseMove={() => setShowControls(true)} onTouchStart={() => setShowControls(true)}>
+      <div className="flex-1 w-full h-full flex items-center justify-center cursor-pointer relative" onClick={handleVideoTap}>
         
         {/* Loading Spinner */}
         {!isReady && (
@@ -142,24 +154,28 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
            </div>
         )}
 
+        {/* Render Native Iframe Wrapper FIRST in DOM so it's at the bottom of the stacking context */}
+        <div className={`absolute inset-[-10px] w-[calc(100%+20px)] h-[calc(100%+20px)] pointer-events-none transition-opacity duration-500 transform scale-[1.05] ${isReady ? 'opacity-100' : 'opacity-0'}`}>
+          <div ref={containerRef} className="w-full h-full border-none outline-none" />
+        </div>
+
+        {/* OVERLAYS MUST BE AFTER IFRAME TO BE ON TOP */}
         {/* Transparent Overlay to block ALL YouTube interactions */}
         <div className="absolute inset-0 z-[100]"></div>
 
         {/* Cover top area to hide YouTube title, avatar, and share button with a smooth gradient */}
         <div className="absolute top-0 left-0 right-0 h-[90px] bg-gradient-to-b from-black via-black/90 to-transparent z-[120] pointer-events-none opacity-90"></div>
-
-        {/* Render Native Iframe Wrapper with zoom to hide edge watermarks */}
-        <div className={`w-full h-full pointer-events-none transition-opacity duration-500 transform scale-[1.05] ${isReady ? 'opacity-100' : 'opacity-0'}`}>
-          <div ref={containerRef} className="w-full h-full border-none outline-none" />
-        </div>
+        
+        {/* Cover bottom area to hide YouTube logo */}
+        <div className="absolute bottom-0 left-0 right-0 h-[60px] bg-gradient-to-t from-black via-black/90 to-transparent z-[120] pointer-events-none opacity-90"></div>
       </div>
       
       {/* Custom Control Bar */}
       <div 
-         className="absolute bottom-0 left-0 right-0 h-[80px] bg-gradient-to-t from-black/90 to-transparent flex items-end pb-4 px-6 gap-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 pointer-events-auto z-[1000]"
+         className={`absolute bottom-0 left-0 right-0 h-[80px] flex items-end pb-4 px-6 gap-4 transition-all duration-300 pointer-events-auto z-[1000] ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}
          onClick={(e) => e.stopPropagation()}
       >
-         <button onClick={togglePlay} className="text-white hover:scale-110 transition active:scale-95 bg-white/20 p-2 rounded-full backdrop-blur-md">
+         <button onClick={handleVideoTap} className="text-white hover:scale-110 transition active:scale-95 bg-white/20 p-2 rounded-full backdrop-blur-md">
             {playing ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor" className="ml-1"/>}
          </button>
          
