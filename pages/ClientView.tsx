@@ -2031,13 +2031,43 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         allowFullScreen
                      ></iframe>
                      
-                     {/* OVERLAYS TO HIDE YOUTUBE BRANDING (Title, Author) */}
+                     {/* OVERLAYS TO HIDE YOUTUBE BRANDING (Title, Author, Copy Link, Logo) */}
                      {playingVideo.includes('youtube.com') && (
                         <>
+                           <style>{`
+                              .yt-overlay-top {
+                                 position: absolute; top: 0; left: 0; right: 0; height: 120px; background: black; z-index: 100; cursor: default;
+                              }
+                              .yt-overlay-bottom-left {
+                                 position: absolute; bottom: 0; left: 0; width: 80px; height: 48px; background: black; z-index: 100; cursor: default;
+                              }
+                              .yt-overlay-bottom-right {
+                                 position: absolute; bottom: 0; right: 0; width: 110px; height: 48px; background: black; z-index: 100; cursor: default;
+                              }
+                              @media (min-aspect-ratio: 1/1) {
+                                 /* On desktop/landscape, controls are single-row, no bottom icons needed */
+                                 .yt-overlay-bottom-left, .yt-overlay-bottom-right {
+                                    display: none;
+                                 }
+                              }
+                           `}</style>
                            {/* Top overlay to visually hide Title and Author, and block physical clicks */}
                            <div 
-                             className="absolute top-0 left-0 right-0 h-[80px] bg-black z-[100] md:rounded-t-[2rem] cursor-default" 
+                             className="yt-overlay-top md:rounded-t-[2rem]" 
                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                             onMouseOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                           ></div>
+                           
+                           {/* Bottom overlays to hide Copy Link and YouTube logo on mobile/vertical layouts */}
+                           <div 
+                             className="yt-overlay-bottom-left md:rounded-bl-[2rem]" 
+                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                             onMouseOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                           ></div>
+                           <div 
+                             className="yt-overlay-bottom-right md:rounded-br-[2rem]" 
+                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                             onMouseOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                            ></div>
                         </>
                      )}
