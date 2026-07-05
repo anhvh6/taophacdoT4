@@ -1141,6 +1141,12 @@ export const PlanEditor: React.FC<{
                     }}
                   >
                     <option value="|">-- Chọn nhóm video --</option>
+                    {/* Đảm bảo nhóm hiện tại luôn được hiển thị dù đã bị xóa khỏi danh sách gốc */}
+                    {customer.video_date && !sortedDates.some(d => d.video_date === customer.video_date && (d.nhom || "") === (customer.ma_vd || "")) && (
+                      <option value={`${customer.video_date}|${customer.ma_vd || ""}`}>
+                        {customer.ma_vd ? `${customer.ma_vd} (Cũ)` : `${formatDDMM(customer.video_date)} (Cũ)`}
+                      </option>
+                    )}
                     {sortedDates.map((d: any, idx) => <option key={idx} value={`${d.video_date}|${d.nhom || ""}`}>{d.nhom ? `${d.nhom}` : formatDDMM(d.video_date)}</option>)}
                   </select>
                   <Button variant="secondary" size="sm" onClick={manualSyncTemplate} disabled={!customer.video_date || isSyncing}>

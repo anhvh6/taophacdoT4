@@ -24,8 +24,8 @@ declare global {
 // ==========================================
 // 🚀 CUSTOM YOUTUBE PLAYER COMPONENT
 // ==========================================
-const CustomYouTubePlayer = ({ url }: { url: string }) => {
-  const [playing, setPlaying] = useState(true);
+const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => void }) => {
+  const [playing, setPlaying] = useState(false);
   const [played, setPlayed] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -142,8 +142,11 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
            </div>
         )}
 
-        {/* Render Native Iframe Wrapper */}
-        <div className={`w-full h-full pointer-events-none transition-opacity duration-500 ${isReady ? 'opacity-100' : 'opacity-0'}`}>
+        {/* Transparent Overlay to block ALL YouTube interactions */}
+        <div className="absolute inset-0 z-[100]"></div>
+
+        {/* Render Native Iframe Wrapper with slight zoom to hide edge watermarks */}
+        <div className={`w-full h-full pointer-events-none transition-opacity duration-500 transform scale-[1.02] ${isReady ? 'opacity-100' : 'opacity-0'}`}>
           <div ref={containerRef} className="w-full h-full border-none outline-none" />
         </div>
       </div>
@@ -187,6 +190,10 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
                <option value="2" className="text-black">2x</option>
             </select>
          </div>
+
+         <button onClick={onClose} className="text-white hover:bg-red-500 hover:text-white transition active:scale-95 bg-white/10 p-2 rounded-lg backdrop-blur-md ml-2 flex items-center gap-1">
+            <X size={20} /> <span className="text-sm font-bold hidden sm:inline">Đóng</span>
+         </button>
       </div>
       
       {/* Giant center play button when paused */}
@@ -2220,7 +2227,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                  </div>
               ) : (
                  playingVideo.includes('youtube.com') || playingVideo.includes('youtu.be') ? (
-                    <CustomYouTubePlayer url={playingVideo} />
+                    <CustomYouTubePlayer url={playingVideo} onClose={() => {
+                       setPlayingVideo(null);
+                       try {
+                          if (document.fullscreenElement) document.exitFullscreen();
+                          else if ((document as any).webkitFullscreenElement) (document as any).webkitExitFullscreen();
+                       } catch(e) {}
+                    }} />
                  ) : (
                     <div className="relative w-full h-full max-w-[1400px] mx-auto flex items-center justify-center bg-black">
                         <iframe 
