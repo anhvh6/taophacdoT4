@@ -177,7 +177,11 @@ export const api = {
     let tasks = await customPlanService.getCustomPlan(id);
     if (!tasks || tasks.length === 0) {
       if (customer.video_date) {
-        tasks = await planService.getMasterPlan(customer.video_date);
+        let masterTasks = await planService.getMasterPlan(customer.video_date);
+        if (customer.ma_vd) {
+          masterTasks = masterTasks.filter(t => t.nhom === customer.ma_vd);
+        }
+        tasks = masterTasks;
       }
     }
 

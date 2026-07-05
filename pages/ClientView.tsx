@@ -343,12 +343,18 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       
       if (customTasks && customTasks.length > 0) {
         planTasks = customTasks;
+        if (customerData.ma_vd && !customerData.is_customized) {
+          planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
+        }
       } else {
         // Fallback to master plan using video_date
         const videoDate = customerData.video_date || customerData.Video_date;
         console.log("No custom tasks, falling back to master plan for date:", videoDate);
         if (videoDate) {
           planTasks = await planService.getMasterPlan(videoDate);
+          if (customerData.ma_vd && !customerData.is_customized) {
+            planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
+          }
           console.log("Master plan tasks result count:", planTasks?.length || 0);
         }
       }
@@ -370,6 +376,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             const masterTasks = await planService.getMasterPlan(videoDate);
             if (masterTasks && masterTasks.length > 0) {
               planTasks = masterTasks;
+              if (customerData.ma_vd && !customerData.is_customized) {
+                planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
+              }
               syncOccurred = true;
             }
           } catch (e) {

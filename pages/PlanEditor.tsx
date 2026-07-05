@@ -522,7 +522,7 @@ export const PlanEditor: React.FC<{
       
       // If not customized, load the master plan to show in the editor
       if (!customized && pc.video_date) {
-        loadMasterPreview(pc.video_date);
+        loadMasterPreview(pc.video_date, pc.ma_vd);
       }
     } else {
       // New student case
@@ -603,7 +603,8 @@ export const PlanEditor: React.FC<{
         
         if (!templateId && tasksData.length === 0) {
           setIsCustomized(false);
-          loadMasterPreview(videoDate);
+          const matchedDate = dates.find((d: any) => d.video_date === videoDate);
+          loadMasterPreview(videoDate, matchedDate ? matchedDate.nhom : undefined);
         }
       }
     }
