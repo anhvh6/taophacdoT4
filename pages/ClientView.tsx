@@ -602,6 +602,17 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     const isBunnyVidId = typeof trimmedLink === "string" && trimmedLink !== "" && !/^https?:\/\//i.test(trimmedLink);
     const isExternalUrl = typeof trimmedLink === "string" && /^https?:\/\//i.test(trimmedLink) && !trimmedLink.includes('mediadelivery.net');
     
+    const getYouTubeEmbedUrl = (url: string) => {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      if (match && match[2].length === 11) {
+        return `https://www.youtube.com/embed/${match[2]}?autoplay=1&rel=0&modestbranding=1`;
+      }
+      return null;
+    };
+    const ytEmbedUrl = getYouTubeEmbedUrl(trimmedLink);
+    const isIframeable = isBunnyVidId || trimmedLink.includes('mediadelivery.net') || ytEmbedUrl !== null;
+
     let newTab: Window | null = null;
 
     if (isAdmin && (checkPermission ? !checkPermission('view_video') : adminRole === 'qlhv')) {
@@ -615,7 +626,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       return;
     }
 
-    if (isExternalUrl && !onNavigate && !skipAuthCheck) {
+    // Mở newTab giả định nếu là external URL và KHÔNG phải video có thể nhúng trực tiếp
+    if (isExternalUrl && !isIframeable && !onNavigate && !skipAuthCheck) {
       try {
         newTab = window.open('about:blank', '_blank');
         if (newTab) {
@@ -667,8 +679,15 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
          } catch(e) {}
          return;
       }
-      if (trimmedLink.includes('mediadelivery.net')) setPlayingVideo(trimmedLink);
-      else window.open(trimmedLink, '_blank');
+      if (trimmedLink.includes('mediadelivery.net')) {
+         setPlayingVideo(trimmedLink);
+         return;
+      }
+      if (ytEmbedUrl) {
+         setPlayingVideo(ytEmbedUrl);
+         return;
+      }
+      window.open(trimmedLink, '_blank');
       return;
     }
 
@@ -827,6 +846,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     } else if (trimmedLink.includes('mediadelivery.net')) {
       setToast("Cảnh báo: Video này sử dụng đường dẫn cũ và không được bảo vệ bằng Token.");
       setPlayingVideo(trimmedLink);
+      if (isStudent) {
+          customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
+          markAttendanceLocally(dayNum);
+      }
+    } else if (ytEmbedUrl) {
+      setPlayingVideo(ytEmbedUrl);
       if (isStudent) {
           customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
           markAttendanceLocally(dayNum);
