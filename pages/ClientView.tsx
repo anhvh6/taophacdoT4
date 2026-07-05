@@ -1212,7 +1212,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           timestamp: Date.now()
         }));
         
-        if (selectedTask) {
+        if (currentTask) {
+          const updated = cleanTasks.find(t => t.day === currentTask.day && t.title === currentTask.title);
+          if (updated) setSelectedTask(updated);
+        } else if (selectedTask) {
           const updated = cleanTasks.find(t => t.day === selectedTask.day && t.title === selectedTask.title);
           if (updated) setSelectedTask(updated);
         }
