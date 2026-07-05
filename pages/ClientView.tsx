@@ -2032,41 +2032,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                  </div>
               ) : (
                  <div className="relative w-full h-full max-w-[1400px] mx-auto flex items-center justify-center bg-black">
-                     {/* 9:16 container to perfectly wrap vertical videos so overlays hit the exact edges */}
-                     <div className="relative w-full h-full flex items-center justify-center overflow-hidden" style={{ maxWidth: 'calc(100vh * (9/16))', maxHeight: '100vh' }}>
-                         <iframe 
-                            src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
-                            className="w-full h-full md:rounded-[1rem] border-none outline-none bg-black"
-                            loading="lazy" 
-                            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-                            sandbox="allow-scripts allow-same-origin allow-presentation"
-                         ></iframe>
-                         
-                         {/* OVERLAYS TO HIDE YOUTUBE BRANDING */}
-                         {playingVideo.includes('youtube.com') && (
-                            <>
-                               {/* Top overlay to visually hide Title and Author, leaves top-right open for Settings gear */}
-                               <div 
-                                 className="absolute top-0 left-0 h-[100px] bg-black z-[100] cursor-default md:rounded-tl-[1rem]"
-                                 style={{ width: 'calc(100% - 120px)' }}
-                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                 onMouseOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                               ></div>
-                               
-                               {/* Bottom overlays to hide Copy Link and YouTube logo perfectly on the video edges */}
-                               <div 
-                                 className="absolute bottom-0 left-0 w-[60px] h-[45px] bg-black z-[100] cursor-default md:rounded-bl-[1rem]" 
-                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                 onMouseOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                               ></div>
-                               <div 
-                                 className="absolute bottom-0 right-0 w-[120px] h-[45px] bg-black z-[100] cursor-default md:rounded-br-[1rem]" 
-                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                 onMouseOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                               ></div>
-                            </>
-                         )}
-                     </div>
+                     <iframe 
+                        src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
+                        className="w-full h-full md:rounded-[1rem] shadow-2xl border-none outline-none bg-black"
+                        loading="lazy" 
+                        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                        sandbox="allow-scripts allow-same-origin allow-presentation"
+                     ></iframe>
                  </div>
               )}
            </div>
