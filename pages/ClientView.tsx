@@ -172,18 +172,11 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
       
       {/* Custom Control Bar */}
       <div 
-         className={`absolute bottom-0 left-0 right-0 h-[80px] flex items-end pb-4 px-6 gap-4 transition-all duration-300 pointer-events-auto z-[1000] ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}
+         className={`absolute bottom-0 left-0 right-0 flex flex-col justify-end pt-8 pb-4 px-4 gap-2 transition-all duration-300 pointer-events-auto z-[1000] ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}
          onClick={(e) => e.stopPropagation()}
       >
-         <button onClick={handleVideoTap} className="text-white hover:scale-110 transition active:scale-95 bg-white/20 p-2 rounded-full backdrop-blur-md">
-            {playing ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor" className="ml-1"/>}
-         </button>
-         
-         <div className="text-white text-sm font-medium whitespace-nowrap tabular-nums">
-            {formatTime(played * duration)} / {formatTime(duration)}
-         </div>
-         
-         <div className="flex-1 flex items-center relative py-2">
+         {/* Top row: Full width Scrubber */}
+         <div className="w-full flex items-center relative py-2">
             <input 
                type="range" 
                min={0} 
@@ -193,31 +186,31 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
                onChange={(e) => handleSeek(parseFloat(e.target.value))}
                onMouseDown={() => setShowControls(true)}
                onTouchStart={() => setShowControls(true)}
-               className="w-full h-1.5 bg-white/30 rounded-full appearance-none cursor-pointer outline-none relative z-10"
+               className="w-full h-1 bg-white/30 rounded-full appearance-none cursor-pointer outline-none relative z-10"
                style={{
-                  background: `linear-gradient(to right, #0068ff ${played * 100}%, rgba(255,255,255,0.3) ${played * 100}%)`
+                  background: `linear-gradient(to right, #ff0000 ${played * 100}%, rgba(255,255,255,0.3) ${played * 100}%)`
                }}
             />
             <style>
                {`
                   input[type=range]::-webkit-slider-thumb {
                      -webkit-appearance: none;
-                     height: 16px;
-                     width: 16px;
+                     height: 12px;
+                     width: 12px;
                      border-radius: 50%;
-                     background: #ffffff;
+                     background: #ff0000;
                      cursor: pointer;
                      box-shadow: 0 0 10px rgba(0,0,0,0.5);
                      transition: transform 0.1s;
                   }
                   input[type=range]::-webkit-slider-thumb:active {
-                     transform: scale(1.3);
+                     transform: scale(1.5);
                   }
                   input[type=range]::-moz-range-thumb {
-                     height: 16px;
-                     width: 16px;
+                     height: 12px;
+                     width: 12px;
                      border-radius: 50%;
-                     background: #ffffff;
+                     background: #ff0000;
                      cursor: pointer;
                      border: none;
                      box-shadow: 0 0 10px rgba(0,0,0,0.5);
@@ -226,26 +219,29 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
             </style>
          </div>
          
-         <div className="flex items-center bg-white/10 rounded-lg px-2 py-1 backdrop-blur-md">
-            <span className="text-white/70 text-xs mr-1 font-medium">Tốc độ:</span>
-            <select 
-               value={playbackRate} 
-               onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
-               className="bg-transparent text-white border-none outline-none text-sm font-bold cursor-pointer appearance-none text-center"
-               style={{ WebkitAppearance: 'none' }}
-            >
-               <option value="0.5" className="text-black">0.5x</option>
-               <option value="0.75" className="text-black">0.75x</option>
-               <option value="1" className="text-black">1x</option>
-               <option value="1.25" className="text-black">1.25x</option>
-               <option value="1.5" className="text-black">1.5x</option>
-               <option value="2" className="text-black">2x</option>
-            </select>
+         {/* Bottom row: Time and Speed */}
+         <div className="w-full flex justify-between items-center px-1">
+            <div className="text-white text-[11px] font-medium tabular-nums drop-shadow-md">
+               {formatTime(played * duration)} / {formatTime(duration)}
+            </div>
+            
+            <div className="flex items-center bg-black/40 rounded-lg px-2 py-1 backdrop-blur-md">
+               <span className="text-white/80 text-[10px] mr-1 font-medium">Tốc độ:</span>
+               <select 
+                  value={playbackRate} 
+                  onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
+                  className="bg-transparent text-white border-none outline-none text-[11px] font-bold cursor-pointer appearance-none text-center"
+                  style={{ WebkitAppearance: 'none' }}
+               >
+                  <option value="0.5" className="text-black">0.5x</option>
+                  <option value="0.75" className="text-black">0.75x</option>
+                  <option value="1" className="text-black">1x</option>
+                  <option value="1.25" className="text-black">1.25x</option>
+                  <option value="1.5" className="text-black">1.5x</option>
+                  <option value="2" className="text-black">2x</option>
+               </select>
+            </div>
          </div>
-
-         <button onClick={onClose} className="text-white hover:bg-red-500 hover:text-white transition active:scale-95 bg-white/10 p-2 rounded-lg backdrop-blur-md ml-2 flex items-center gap-1">
-            <X size={20} /> <span className="text-sm font-bold hidden sm:inline">Đóng</span>
-         </button>
       </div>
       
       {/* Giant center play button when paused */}
