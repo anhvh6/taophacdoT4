@@ -61,16 +61,30 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
           disablekb: 1,
           playsinline: 1,
           autoplay: 1,
+          vq: 'hd1080',
+          cc_load_policy: 0,
           origin: window.location.origin
         },
         events: {
           onReady: (e: any) => {
             setIsReady(true);
             setDuration(e.target.getDuration());
+            try {
+               if (e.target.setPlaybackQuality) e.target.setPlaybackQuality('hd1080');
+               if (e.target.unloadModule) {
+                  e.target.unloadModule('captions');
+                  e.target.unloadModule('cc');
+               }
+            } catch(err) {}
             e.target.playVideo();
           },
           onStateChange: (e: any) => {
-            if (e.data === 1) setPlaying(true); // PLAYING
+            if (e.data === 1) {
+               setPlaying(true);
+               try {
+                  if (e.target.setPlaybackQuality) e.target.setPlaybackQuality('hd1080');
+               } catch(err) {}
+            }
             if (e.data === 2 || e.data === 0) setPlaying(false); // PAUSED or ENDED
           }
         }
