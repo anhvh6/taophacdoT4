@@ -916,30 +916,48 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         
         if (customTasks && customTasks.length > 0) {
           planTasks = customTasks;
+          if (customerData.ma_vd) {
+            planTasks = planTasks.filter(t => !t.nhom || t.nhom === customerData.ma_vd);
+          }
         } else {
           const videoDate = customerData.video_date || customerData.Video_date;
           if (videoDate) {
             planTasks = await planService.getMasterPlan(videoDate);
+            if (customerData.ma_vd) {
+              planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
+            }
           }
         }
 
         // Logic: Lấy nội dung mới nhất từ Lich phac do mỗi khi click
-        if (currentTask) {
+        if (currentTask && !customerData.is_customized) {
           const videoDate = customerData.video_date || customerData.Video_date;
           if (videoDate) {
             console.log(`User clicked a task. Merging with latest master plan to display latest content...`);
             const masterTasks = await planService.getMasterPlan(videoDate);
             
             if (masterTasks && masterTasks.length > 0) {
-              // Thay thế tạm thời phác đồ hiển thị bằng dữ liệu từ master plan để người dùng xem bản cập nhật
               planTasks = masterTasks;
+              if (customerData.ma_vd) {
+                planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
+              }
             }
           }
         }
 
-        const cleanTasks = (planTasks || [])
-          .filter(task => !task.is_deleted && task.day <= 30)
-          .sort((a, b) => {
+        const deduplicate = (list: any[]) => {
+          const seen = new Set();
+          return list.filter(t => {
+            const key = `${t.day}-${(t.title || "").trim()}-${(t.link || "").trim()}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        };
+
+        const cleanTasks = deduplicate(planTasks || [])
+          .filter((task: any) => !task.is_deleted && task.day <= 30)
+          .sort((a: any, b: any) => {
             if (a.day !== b.day) return a.day - b.day;
             return (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true });
           });
