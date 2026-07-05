@@ -145,8 +145,11 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
         {/* Transparent Overlay to block ALL YouTube interactions */}
         <div className="absolute inset-0 z-[100]"></div>
 
-        {/* Render Native Iframe Wrapper with slight zoom to hide edge watermarks */}
-        <div className={`w-full h-full pointer-events-none transition-opacity duration-500 transform scale-[1.02] ${isReady ? 'opacity-100' : 'opacity-0'}`}>
+        {/* Cover top area to hide YouTube title, avatar, and share button */}
+        <div className="absolute top-0 left-0 right-0 h-[70px] bg-black z-[120] pointer-events-none"></div>
+
+        {/* Render Native Iframe Wrapper with zoom to hide edge watermarks */}
+        <div className={`w-full h-full pointer-events-none transition-opacity duration-500 transform scale-[1.05] ${isReady ? 'opacity-100' : 'opacity-0'}`}>
           <div ref={containerRef} className="w-full h-full border-none outline-none" />
         </div>
       </div>
@@ -1649,7 +1652,11 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         if (finalUrl && typeof finalUrl === 'string') {
                             finalUrl = finalUrl.replace('vz-371142c2-906.b-cdn.net', 'video.phacdo.com');
                         }
-                        window.open(finalUrl, '_blank');
+                        if (finalUrl && typeof finalUrl === 'string' && (finalUrl.includes('youtube.com') || finalUrl.includes('youtu.be'))) {
+                            handlePlayVideo(finalUrl, false, 0);
+                        } else {
+                            window.open(finalUrl, '_blank');
+                        }
                     }} className={`w-full py-3.5 text-[11px] font-black rounded-full flex items-center justify-center gap-2 transition-all active:scale-95 ${block.type === 'dark' ? 'bg-white text-[#1E3A8A] hover:bg-blue-50' : 'bg-[#1E3A8A] text-white hover:bg-blue-900'}`}>▶ Xem hướng dẫn video</button>
                  ) : null}
                </div>
