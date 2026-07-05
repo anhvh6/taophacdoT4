@@ -23,6 +23,7 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
   const [played, setPlayed] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [isReady, setIsReady] = useState(false);
   const playerRef = useRef<any>(null);
 
   const formatTime = (seconds: number) => {
@@ -47,9 +48,17 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
 
   return (
     <div className="relative w-full h-full max-w-[1400px] mx-auto bg-black flex flex-col group md:rounded-[1rem] overflow-hidden">
-      <div className="flex-1 w-full h-full flex items-center justify-center cursor-pointer" onClick={() => setPlaying(!playing)}>
+      <div className="flex-1 w-full h-full flex items-center justify-center cursor-pointer relative" onClick={() => setPlaying(!playing)}>
+        
+        {/* Loading Spinner */}
+        {!isReady && (
+           <div className="absolute inset-0 flex items-center justify-center z-[50]">
+              <div className="w-12 h-12 border-4 border-[#0068ff] border-t-transparent rounded-full animate-spin"></div>
+           </div>
+        )}
+
         {/* Render ReactPlayer with pointer-events-none to block native clicks and overlays */}
-        <div className="w-full h-full pointer-events-none">
+        <div className={`w-full h-full pointer-events-none transition-opacity duration-500 ${isReady ? 'opacity-100' : 'opacity-0'}`}>
           <ReactPlayer
             ref={playerRef}
             url={cleanUrl}
@@ -60,6 +69,10 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
             playbackRate={playbackRate}
             onProgress={(s) => setPlayed(s.played)}
             onDuration={(d) => setDuration(d)}
+            onReady={() => setIsReady(true)}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={() => setPlaying(false)}
             playsinline={true}
             config={{
                youtube: {
@@ -69,7 +82,8 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
                      modestbranding: 1,
                      iv_load_policy: 3,
                      fs: 0,
-                     disablekb: 1
+                     disablekb: 1,
+                     origin: typeof window !== 'undefined' ? window.location.origin : ''
                   }
                }
             }}
@@ -95,6 +109,7 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
             const rect = e.currentTarget.getBoundingClientRect();
             const pos = (e.clientX - rect.left) / rect.width;
             playerRef.current.seekTo(pos);
+            setPlayed(pos); // Optimistic UI update
          }}>
             <div className="w-full h-1.5 bg-white/30 rounded-full relative overflow-hidden">
                <div className="absolute top-0 left-0 h-full bg-[#0068ff]" style={{ width: `${played * 100}%` }}></div>
@@ -120,9 +135,9 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
       </div>
       
       {/* Giant center play button when paused */}
-      {!playing && (
+      {!playing && isReady && (
          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[500]">
-            <div className="w-20 h-20 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white/90">
+            <div className="w-20 h-20 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white/90 shadow-2xl">
                <Play size={40} fill="currentColor" className="ml-2"/>
             </div>
          </div>
