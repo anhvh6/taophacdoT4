@@ -2021,13 +2021,26 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     <HlsVideoPlayer url={playingVideo} />
                  </div>
               ) : (
-                 <iframe 
-                    src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
-                    className="w-full h-full max-w-[1400px] mx-auto md:rounded-[2rem] shadow-2xl border-none outline-none bg-black"
-                    loading="lazy" 
-                    allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
-                    allowFullScreen
-                 ></iframe>
+                 <div className="relative w-full h-full max-w-[1400px] mx-auto flex items-center justify-center bg-black">
+                     <iframe 
+                        src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
+                        className="w-full h-full md:rounded-[2rem] shadow-2xl border-none outline-none bg-black"
+                        loading="lazy" 
+                        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen;"
+                        allowFullScreen
+                     ></iframe>
+                     
+                     {/* OVERLAYS TO HIDE YOUTUBE BRANDING (Title, Author, Logo, Copy Link) */}
+                     {playingVideo.includes('youtube.com') && (
+                        <>
+                           {/* Top overlay to hide Title and Author */}
+                           <div className="absolute top-0 left-0 right-0 h-[80px] bg-black z-[100] pointer-events-none md:rounded-t-[2rem]"></div>
+                           
+                           {/* Bottom overlay to hide YouTube logo and Copy Link */}
+                           <div className="absolute bottom-0 left-0 right-0 h-[70px] bg-black z-[100] pointer-events-none md:rounded-b-[2rem]"></div>
+                        </>
+                     )}
+                 </div>
               )}
            </div>
          </div>
