@@ -1167,17 +1167,21 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           }
         }
 
-        // Logic: Lấy nội dung mới nhất từ Lich phac do mỗi khi click
-        if (currentTask && !customerData.is_customized) {
+        // Logic: Lấy nội dung mới nhất từ Lich phac do mỗi khi click (hoặc nếu bài tập hiện tại bị thiếu link)
+        if (currentTask && (!customerData.is_customized || !currentTask.link || String(currentTask.link).trim() === '')) {
           const videoDate = customerData.video_date || customerData.Video_date;
           if (videoDate) {
-            console.log(`User clicked a task. Merging with latest master plan to display latest content...`);
+            console.log(`User clicked a task or missing link. Merging with latest master plan to display latest content...`);
             const masterTasks = await planService.getMasterPlan(videoDate);
             
             if (masterTasks && masterTasks.length > 0) {
               planTasks = masterTasks;
-              if (customerData.ma_vd) {
-                planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
+              let actualMaVd = customerData.ma_vd;
+              if (!actualMaVd || String(actualMaVd).trim() === '') {
+                 actualMaVd = masterTasks[0].nhom;
+              }
+              if (actualMaVd) {
+                planTasks = planTasks.filter(t => t.nhom === actualMaVd);
               }
             }
           }

@@ -506,6 +506,15 @@ export const PlanEditor: React.FC<{
       const c = data.customer;
       let pc = { ...c };
       if (c.start_date) pc.start_date = toInputDateString(c.start_date);
+      
+      // AUTO FALLBACK cho ma_vd
+      if (pc.video_date && (!pc.ma_vd || String(pc.ma_vd).trim() === '')) {
+         const matchingGroups = dates.filter(d => d.video_date === pc.video_date);
+         if (matchingGroups.length > 0 && matchingGroups[0].nhom) {
+            pc.ma_vd = matchingGroups[0].nhom;
+         }
+      }
+
       setCustomer(pc);
       currentVideoDate = pc.video_date;
       
