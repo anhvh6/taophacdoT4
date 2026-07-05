@@ -343,8 +343,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       
       if (customTasks && customTasks.length > 0) {
         planTasks = customTasks;
-        if (customerData.ma_vd && !customerData.is_customized) {
-          planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
+        // Even if customized, if they somehow contain tasks from other groups (due to old bugs), filter them
+        if (customerData.ma_vd) {
+          planTasks = planTasks.filter(t => !t.nhom || t.nhom === customerData.ma_vd);
         }
       } else {
         // Fallback to master plan using video_date
@@ -352,7 +353,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         console.log("No custom tasks, falling back to master plan for date:", videoDate);
         if (videoDate) {
           planTasks = await planService.getMasterPlan(videoDate);
-          if (customerData.ma_vd && !customerData.is_customized) {
+          if (customerData.ma_vd) {
             planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
           }
           console.log("Master plan tasks result count:", planTasks?.length || 0);
@@ -360,23 +361,21 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       }
 
       // CRITICAL: Tự động cập nhật nội dung mới nhất từ Lich phac do khi load trang
-      // CHÚ Ý: Chuyển lên trên hoặc chạy song song để tối ưu tốc độ render ban đầu
+      // Chỉ tự động cập nhật nếu khách hàng CHƯA tùy chỉnh. Nếu đã tùy chỉnh, tôn trọng dữ liệu đã lưu.
       const videoDate = customerData.video_date || customerData.Video_date;
       let syncOccurred = false;
-      if (videoDate && planTasks.length > 0) {
+      if (videoDate && planTasks.length > 0 && !customerData.is_customized) {
         const todayDate = toVnZeroHour();
         const start = toVnZeroHour(customerData.start_date);
         const currentAllowedDay = customerData.allowed_day || getDiffDays(start, todayDate) + 1;
         
         // Đồng bộ toàn bộ phác đồ từ master
         if (currentAllowedDay > 0) {
-           // Ở đây ta có thể chọn await hoặc không. Để chắc chắn dữ liệu mới nhất, ta await, 
-           // nhưng vì đã có Stale UI phía trên nên cảm giác vẫn nhanh.
           try {
             const masterTasks = await planService.getMasterPlan(videoDate);
             if (masterTasks && masterTasks.length > 0) {
               planTasks = masterTasks;
-              if (customerData.ma_vd && !customerData.is_customized) {
+              if (customerData.ma_vd) {
                 planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
               }
               syncOccurred = true;
