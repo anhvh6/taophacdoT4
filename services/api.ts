@@ -52,15 +52,13 @@ export const api = {
     (videoTasks || []).forEach(v => {
       const vDate = (v as any).Video_date || v.video_date;
       const vNhom = (v as any).Nhom || v.nhom;
-      if (vDate && !uniqueMap.has(vDate)) {
-        uniqueMap.set(vDate, vNhom || vDate);
+      const key = `${vDate}_${vNhom}`;
+      if (vDate && !uniqueMap.has(key)) {
+        uniqueMap.set(key, { video_date: vDate, nhom: vNhom || vDate });
       }
     });
     
-    const dates = Array.from(uniqueMap.entries()).map(([video_date, nhom]) => ({
-      video_date,
-      nhom
-    })).sort((a, b) => b.video_date.localeCompare(a.video_date));
+    const dates = Array.from(uniqueMap.values()).sort((a, b) => b.video_date.localeCompare(a.video_date));
 
     return {
       customer,
@@ -130,11 +128,11 @@ export const api = {
     })).sort((a, b) => b.video_date_key.localeCompare(a.video_date_key));
   },
 
-  getPlan: async (customerId: string, videoDate: string) => {
-    console.log(`API getPlan called for customer: ${customerId}, date: ${videoDate}`);
+  getPlan: async (customerId: string, videoDate: string, nhom?: string) => {
+    console.log(`API getPlan called for customer: ${customerId}, date: ${videoDate}, nhom: ${nhom}`);
     if (customerId === 'NEW' || !customerId) {
       const master = await planService.getMasterPlan(videoDate);
-      const filtered = master;
+      const filtered = nhom ? master.filter(t => t.nhom === nhom) : master;
       console.log(`API getPlan (Master) returned ${filtered.length} tasks (filtered from ${master.length})`);
       return filtered;
     }
@@ -145,7 +143,7 @@ export const api = {
       return filtered;
     }
     const master = await planService.getMasterPlan(videoDate);
-    const filtered = master.filter(t => t.day <= 30);
+    const filtered = (nhom ? master.filter(t => t.nhom === nhom) : master).filter(t => t.day <= 30);
     console.log(`API getPlan (Fallback Master) returned ${filtered.length} tasks (filtered from ${master.length})`);
     return filtered;
   },

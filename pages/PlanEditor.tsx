@@ -386,12 +386,12 @@ export const PlanEditor: React.FC<{
     return masterDates;
   }, [masterDates]);
 
-  const loadMasterPreview = async (date: string) => {
+  const loadMasterPreview = async (date: string, nhom?: string) => {
     if (!date) return;
     setIsSyncing(true);
     try {
-      console.log("Loading master preview for date:", date);
-      const t = await api.getPlan("NEW", date);
+      console.log("Loading master preview for date:", date, "nhom:", nhom);
+      const t = await api.getPlan("NEW", date, nhom);
       const newTasks = Array.isArray(t) ? t : [];
       
       if (newTasks.length === 0) {
@@ -415,10 +415,10 @@ export const PlanEditor: React.FC<{
     }
   };
 
-  const handleVideoDateChange = async (date: string) => {
-    setCustomer(prev => ({ ...prev, video_date: date }));
+  const handleVideoDateChange = async (date: string, nhom?: string) => {
+    setCustomer(prev => ({ ...prev, video_date: date, ma_vd: nhom || "" }));
     if (date) {
-      await loadMasterPreview(date);
+      await loadMasterPreview(date, nhom);
     }
   };
 
@@ -440,7 +440,7 @@ export const PlanEditor: React.FC<{
       return; 
     }
     setIsCustomized(true);
-    await loadMasterPreview(customer.video_date);
+    await loadMasterPreview(customer.video_date, customer.ma_vd);
   };
 
   const fetchData = async () => {
@@ -1128,11 +1128,19 @@ export const PlanEditor: React.FC<{
                 <div className="flex items-center gap-3">
                   <select 
                     className="line-input flex-1 cursor-pointer font-bold text-blue-900" 
-                    value={customer.video_date} 
-                    onChange={e => handleVideoDateChange(e.target.value)}
+                    value={`${customer.video_date || ""}|${customer.ma_vd || ""}`}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (!val || val === "|") {
+                        handleVideoDateChange("", "");
+                      } else {
+                        const [d, n] = val.split("|");
+                        handleVideoDateChange(d, n);
+                      }
+                    }}
                   >
-                    <option value="">-- Chọn nhóm video --</option>
-                    {sortedDates.map(d => <option key={d.video_date} value={d.video_date}>{d.nhom}</option>)}
+                    <option value="|">-- Chọn nhóm video --</option>
+                    {sortedDates.map((d: any, idx) => <option key={idx} value={`${d.video_date}|${d.nhom || ""}`}>{d.nhom ? `${d.nhom}` : formatDDMM(d.video_date)}</option>)}
                   </select>
                   <Button variant="secondary" size="sm" onClick={manualSyncTemplate} disabled={!customer.video_date || isSyncing}>
                     <RefreshCw size={14} className={`mr-2 ${isSyncing ? 'animate-spin' : ''}`} /> {isSyncing ? "ĐANG ĐỒNG BỘ..." : "Đồng bộ mẫu"}
