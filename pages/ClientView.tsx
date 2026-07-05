@@ -1167,21 +1167,34 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           }
         }
 
-        // Logic: Lấy nội dung mới nhất từ Lich phac do mỗi khi click (hoặc nếu bài tập hiện tại bị thiếu link)
-        if (currentTask && (!customerData.is_customized || !currentTask.link || String(currentTask.link).trim() === '')) {
+        // Logic: Lấy nội dung mới nhất từ Lich phac do hoặc tự động heal link nếu bị thiếu
+        const hasMissingLinks = planTasks.some(t => !t.link || String(t.link).trim() === '');
+        if (!customerData.is_customized || hasMissingLinks) {
           const videoDate = customerData.video_date || customerData.Video_date;
           if (videoDate) {
-            console.log(`User clicked a task or missing link. Merging with latest master plan to display latest content...`);
+            console.log(`Merging with latest master plan to display latest content or heal missing links...`);
             const masterTasks = await planService.getMasterPlan(videoDate);
             
             if (masterTasks && masterTasks.length > 0) {
-              planTasks = masterTasks;
               let actualMaVd = customerData.ma_vd;
               if (!actualMaVd || String(actualMaVd).trim() === '') {
                  actualMaVd = masterTasks[0].nhom;
               }
-              if (actualMaVd) {
-                planTasks = planTasks.filter(t => t.nhom === actualMaVd);
+              const filteredMaster = actualMaVd ? masterTasks.filter(t => t.nhom === actualMaVd) : masterTasks;
+              
+              if (!customerData.is_customized) {
+                 planTasks = filteredMaster;
+              } else {
+                 // Nếu đã customize nhưng bị thiếu link (trắng), auto map link từ master!
+                 planTasks = planTasks.map(t => {
+                    if (!t.link || String(t.link).trim() === '') {
+                       const match = filteredMaster.find(m => m.day === t.day && (m.title || '').trim().toLowerCase() === (t.title || '').trim().toLowerCase());
+                       if (match && match.link) {
+                          return { ...t, link: match.link };
+                       }
+                    }
+                    return t;
+                 });
               }
             }
           }
