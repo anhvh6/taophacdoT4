@@ -32,6 +32,19 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  // Extract video ID from embed URL if necessary
+  const getCleanUrl = (rawUrl: string) => {
+     if (rawUrl.includes('/embed/')) {
+        const match = rawUrl.match(/embed\/([^?]+)/);
+        if (match && match[1]) {
+           return `https://www.youtube.com/watch?v=${match[1]}`;
+        }
+     }
+     return rawUrl;
+  };
+  
+  const cleanUrl = getCleanUrl(url);
+
   return (
     <div className="relative w-full h-full max-w-[1400px] mx-auto bg-black flex flex-col group md:rounded-[1rem] overflow-hidden">
       <div className="flex-1 w-full h-full flex items-center justify-center cursor-pointer" onClick={() => setPlaying(!playing)}>
@@ -39,7 +52,7 @@ const CustomYouTubePlayer = ({ url }: { url: string }) => {
         <div className="w-full h-full pointer-events-none">
           <ReactPlayer
             ref={playerRef}
-            url={url}
+            url={cleanUrl}
             width="100%"
             height="100%"
             playing={playing}
