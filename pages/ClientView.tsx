@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, ChevronUp, ChevronDown, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut } from 'lucide-react';
+import { Play, Pause, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, ChevronUp, ChevronDown, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut } from 'lucide-react';
 import { Toast } from '../components/UI';
 import { customerService, generateCustomerLink } from '../src/services/customerService';
 import { planService } from '../src/services/planService';
@@ -13,6 +13,111 @@ import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
 import Hls from 'hls.js';
+import ReactPlayer from 'react-player';
+
+// ==========================================
+// 🚀 CUSTOM YOUTUBE PLAYER COMPONENT
+// ==========================================
+const CustomYouTubePlayer = ({ url }: { url: string }) => {
+  const [playing, setPlaying] = useState(true);
+  const [played, setPlayed] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const playerRef = useRef<any>(null);
+
+  const formatTime = (seconds: number) => {
+    if (isNaN(seconds)) return '0:00';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  return (
+    <div className="relative w-full h-full max-w-[1400px] mx-auto bg-black flex flex-col group md:rounded-[1rem] overflow-hidden">
+      <div className="flex-1 w-full h-full flex items-center justify-center cursor-pointer" onClick={() => setPlaying(!playing)}>
+        {/* Render ReactPlayer with pointer-events-none to block native clicks and overlays */}
+        <div className="w-full h-full pointer-events-none">
+          <ReactPlayer
+            ref={playerRef}
+            url={url}
+            width="100%"
+            height="100%"
+            playing={playing}
+            controls={false}
+            playbackRate={playbackRate}
+            onProgress={(s) => setPlayed(s.played)}
+            onDuration={(d) => setDuration(d)}
+            playsinline={true}
+            config={{
+               youtube: {
+                  playerVars: {
+                     showinfo: 0,
+                     rel: 0,
+                     modestbranding: 1,
+                     iv_load_policy: 3,
+                     fs: 0,
+                     disablekb: 1
+                  }
+               }
+            }}
+          />
+        </div>
+      </div>
+      
+      {/* Custom Control Bar */}
+      <div 
+         className="absolute bottom-0 left-0 right-0 h-[80px] bg-gradient-to-t from-black/90 to-transparent flex items-end pb-4 px-6 gap-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 pointer-events-auto z-[1000]"
+         onClick={(e) => e.stopPropagation()}
+      >
+         <button onClick={() => setPlaying(!playing)} className="text-white hover:scale-110 transition active:scale-95 bg-white/20 p-2 rounded-full backdrop-blur-md">
+            {playing ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor" className="ml-1"/>}
+         </button>
+         
+         <div className="text-white text-sm font-medium whitespace-nowrap tabular-nums">
+            {formatTime(played * duration)} / {formatTime(duration)}
+         </div>
+         
+         <div className="flex-1 flex items-center h-full group/slider relative cursor-pointer" onClick={(e) => {
+            if (!playerRef.current) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const pos = (e.clientX - rect.left) / rect.width;
+            playerRef.current.seekTo(pos);
+         }}>
+            <div className="w-full h-1.5 bg-white/30 rounded-full relative overflow-hidden">
+               <div className="absolute top-0 left-0 h-full bg-[#0068ff]" style={{ width: `${played * 100}%` }}></div>
+            </div>
+         </div>
+         
+         <div className="flex items-center bg-white/10 rounded-lg px-2 py-1 backdrop-blur-md">
+            <span className="text-white/70 text-xs mr-1 font-medium">Tốc độ:</span>
+            <select 
+               value={playbackRate} 
+               onChange={(e) => setPlaybackRate(parseFloat(e.target.value))}
+               className="bg-transparent text-white border-none outline-none text-sm font-bold cursor-pointer appearance-none text-center"
+               style={{ WebkitAppearance: 'none' }}
+            >
+               <option value="0.5" className="text-black">0.5x</option>
+               <option value="0.75" className="text-black">0.75x</option>
+               <option value="1" className="text-black">1x</option>
+               <option value="1.25" className="text-black">1.25x</option>
+               <option value="1.5" className="text-black">1.5x</option>
+               <option value="2" className="text-black">2x</option>
+            </select>
+         </div>
+      </div>
+      
+      {/* Giant center play button when paused */}
+      {!playing && (
+         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[500]">
+            <div className="w-20 h-20 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white/90">
+               <Play size={40} fill="currentColor" className="ml-2"/>
+            </div>
+         </div>
+      )}
+    </div>
+  );
+};
+
 
 const HlsVideoPlayerCore = ({ 
   url, 
@@ -2031,15 +2136,19 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     <HlsVideoPlayer url={playingVideo} />
                  </div>
               ) : (
-                 <div className="relative w-full h-full max-w-[1400px] mx-auto flex items-center justify-center bg-black">
-                     <iframe 
-                        src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
-                        className="w-full h-full md:rounded-[1rem] shadow-2xl border-none outline-none bg-black"
-                        loading="lazy" 
-                        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-                        sandbox="allow-scripts allow-same-origin allow-presentation"
-                     ></iframe>
-                 </div>
+                 playingVideo.includes('youtube.com') || playingVideo.includes('youtu.be') ? (
+                    <CustomYouTubePlayer url={playingVideo} />
+                 ) : (
+                    <div className="relative w-full h-full max-w-[1400px] mx-auto flex items-center justify-center bg-black">
+                        <iframe 
+                           src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
+                           className="w-full h-full md:rounded-[1rem] shadow-2xl border-none outline-none bg-black"
+                           loading="lazy" 
+                           allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                           sandbox="allow-scripts allow-same-origin allow-presentation"
+                        ></iframe>
+                    </div>
+                 )
               )}
            </div>
          </div>
