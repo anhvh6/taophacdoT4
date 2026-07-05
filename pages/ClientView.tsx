@@ -145,8 +145,8 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
         {/* Transparent Overlay to block ALL YouTube interactions */}
         <div className="absolute inset-0 z-[100]"></div>
 
-        {/* Cover top area to hide YouTube title, avatar, and share button */}
-        <div className="absolute top-0 left-0 right-0 h-[70px] bg-black z-[120] pointer-events-none"></div>
+        {/* Cover top area to hide YouTube title, avatar, and share button with a smooth gradient */}
+        <div className="absolute top-0 left-0 right-0 h-[90px] bg-gradient-to-b from-black via-black/90 to-transparent z-[120] pointer-events-none opacity-90"></div>
 
         {/* Render Native Iframe Wrapper with zoom to hide edge watermarks */}
         <div className={`w-full h-full pointer-events-none transition-opacity duration-500 transform scale-[1.05] ${isReady ? 'opacity-100' : 'opacity-0'}`}>
@@ -801,7 +801,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     const isExternalUrl = typeof trimmedLink === "string" && /^https?:\/\//i.test(trimmedLink) && !trimmedLink.includes('mediadelivery.net');
     
     const getYouTubeEmbedUrl = (url: string) => {
-      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
       const match = url.match(regExp);
       if (match && match[2].length === 11) {
         return `https://www.youtube.com/embed/${match[2]}?autoplay=1&rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&fs=0&playsinline=1`;
