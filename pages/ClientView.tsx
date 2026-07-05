@@ -606,7 +606,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
       const match = url.match(regExp);
       if (match && match[2].length === 11) {
-        return `https://www.youtube.com/embed/${match[2]}?autoplay=1&rel=0&modestbranding=1`;
+        return `https://www.youtube.com/embed/${match[2]}?autoplay=1&rel=0&modestbranding=1&controls=0&showinfo=0&iv_load_policy=3&disablekb=1&fs=1&playsinline=1`;
       }
       return null;
     };
@@ -685,6 +685,15 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       }
       if (ytEmbedUrl) {
          setPlayingVideo(ytEmbedUrl);
+         setTimeout(() => {
+            const container = document.getElementById('bunny-fullscreen-modal');
+            if (container) {
+               try {
+                  if (container.requestFullscreen) container.requestFullscreen();
+                  else if ((container as any).webkitRequestFullscreen) (container as any).webkitRequestFullscreen();
+               } catch (e) {}
+            }
+         }, 300);
          return;
       }
       window.open(trimmedLink, '_blank');
@@ -852,6 +861,15 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       }
     } else if (ytEmbedUrl) {
       setPlayingVideo(ytEmbedUrl);
+      setTimeout(() => {
+         const container = document.getElementById('bunny-fullscreen-modal');
+         if (container) {
+            try {
+               if (container.requestFullscreen) container.requestFullscreen();
+               else if ((container as any).webkitRequestFullscreen) (container as any).webkitRequestFullscreen();
+            } catch (e) {}
+         }
+      }, 300);
       if (isStudent) {
           customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
           markAttendanceLocally(dayNum);
@@ -1983,10 +2001,19 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
       {/* 🚀 THE BUNNY FULLSCREEN VIDEO MODAL */}
       {playingVideo && (
-         <div className="fixed inset-0 z-[9000] bg-black flex flex-col animate-in fade-in duration-300">
+         <div id="bunny-fullscreen-modal" className="fixed inset-0 z-[9000] bg-black flex flex-col animate-in fade-in duration-300">
            <div className="absolute top-6 right-6 z-10 flex gap-4">
 
-             <button onClick={() => setPlayingVideo(null)} className="bg-white/20 hover:bg-white/40 p-4 rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-xl"><X size={20}/></button>
+             <button onClick={() => {
+                setPlayingVideo(null);
+                try {
+                   if (document.fullscreenElement) {
+                      document.exitFullscreen();
+                   } else if ((document as any).webkitFullscreenElement) {
+                      (document as any).webkitExitFullscreen();
+                   }
+                } catch(e) {}
+             }} className="bg-white/20 hover:bg-white/40 p-4 rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-xl"><X size={20}/></button>
            </div>
            <div className="flex-1 flex items-center justify-center p-0 md:p-10 w-full h-full">
               {playingVideo.includes('.m3u8') ? (
