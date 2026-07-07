@@ -1882,9 +1882,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                 </div>
 
                 {allowedDay >= 30 && !isNotStarted && (
-                  <div className="mt-8 p-6 bg-white border-2 border-red-500 rounded-2xl shadow-sm">
-                    <p className="text-red-600 font-bold text-[14px] md:text-[15px] leading-relaxed text-center">
-                      Khi hoàn thành bài học ngày thứ 30, bạn hãy quay lại tập từ bài 1 để xây dựng lại nền tảng. kết hợp với các bài dẫn lưu hệ bạch huyết bản nâng cao mỗi ngày và tiếp tục duy trì các bài tập trong phác đồ, tập nhiều hơn các bài bổ trợ tăng cường để hỗ trợ tư thế và tối ưu hiệu quả luyện tập nhé!
+                  <div className="mt-8 px-6 py-5 bg-orange-500 text-white rounded-2xl shadow-md flex flex-col sm:flex-row items-center gap-4">
+                    <AlertTriangle size={32} className="shrink-0 animate-pulse" />
+                    <p className="font-bold text-[14px] md:text-[15px] leading-relaxed text-center sm:text-left">
+                      Khi hoàn thành bài học ngày thứ 30, bạn hãy quay lại tập từ bài 1 để xây dựng lại nền tảng. kết hợp với các bài dẫn lưu hệ bạch huyết nâng cao mỗi ngày và tiếp tục duy trì các bài tập trong phác đồ, tập nhiều hơn các bài bổ trợ - tăng cường để hỗ trợ tư thế và tối ưu hiệu quả luyện tập nhé!
                     </p>
                   </div>
                 )}
