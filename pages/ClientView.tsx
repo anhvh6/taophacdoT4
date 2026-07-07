@@ -953,15 +953,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       }
       if (ytEmbedUrl) {
          setPlayingVideo(ytEmbedUrl);
-         setTimeout(() => {
-            const container = document.getElementById('bunny-fullscreen-modal');
-            if (container) {
-               try {
-                  if (container.requestFullscreen) container.requestFullscreen();
-                  else if ((container as any).webkitRequestFullscreen) (container as any).webkitRequestFullscreen();
-               } catch (e) {}
-            }
-         }, 300);
          return;
       }
       window.open(trimmedLink, '_blank');
@@ -1129,15 +1120,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       }
     } else if (ytEmbedUrl) {
       setPlayingVideo(ytEmbedUrl);
-      setTimeout(() => {
-         const container = document.getElementById('bunny-fullscreen-modal');
-         if (container) {
-            try {
-               if (container.requestFullscreen) container.requestFullscreen();
-               else if ((container as any).webkitRequestFullscreen) (container as any).webkitRequestFullscreen();
-            } catch (e) {}
-         }
-      }, 300);
       if (isStudent) {
           customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
           markAttendanceLocally(dayNum);
