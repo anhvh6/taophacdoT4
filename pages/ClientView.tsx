@@ -1882,9 +1882,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                 </div>
 
                 {allowedDay >= 30 && !isNotStarted && (
-                  <div className="mt-8 px-6 py-5 bg-orange-500 text-white rounded-2xl shadow-md flex flex-col sm:flex-row items-center gap-4">
-                    <AlertTriangle size={32} className="shrink-0 animate-pulse" />
-                    <p className="font-bold text-[14px] md:text-[15px] leading-relaxed text-center sm:text-left">
+                  <div className="mt-10 px-6 py-6 bg-gradient-to-br from-[#FFF7ED] to-[#FFEDD5] border border-orange-200 rounded-[2rem] shadow-[0_10px_40px_-10px_rgba(249,115,22,0.3)] flex flex-col sm:flex-row items-center gap-5 relative overflow-hidden transform transition-all hover:-translate-y-1">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-orange-400/10 rounded-full blur-2xl transform translate-x-1/2 -translate-y-1/2"></div>
+                    <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shrink-0 shadow-[0_4px_15px_rgba(249,115,22,0.15)] text-orange-500 z-10">
+                      <AlertTriangle size={28} className="animate-pulse" />
+                    </div>
+                    <p className="font-bold text-[14px] md:text-[15px] leading-relaxed text-center sm:text-left text-[#9A3412] z-10">
                       Khi hoàn thành bài học ngày thứ 30, bạn hãy quay lại tập từ bài 1 để xây dựng lại nền tảng. kết hợp với các bài dẫn lưu hệ bạch huyết nâng cao mỗi ngày và tiếp tục duy trì các bài tập trong phác đồ, tập nhiều hơn các bài bổ trợ - tăng cường để hỗ trợ tư thế và tối ưu hiệu quả luyện tập nhé!
                     </p>
                   </div>
