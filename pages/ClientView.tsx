@@ -1853,9 +1853,11 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5" ref={gridRef}>
                   {Array.from({ length: Math.min(customer.duration_days || 30, 30) }, (_, i) => i + 1).map(day => {
+                    const maxDay = Math.min(customer.duration_days || 30, 30);
+                    const cappedAllowedDay = Math.min(allowedDay, maxDay);
                     const isLocked = day > allowedDay || isNotStarted;
                     const isUnlocked = day <= allowedDay;
-                    const isActive = day === allowedDay && !isNotStarted;
+                    const isActive = day === cappedAllowedDay && !isNotStarted;
                     const dayTasks = tasks
                       .filter(t => t.day === day)
                       .sort((a, b) => (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true }));
