@@ -69,6 +69,13 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
           onReady: (e: any) => {
             setIsReady(true);
             setDuration(e.target.getDuration());
+            
+            // Resume from saved time
+            const savedTime = localStorage.getItem(`phacdo_yt_progress_${videoId}`);
+            if (savedTime && parseFloat(savedTime) > 0) {
+               e.target.seekTo(parseFloat(savedTime), true);
+            }
+
             try {
                if (e.target.setPlaybackQuality) e.target.setPlaybackQuality('hd1080');
                if (e.target.unloadModule) {
@@ -119,11 +126,15 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
     }
     progressInterval.current = setInterval(() => {
       if (playerRef.current && playerRef.current.getCurrentTime && duration > 0) {
-        setPlayed(playerRef.current.getCurrentTime() / duration);
+        const currentTime = playerRef.current.getCurrentTime();
+        setPlayed(currentTime / duration);
+        if (videoId) {
+          localStorage.setItem(`phacdo_yt_progress_${videoId}`, currentTime.toString());
+        }
       }
     }, 1000);
     return () => clearInterval(progressInterval.current);
-  }, [isReady, playing, duration]);
+  }, [isReady, playing, duration, videoId]);
 
   // Auto-hide controls
   useEffect(() => {
