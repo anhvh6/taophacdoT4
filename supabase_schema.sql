@@ -286,8 +286,8 @@ begin
     c.require_device_limit,
     c.raw_backup
   from customers c
-  where trim(c.customer_id) = trim(p_customer_id)
-    and trim(c.token) = trim(p_token)
+  where c.customer_id = p_customer_id
+    and c.token = p_token
   limit 1;
 end;
 $$ language plpgsql;
@@ -312,8 +312,8 @@ begin
   select c.is_customized, c.video_date
   into v_is_customized, v_video_date
   from customers c
-  where trim(c.customer_id) = trim(p_customer_id)
-    and trim(c.token) = trim(p_token)
+  where c.customer_id = p_customer_id
+    and c.token = p_token
   limit 1;
 
   if not found then
@@ -324,7 +324,7 @@ begin
     return query
     select ct.day, ct.type, ct.title, ct.detail, ct.link, ct.sort_order, coalesce(ct.nhom, '')
     from customer_tasks ct
-    where trim(ct.customer_id) = trim(p_customer_id)
+    where ct.customer_id = p_customer_id
       and ct.is_deleted = false
     order by ct.day asc, ct.sort_order asc;
   else
