@@ -1186,15 +1186,21 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       const allowedDay = customer.allowed_day || getDiffDays(startDate, today) + 1;
 
       if (allowedDay >= 2) {
-        // Giảm delay xuống để cảm giác nhanh hơn
-        const timer = setTimeout(() => {
+        let retries = 0;
+        const tryScroll = () => {
           const activeCard = document.querySelector('.day-card-active');
           if (activeCard) {
-            activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            hasScrolledRef.current = true;
+            // Sử dụng setTimeout nhỏ sau khi tìm thấy để đảm bảo UI đã ổn định
+            setTimeout(() => {
+              activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              hasScrolledRef.current = true;
+            }, 100);
+          } else if (retries < 15) {
+            retries++;
+            setTimeout(tryScroll, 200);
           }
-        }, 100);
-        return () => clearTimeout(timer);
+        };
+        tryScroll();
       } else {
         hasScrolledRef.current = true;
       }
