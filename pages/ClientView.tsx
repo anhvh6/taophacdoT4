@@ -1679,7 +1679,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
         <div className="flex flex-col lg:flex-row gap-8">
           <aside className="lg:w-80 flex flex-col gap-6 flex-shrink-0">
-             <div className="bg-[#1E3A8A] text-white rounded-[2.5rem] p-8 shadow-xl">
+             <div className="bg-gradient-to-br from-[#1E3A8A] to-[#172554] text-white rounded-[2.5rem] p-8 shadow-[0_10px_40px_rgba(30,58,138,0.3)] transform transition-transform duration-300 hover:-translate-y-1">
                 <h3 className="text-lg font-black mb-4 border-b border-white/10 pb-3 flex items-center gap-2 uppercase tracking-wide">Ăn Nhai Cân Bằng</h3>
                 <p className="text-sm leading-relaxed opacity-90 text-justify whitespace-pre-line font-medium">
                   {customer.chewing_status && String(customer.chewing_status).toUpperCase() !== "NULL" && String(customer.chewing_status).trim() !== "" 
@@ -1689,7 +1689,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
              </div>
              
              {sidebarBlocks.map((block: any) => (
-               <div key={block.id} className={`rounded-[2.5rem] p-8 border transition-all ${block.type === 'dark' ? 'bg-[#1E3A8A] text-white border-transparent' : 'bg-white border-blue-50 shadow-sm text-[#1E3A8A]'}`}>
+               <div key={block.id} className={`rounded-[2.5rem] p-8 border transform transition-all duration-300 hover:-translate-y-1 ${block.type === 'dark' ? 'bg-gradient-to-br from-[#1E3A8A] to-[#172554] text-white border-transparent shadow-[0_10px_40px_rgba(30,58,138,0.3)]' : 'bg-gradient-to-br from-white to-[#F8FAFC] border-blue-50 shadow-[0_10px_35px_rgba(30,58,138,0.06)] text-[#1E3A8A]'}`}>
                  <h3 className={`text-lg font-black mb-4 border-b pb-3 flex items-center gap-2 uppercase tracking-wide ${block.type === 'dark' ? 'border-white/10' : 'border-blue-50'}`}>{block.title}</h3>
                  <p className={`text-sm leading-relaxed mb-6 whitespace-pre-line font-medium text-justify ${block.type === 'dark' ? 'text-white/90' : 'text-blue-800'}`}>{block.content}</p>
                  
@@ -1757,7 +1757,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
                 return (
                   <div 
-                    className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-blue-50 text-[#1E3A8A] cursor-pointer hover:shadow-md transition-all"
+                    className="bg-gradient-to-br from-white to-[#F8FAFC] rounded-[2.5rem] p-8 shadow-[0_10px_35px_rgba(30,58,138,0.06)] border border-blue-50 text-[#1E3A8A] cursor-pointer transform transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(30,58,138,0.1)]"
                     onClick={() => setIsAttendanceExpanded(!isAttendanceExpanded)}
                   >
                     <h3 className="text-lg font-black flex items-center justify-between uppercase tracking-wide">
@@ -1815,7 +1815,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
 
           <section className="flex-1">
-             <div className="bg-white rounded-[2.5rem] p-8 md:p-12 border border-blue-50 shadow-sm">
+             <div className="bg-white rounded-[2.5rem] p-8 md:p-12 border border-blue-50 shadow-[0_8px_30px_rgba(0,0,0,0.04)] relative z-10">
                 <h2 className="text-2xl font-black text-center mb-10 uppercase tracking-tight text-[#1E3A8A] flex items-center justify-center gap-2">
                    Lịch học chi tiết
                    {isVerified && (
@@ -1860,9 +1860,15 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                       <div 
                         key={day} 
                         onClick={() => { if(dayTasks.length === 0) handleTaskClick({day} as any) }} 
-                        className={`bg-white rounded-3xl border p-6 transition-all cursor-pointer hover:border-blue-300 ${isActive ? 'border-blue-600 ring-4 ring-blue-50 day-card-active' : 'border-blue-50'}`}
+                        className={`rounded-3xl border p-6 transform transition-all duration-300 cursor-pointer ${
+                          isLocked 
+                            ? 'bg-gray-50/80 border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.02)]' 
+                            : isActive
+                              ? 'bg-gradient-to-br from-[#F0F7FF] to-[#E0F2FE] border-blue-400 shadow-[0_10px_35px_rgba(37,99,235,0.15)] ring-4 ring-blue-50 day-card-active hover:-translate-y-1'
+                              : 'bg-gradient-to-br from-[#FAFCFF] to-[#F1F6FD] border-blue-100 shadow-[0_8px_25px_rgba(30,58,138,0.06)] hover:-translate-y-1 hover:shadow-[0_12px_30px_rgba(30,58,138,0.1)]'
+                        }`}
                       >
-                        <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-2 uppercase tracking-widest ${isUnlocked && !isNotStarted ? 'text-blue-600' : 'text-gray-400'}`}>
+                        <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-2 uppercase tracking-widest ${isUnlocked && !isNotStarted ? 'text-blue-600 border-blue-200/50' : 'text-gray-400 border-gray-200'}`}>
                           Ngày {day}
                           {isAttended && <CheckCircle size={14} className="text-green-500" strokeWidth={3} />}
                         </div>
@@ -1870,7 +1876,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                           <button 
                             key={idx} 
                             onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} 
-                            className="w-full text-center py-2.5 text-[13px] font-bold hover:bg-blue-50 rounded-xl transition-colors mb-1" 
+                            className={`w-full text-center py-2.5 px-2 text-[13px] font-bold rounded-xl transition-all mb-1.5 ${isLocked ? 'hover:bg-gray-100' : 'bg-white shadow-sm hover:shadow hover:bg-blue-50 hover:-translate-y-0.5'}`}
                             style={{ color: isLocked ? '#9CA3AF' : (isMandatory(t) ? '#2563EB' : '#10B981') }}
                           >
                             {t.title}
