@@ -1899,9 +1899,14 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shrink-0 shadow-[0_4px_15px_rgba(249,115,22,0.15)] text-orange-500 z-10">
                       <AlertTriangle size={28} className="animate-pulse" />
                     </div>
-                    <p className="font-bold text-[14px] md:text-[15px] leading-relaxed text-center sm:text-left text-[#9A3412] z-10">
-                      Khi hoàn thành bài học ngày thứ 30, bạn hãy quay lại tập từ bài 1 để xây dựng lại nền tảng. kết hợp với các bài dẫn lưu hệ bạch huyết nâng cao mỗi ngày và tiếp tục duy trì các bài tập trong phác đồ, tập nhiều hơn các bài bổ trợ - tăng cường để hỗ trợ tư thế và tối ưu hiệu quả luyện tập nhé!
-                    </p>
+                    <div className="font-bold text-[14px] md:text-[15px] leading-relaxed text-left text-blue-600 z-10 w-full">
+                      <p className="mb-2">Sau bài thứ 30 hãy:</p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li>Quay lại tập từ bài 1 để xây dựng lại nền tảng.</li>
+                        <li>Kết hợp dẫn lưu hệ bạch huyết bản nâng cao mỗi ngày.</li>
+                        <li>Tiếp tục duy trì các bài tập tăng cường cơ cổ và cơ thang để hỗ trợ tư thế và tối ưu hiệu quả luyện tập.</li>
+                      </ul>
+                    </div>
                   </div>
                 )}
              </div>

@@ -1,6 +1,5 @@
--- 1. Create function-based indexes just in case (optional but highly recommended for legacy data)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_customers_trim_lookup ON customers(trim(customer_id), trim(token));
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_customer_tasks_trim_lookup ON customer_tasks(trim(customer_id));
+CREATE INDEX IF NOT EXISTS idx_customers_trim_lookup ON customers(trim(customer_id), trim(token));
+CREATE INDEX IF NOT EXISTS idx_customer_tasks_trim_lookup ON customer_tasks(trim(customer_id));
 
 -- 2. Update get_client_customer RPC to remove trim()
 drop function if exists get_client_customer(text, text);
