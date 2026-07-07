@@ -1860,15 +1860,15 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                       <div 
                         key={day} 
                         onClick={() => { if(dayTasks.length === 0) handleTaskClick({day} as any) }} 
-                        className={`rounded-3xl border p-6 transform transition-all duration-300 cursor-pointer ${
+                        className={`rounded-[2rem] border p-6 transform transition-all duration-300 cursor-pointer ${
                           isLocked 
-                            ? 'bg-gray-50/80 border-gray-100 shadow-[0_4px_15px_rgba(0,0,0,0.02)]' 
+                            ? 'bg-gray-50/80 border-gray-200 shadow-[0_4px_10px_rgba(0,0,0,0.05)]' 
                             : isActive
-                              ? 'bg-gradient-to-br from-[#F0F7FF] to-[#E0F2FE] border-blue-400 shadow-[0_10px_35px_rgba(37,99,235,0.15)] ring-4 ring-blue-50 day-card-active hover:-translate-y-1'
-                              : 'bg-gradient-to-br from-[#FAFCFF] to-[#F1F6FD] border-blue-100 shadow-[0_8px_25px_rgba(30,58,138,0.06)] hover:-translate-y-1 hover:shadow-[0_12px_30px_rgba(30,58,138,0.1)]'
+                              ? 'bg-gradient-to-br from-[#F4F9FF] to-[#E6F3FE] border-blue-300 shadow-[0_15px_40px_rgba(37,99,235,0.2)] ring-4 ring-blue-100/50 day-card-active hover:-translate-y-2'
+                              : 'bg-gradient-to-br from-[#FAFCFF] to-[#F1F6FD] border-blue-100 shadow-[0_10px_35px_rgba(30,58,138,0.12)] hover:-translate-y-2 hover:shadow-[0_15px_40px_rgba(30,58,138,0.18)]'
                         }`}
                       >
-                        <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-2 uppercase tracking-widest ${isUnlocked && !isNotStarted ? 'text-blue-600 border-blue-200/50' : 'text-gray-400 border-gray-200'}`}>
+                        <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-3 uppercase tracking-widest ${isUnlocked && !isNotStarted ? 'text-blue-600 border-blue-200/50' : 'text-gray-400 border-gray-300'}`}>
                           Ngày {day}
                           {isAttended && <CheckCircle size={14} className="text-green-500" strokeWidth={3} />}
                         </div>
@@ -1876,12 +1876,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                           <button 
                             key={idx} 
                             onClick={(e) => { e.stopPropagation(); handleTaskClick(t); }} 
-                            className={`w-full text-center py-2.5 px-2 text-[13px] font-bold rounded-xl transition-all mb-1.5 ${isLocked ? 'hover:bg-gray-100' : 'bg-white shadow-sm hover:shadow hover:bg-blue-50 hover:-translate-y-0.5'}`}
+                            className="w-full text-center py-2.5 px-2 text-[13px] font-bold rounded-xl transition-all mb-1 hover:bg-blue-100/50"
                             style={{ color: isLocked ? '#9CA3AF' : (isMandatory(t) ? '#2563EB' : '#10B981') }}
                           >
                             {t.title}
                           </button>
-                        )) : <div className="text-center text-[10px] text-gray-300 font-bold uppercase italic py-4">Nghỉ ngơi</div>}
+                        )) : <div className="text-center text-[10px] text-gray-400 font-bold uppercase italic py-4">Nghỉ ngơi</div>}
                       </div>
                     );
                   })}
