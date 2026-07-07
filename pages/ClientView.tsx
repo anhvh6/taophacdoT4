@@ -1186,26 +1186,31 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       const allowedDay = customer.allowed_day || getDiffDays(startDate, today) + 1;
 
       if (allowedDay >= 2) {
+        hasScrolledRef.current = true; // Đánh dấu ngay lập tức để không bị trigger nhiều lần
         let retries = 0;
-        const tryScroll = () => {
+        const scrollLoop = setInterval(() => {
           const activeCard = document.querySelector('.day-card-active');
           if (activeCard) {
-            // Sử dụng setTimeout nhỏ sau khi tìm thấy để đảm bảo UI đã ổn định
+            clearInterval(scrollLoop);
+            // Chờ 600ms để đảm bảo các dữ liệu từ API (nếu có delay) đã bung layout ra hoàn chỉnh
             setTimeout(() => {
-              activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              hasScrolledRef.current = true;
-            }, 100);
-          } else if (retries < 15) {
+              try {
+                activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              } catch (e) {
+                const topPos = activeCard.getBoundingClientRect().top + window.scrollY - 150;
+                window.scrollTo({ top: topPos, behavior: 'smooth' });
+              }
+            }, 600);
+          } else {
             retries++;
-            setTimeout(tryScroll, 200);
+            if (retries > 30) clearInterval(scrollLoop); // Timeout sau 6 giây
           }
-        };
-        tryScroll();
+        }, 200);
       } else {
         hasScrolledRef.current = true;
       }
     }
-  }, [loading, customer]);
+  }, [loading, customer, tasks]);
 
   const triggerBackgroundRefresh = async (currentTask?: ExerciseTask) => {
     if (refreshInFlight.current) return;
