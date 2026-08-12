@@ -315,6 +315,8 @@ export const Dashboard: React.FC<{
 }> = ({ onNavigate, initialAction, filterStatus, customers, products, loading, onRefresh, onUpsert, onDelete, onLogout, currentUserRole = 'super_admin', checkPermission }) => {
   const hasPerm = (perm: string) => checkPermission ? checkPermission(perm) : true;
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [dateFilters, setDateFilters] = useState<Record<string, {from: string, to: string}>>({
     expiring: { from: '', to: '' },
     active: { from: '', to: '' },
@@ -648,12 +650,14 @@ export const Dashboard: React.FC<{
 
   useEffect(() => {
     const defaults = getDefaultDateRange();
+    setDateFrom(defaults.from);
+    setDateTo(defaults.to);
     setDateFilters({
-      expiring: defaults,
-      active: defaults,
-      notStarted: defaults,
-      expired: defaults,
-      deleted: defaults
+      expiring: {from: '', to: ''},
+      active: {from: '', to: ''},
+      notStarted: {from: '', to: ''},
+      expired: {from: '', to: ''},
+      deleted: {from: '', to: ''}
     });
   }, []);
 
@@ -664,6 +668,8 @@ export const Dashboard: React.FC<{
     if (filterStatus) {
       // Clear other filters
       setSearchTerm("");
+      setDateFrom("");
+      setDateTo("");
       
       // We need to handle the filtering logic. 
       // Since Dashboard uses useMemo for groups, we just need to ensure the groups reflect the filter.
@@ -815,16 +821,19 @@ export const Dashboard: React.FC<{
         calculatedEndObj = new Date(startObj.getTime() + (c.duration_days || 0) * 86400000);
       }
 
+      const createdAtISO = toISODateKey(c.created_at);
+      const matchGlobalDate = isSearching || videoOpenFilter || ((!dateFrom || createdAtISO >= dateFrom) && (!dateTo || createdAtISO <= dateTo));
+
       if (isNewToday) newToday.push(c);
 
       if (c.is_consultation) {
-        consultation.push(c);
+        if (matchGlobalDate) consultation.push(c);
       } else if (c.is_deposit) {
-        deposit.push(c);
+        if (matchGlobalDate) deposit.push(c);
       } else if (!hasPlan) {
-        noPlan.push(c);
+        if (matchGlobalDate) noPlan.push(c);
       } else if (currentDay < 1) {
-        if (checkDateObj(startObj, dateFilters.notStarted.from, dateFilters.notStarted.to)) {
+        if (matchGlobalDate && checkDateObj(startObj, dateFilters.notStarted.from, dateFilters.notStarted.to)) {
            notStarted.push(c);
         }
       } else if (daysLeft < 0) {
@@ -836,7 +845,7 @@ export const Dashboard: React.FC<{
            expiring.push(c);
         }
       } else {
-        if (checkDateObj(startObj, dateFilters.active.from, dateFilters.active.to)) {
+        if (matchGlobalDate && checkDateObj(startObj, dateFilters.active.from, dateFilters.active.to)) {
            active.push(c);
         }
       }
@@ -854,7 +863,7 @@ export const Dashboard: React.FC<{
     expired.sort((a, b) => (calcInfo(b).start.getTime() + (b.duration_days || 0) * 86400000) - (calcInfo(a).start.getTime() + (a.duration_days || 0) * 86400000));
 
     return { newToday, consultation, deposit, noPlan, expiring, active, notStarted, expired, deleted };
-  }, [filteredBySearch, todayStr, dateFilters, searchTerm, videoOpenFilter]);
+  }, [filteredBySearch, todayStr, dateFilters, dateFrom, dateTo, searchTerm, videoOpenFilter]);
 
   const summaryStats = useMemo(() => {
     // Calculate "Hoạt động" count independent of date filter
@@ -961,11 +970,15 @@ export const Dashboard: React.FC<{
   const totalProfit = useMemo(() => {
     return customers
       .filter(c => c.status !== CustomerStatus.DELETED)
+      .filter(c => {
+        const createdAtISO = toISODateKey(c.created_at);
+        return (!dateFrom || createdAtISO >= dateFrom) && (!dateTo || createdAtISO <= dateTo);
+      })
       .reduce((acc, c) => {
         const fin = calcRevenueCostProfit(c, products, productMap);
         return acc + fin.profit;
       }, 0);
-  }, [customers, products, productMap]);
+  }, [customers, products, dateFrom, dateTo, productMap]);
 
   return (
     <Layout 
@@ -1082,26 +1095,43 @@ export const Dashboard: React.FC<{
             />
           </div>
           <div className="grid grid-cols-2 sm:flex gap-4 w-full md:w-auto">
-            <div className="w-full sm:w-40 relative flex items-end justify-end">
+            <div className="w-full sm:w-40">
+              <LineInput 
+                label="Từ ngày"
+                type="date" 
+                value={dateFrom} 
+                onChange={e => setDateFrom(e.target.value)} 
+              />
+            </div>
+            <div className="w-full sm:w-40 relative">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">Đến ngày</label>
                 <button 
                   onClick={() => { 
                     setSearchTerm(""); 
                     const def = getDefaultDateRange();
+                    setDateFrom(def.from);
+                    setDateTo(def.to);
                     setDateFilters({
-                      expiring: def,
-                      active: def,
-                      notStarted: def,
-                      expired: def,
-                      deleted: def
+                      expiring: {from: '', to: ''},
+                      active: {from: '', to: ''},
+                      notStarted: {from: '', to: ''},
+                      expired: {from: '', to: ''},
+                      deleted: {from: '', to: ''}
                     });
                     setVideoOpenFilter(false); 
                     setCreatorFilter(null);
                   }} 
-                  className="text-gray-400 hover:text-red-500 transition-all active:scale-90 flex items-center gap-2 p-2" 
+                  className="text-gray-400 hover:text-red-500 transition-all active:scale-90" 
                   title="Xóa tất cả bộ lọc"
                 >
-                  <Eraser size={14} /> Xóa lọc
+                  <Eraser size={14} />
                 </button>
+              </div>
+              <DateInput 
+                value={dateTo} 
+                onChange={val => setDateTo(val)} 
+              />
             </div>
           </div>
         </div>
@@ -1150,56 +1180,56 @@ export const Dashboard: React.FC<{
                 )}
               </div>
             )}
-            {groups.expiring.length > 0 && (
-              <div id="group-expiring">
-                <GroupHeader icon={AlertTriangle} title="Sắp hết hạn" count={groups.expiring.length} colorClass="text-amber-700" isCollapsed={!!collapsedGroups['expiring'] && !isSearching} onToggle={() => toggleGroup('expiring')} filterLabel="Hết hạn từ" filterFrom={dateFilters.expiring.from} filterTo={dateFilters.expiring.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, expiring: {from, to}})} />
-                {(!collapsedGroups['expiring'] || isSearching) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.expiring.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-amber-500" groupIcon={AlertTriangle} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
-                  </div>
-                )}
-              </div>
-            )}
-            {groups.active.length > 0 && (
-              <div id="group-active">
-                <GroupHeader icon={CheckCircle} title="Hoạt động" count={groups.active.length} colorClass="text-green-800" isCollapsed={!!collapsedGroups['active'] && !isSearching} onToggle={() => toggleGroup('active')} filterLabel="Bắt đầu từ" filterFrom={dateFilters.active.from} filterTo={dateFilters.active.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, active: {from, to}})} />
-                {(!collapsedGroups['active'] || isSearching) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.active.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-green-600" groupIcon={CheckCircle} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
-                  </div>
-                )}
-              </div>
-            )}
-            {groups.notStarted.length > 0 && (
-              <div id="group-notStarted">
-                <GroupHeader icon={Clock} title="Chưa bắt đầu" count={groups.notStarted.length} colorClass="text-blue-800" isCollapsed={!!collapsedGroups['notStarted'] && !isSearching} onToggle={() => toggleGroup('notStarted')} filterLabel="Bắt đầu từ" filterFrom={dateFilters.notStarted.from} filterTo={dateFilters.notStarted.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, notStarted: {from, to}})} />
-                {(!collapsedGroups['notStarted'] || isSearching) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.notStarted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-blue-500" groupIcon={Clock} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
-                  </div>
-                )}
-              </div>
-            )}
-            {groups.expired.length > 0 && (
-              <div id="group-expired">
-                <GroupHeader icon={Archive} title="Đã kết thúc" count={groups.expired.length} colorClass="text-red-800" isCollapsed={!!collapsedGroups['expired'] && !isSearching} onToggle={() => toggleGroup('expired')} filterLabel="Hết hạn từ" filterFrom={dateFilters.expired.from} filterTo={dateFilters.expired.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, expired: {from, to}})} />
-                {(!collapsedGroups['expired'] || isSearching) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                    {groups.expired.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={Archive} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
-                  </div>
-                )}
-              </div>
-            )}
-            {groups.deleted.length > 0 && (
-              <div>
-                <GroupHeader icon={Trash2} title="Đã xóa" count={groups.deleted.length} colorClass="text-gray-500" isCollapsed={!!collapsedGroups['deleted'] && !isSearching} onToggle={() => toggleGroup('deleted')} filterLabel="Ngày xóa từ" filterFrom={dateFilters.deleted.from} filterTo={dateFilters.deleted.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, deleted: {from, to}})} />
-                {(!collapsedGroups['deleted'] || isSearching) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300 opacity-70 grayscale-[0.3]">
-                    {groups.deleted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-gray-400" groupIcon={Trash2} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Always show groups with filters even if length is 0 */}
+            <div id="group-expiring">
+              <GroupHeader icon={AlertTriangle} title="Sắp hết hạn" count={groups.expiring.length} colorClass="text-amber-700" isCollapsed={!!collapsedGroups['expiring'] && !isSearching} onToggle={() => toggleGroup('expiring')} filterLabel="Hết hạn từ" filterFrom={dateFilters.expiring.from} filterTo={dateFilters.expiring.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, expiring: {from, to}})} />
+              {(!collapsedGroups['expiring'] || isSearching) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
+                  {groups.expiring.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-amber-500" groupIcon={AlertTriangle} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
+                  {groups.expiring.length === 0 && <div className="col-span-full py-4 text-center text-sm text-gray-400 italic">Không có học viên nào</div>}
+                </div>
+              )}
+            </div>
+
+            <div id="group-active">
+              <GroupHeader icon={CheckCircle} title="Hoạt động" count={groups.active.length} colorClass="text-green-800" isCollapsed={!!collapsedGroups['active'] && !isSearching} onToggle={() => toggleGroup('active')} filterLabel="Bắt đầu từ" filterFrom={dateFilters.active.from} filterTo={dateFilters.active.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, active: {from, to}})} />
+              {(!collapsedGroups['active'] || isSearching) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
+                  {groups.active.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-green-600" groupIcon={CheckCircle} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
+                  {groups.active.length === 0 && <div className="col-span-full py-4 text-center text-sm text-gray-400 italic">Không có học viên nào</div>}
+                </div>
+              )}
+            </div>
+
+            <div id="group-notStarted">
+              <GroupHeader icon={Clock} title="Chưa bắt đầu" count={groups.notStarted.length} colorClass="text-blue-800" isCollapsed={!!collapsedGroups['notStarted'] && !isSearching} onToggle={() => toggleGroup('notStarted')} filterLabel="Bắt đầu từ" filterFrom={dateFilters.notStarted.from} filterTo={dateFilters.notStarted.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, notStarted: {from, to}})} />
+              {(!collapsedGroups['notStarted'] || isSearching) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
+                  {groups.notStarted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-blue-500" groupIcon={Clock} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
+                  {groups.notStarted.length === 0 && <div className="col-span-full py-4 text-center text-sm text-gray-400 italic">Không có học viên nào</div>}
+                </div>
+              )}
+            </div>
+
+            <div id="group-expired">
+              <GroupHeader icon={Archive} title="Đã kết thúc" count={groups.expired.length} colorClass="text-red-800" isCollapsed={!!collapsedGroups['expired'] && !isSearching} onToggle={() => toggleGroup('expired')} filterLabel="Hết hạn từ" filterFrom={dateFilters.expired.from} filterTo={dateFilters.expired.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, expired: {from, to}})} />
+              {(!collapsedGroups['expired'] || isSearching) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
+                  {groups.expired.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={Archive} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
+                  {groups.expired.length === 0 && <div className="col-span-full py-4 text-center text-sm text-gray-400 italic">Không có học viên nào</div>}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <GroupHeader icon={Trash2} title="Đã xóa" count={groups.deleted.length} colorClass="text-gray-500" isCollapsed={!!collapsedGroups['deleted'] && !isSearching} onToggle={() => toggleGroup('deleted')} filterLabel="Ngày xóa từ" filterFrom={dateFilters.deleted.from} filterTo={dateFilters.deleted.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, deleted: {from, to}})} />
+              {(!collapsedGroups['deleted'] || isSearching) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300 opacity-70 grayscale-[0.3]">
+                  {groups.deleted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-gray-400" groupIcon={Trash2} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
+                  {groups.deleted.length === 0 && <div className="col-span-full py-4 text-center text-sm text-gray-400 italic">Không có học viên nào</div>}
+                </div>
+              )}
+            </div>
             {groups.newToday.length === 0 && groups.expiring.length === 0 && groups.active.length === 0 && groups.notStarted.length === 0 && groups.expired.length === 0 && groups.deleted.length === 0 && !loading && (
               <div className="py-24 text-center bg-gray-50/50 rounded-[2.5rem] border border-dashed border-gray-200">
                 <p className="text-gray-400 italic text-sm font-medium">Hệ thống không tìm thấy học viên nào khớp với bộ lọc...</p>
