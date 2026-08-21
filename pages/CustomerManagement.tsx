@@ -593,7 +593,8 @@ export const CustomerManagement: React.FC<{
                       const currentDayInCycle = Math.min(60, Math.max(1, getDiffDays(cycleStartDate, today) + 1));
 
                       for (let i = 1; i <= currentDayInCycle; i++) {
-                        if (completedDays.includes(i)) attendedCount++;
+                        const checkDay = (i - 1) % 30 + 1;
+                        if (completedDays.includes(checkDay)) attendedCount++;
                         else if (i < currentDayInCycle) missedCount++;
                       }
 
@@ -618,7 +619,8 @@ export const CustomerManagement: React.FC<{
                               const actualDate = addDays(cycleStartDate, day - 1);
                               const isFuture = actualDate > today;
                               const isToday = actualDate.getTime() === today.getTime();
-                              const attended = completedDays.includes(day);
+                              const checkDay = (day - 1) % 30 + 1;
+                              const attended = completedDays.includes(checkDay);
                               const missed = !attended && day < currentDayInCycle;
 
                               return (
