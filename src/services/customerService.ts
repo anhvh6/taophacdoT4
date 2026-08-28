@@ -63,7 +63,8 @@ export const normalizeCustomer = (item: any): Customer => {
       require_device_limit: parseFlag(item.require_device_limit, true),
       pending_email: item.pending_email || "",
       raw_backup: rawBackup,
-      creator_email: rawBackup.creator_email || ""
+      creator_email: rawBackup.creator_email || "",
+      ad_config: rawBackup.ad_config || undefined
     };
   };
 
@@ -208,6 +209,10 @@ export const customerService = {
     
     if (payload.creator_email) {
       rawBackup.creator_email = payload.creator_email;
+    }
+    
+    if (payload.ad_config !== undefined) {
+      rawBackup.ad_config = payload.ad_config;
     }
 
     // Build DB payload by merging existing and new (only if defined)

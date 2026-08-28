@@ -552,6 +552,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const [isAttendanceExpanded, setIsAttendanceExpanded] = useState(false);
   const [showDay3Popup, setShowDay3Popup] = useState(false);
 
+  // Ad Popup State
+  const [showAdPopup, setShowAdPopup] = useState(false);
+  const [currentAdMediaIndex, setCurrentAdMediaIndex] = useState(0);
+  const [showAdDetails, setShowAdDetails] = useState(false);
+  const hasAdPrompted = useRef(false);
+
   const refreshInFlight = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const hasScrolledRef = useRef(false);
@@ -827,6 +833,39 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       setAuthModal({ isOpen: false, link: null });
     }
   }, [customer, isVerified, loading, authModal.isOpen]);
+
+  // Xử lý logic hiển thị quảng cáo
+  useEffect(() => {
+    if (loading || !customer || hasAdPrompted.current) return;
+    
+    const adConfig = customer.ad_config;
+    if (adConfig && adConfig.media && adConfig.media.length > 0) {
+       let shouldShow = true;
+       const todayDate = toVnZeroHour();
+       const start = toVnZeroHour(customer.start_date);
+       const currentAllowedDay = customer.allowed_day || getDiffDays(start, todayDate) + 1;
+       
+       if (adConfig.display_now) {
+          const startTime = adConfig.start_time ? new Date(adConfig.start_time) : new Date(customer.updated_at || new Date());
+          const diffDays = getDiffDays(toVnZeroHour(startTime), todayDate);
+          if (diffDays >= (adConfig.display_days || 0)) {
+             shouldShow = false;
+          }
+       } else {
+          shouldShow = false; // "Hiển thị ngay" is false, meaning it's not active
+       }
+
+       if (shouldShow) {
+          if (adConfig.from_session && currentAllowedDay < adConfig.from_session) shouldShow = false;
+          if (adConfig.to_session && currentAllowedDay > adConfig.to_session) shouldShow = false;
+       }
+
+       if (shouldShow) {
+          hasAdPrompted.current = true;
+          setShowAdPopup(true);
+       }
+    }
+  }, [customer, loading]);
 
   // Helper to mark attendance in local state for instant UI feedback
   const markAttendanceLocally = (dayNum?: number) => {
@@ -2433,6 +2472,50 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                <CheckCircle size={18} /> Đã hiểu và Đóng
              </button>
           </div>
+        </div>
+      )}
+
+      {/* 🚀 AD POPUP NOTIFICATION */}
+      {showAdPopup && customer?.ad_config && (
+        <div className="fixed inset-0 z-[99999] bg-black flex flex-col justify-center animate-in fade-in duration-300">
+           {/* Top control bar */}
+           <div className="absolute top-0 left-0 right-0 z-10 flex justify-end items-center p-4 md:p-6 bg-gradient-to-b from-black/80 to-transparent gap-4 pointer-events-none">
+              <div className="flex items-center gap-4 pointer-events-auto">
+                {customer.ad_config.cta_name && customer.ad_config.cta_link && (
+                   <a href={customer.ad_config.cta_link} target="_blank" className="bg-blue-600 hover:bg-blue-700 text-white font-black px-6 py-2.5 rounded-full uppercase text-sm tracking-widest shadow-lg transition-all active:scale-95">{customer.ad_config.cta_name}</a>
+                )}
+                {customer.ad_config.description && (
+                   <button onClick={() => setShowAdDetails(!showAdDetails)} className="bg-white/20 hover:bg-white/30 text-white font-bold px-6 py-2.5 rounded-full text-sm transition-all shadow-lg backdrop-blur-sm">Chi tiết</button>
+                )}
+                <button onClick={() => setShowAdPopup(false)} className="bg-white/20 hover:bg-white/40 p-2.5 rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-xl flex items-center justify-center"><X size={20}/></button>
+              </div>
+           </div>
+           
+           {/* Media Display */}
+           <div className="flex-1 relative flex items-center justify-center w-full overflow-hidden">
+              {customer.ad_config.media[currentAdMediaIndex].match(/\.(mp4|webm|m3u8)(\?.*)?$/i) ? (
+                 <video src={customer.ad_config.media[currentAdMediaIndex]} autoPlay loop muted playsInline className="w-full h-full object-contain" />
+              ) : (
+                 <img src={customer.ad_config.media[currentAdMediaIndex]} alt="Ad Media" className="w-full h-full object-contain" />
+              )}
+              
+              {/* Navigation arrows if multiple media */}
+              {customer.ad_config.media.length > 1 && (
+                 <>
+                    <button onClick={() => setCurrentAdMediaIndex(prev => (prev - 1 + customer.ad_config!.media.length) % customer.ad_config!.media.length)} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-all"><ChevronLeft size={24}/></button>
+                    <button onClick={() => setCurrentAdMediaIndex(prev => (prev + 1) % customer.ad_config!.media.length)} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-all"><ChevronRight size={24}/></button>
+                 </>
+              )}
+           </div>
+
+           {/* Details Modal */}
+           {showAdDetails && customer.ad_config.description && (
+              <div className="absolute inset-x-0 bottom-0 top-1/2 bg-white/95 backdrop-blur-md rounded-t-[2rem] shadow-2xl p-6 sm:p-8 overflow-y-auto animate-in slide-in-from-bottom-full duration-300 z-20">
+                 <button onClick={() => setShowAdDetails(false)} className="absolute top-6 right-6 text-gray-500 hover:text-black p-2 bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
+                 <h3 className="text-xl font-black text-blue-900 uppercase mb-4 tracking-tight">Thông tin chi tiết</h3>
+                 <div className="whitespace-pre-wrap text-sm font-medium text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: customer.ad_config.description.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 underline hover:text-blue-800">$1</a>') }} />
+              </div>
+           )}
         </div>
       )}
 

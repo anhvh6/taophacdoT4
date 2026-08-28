@@ -63,6 +63,18 @@ export interface VideoGroup {
   nhom?: string;
 }
 
+export interface AdConfig {
+  media: string[];
+  cta_name?: string;
+  cta_link?: string;
+  description?: string;
+  display_now?: boolean;
+  display_days?: number;
+  from_session?: number;
+  to_session?: number;
+  start_time?: string;
+}
+
 export interface Customer {
   id?: string;
   customer_id: string;
@@ -104,6 +116,7 @@ export interface Customer {
   access_state?: string;
   blocks?: SidebarBlock[];
   raw_backup?: any;
+  ad_config?: AdConfig;
 }
 
 export interface CustomerDevice {

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Save, Trash2, Plus, RefreshCw, Moon, Sun, Info, Copy, CopyPlus, UserPlus, Link as LinkIcon, Sparkles, RotateCcw, Search, Lock, Maximize2, Loader2, ArrowRight, Layout as LayoutIcon, Type, Video, Palette, AlertCircle, FileJson, CheckCircle, MessageSquare, Terminal, ShieldAlert, Bot, Eraser, Play, ChevronDown, ChevronRight, X, ShoppingBag, Clock, Calendar, User, Pin, DollarSign } from 'lucide-react';
+import { Save, Trash2, Plus, RefreshCw, Moon, Sun, Info, Copy, CopyPlus, UserPlus, Link as LinkIcon, Sparkles, RotateCcw, Search, Lock, Maximize2, Loader2, ArrowRight, Layout as LayoutIcon, Type, Video, Palette, AlertCircle, FileJson, CheckCircle, MessageSquare, Terminal, ShieldAlert, Bot, Eraser, Play, ChevronDown, ChevronRight, X, ShoppingBag, Clock, Calendar, User, Pin, DollarSign, Megaphone } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Card, Button, Modal } from '../components/UI';
 import { LineInput } from '../components/UI';
 import { api } from '../services/api';
 import { customPlanService } from '../src/services/customPlanService';
 import { generateCustomerLink, customerService } from '../src/services/customerService';
-import { Customer, ExerciseTask, ExerciseType, SidebarBlock, CustomerStatus, Product } from '../types';
+import { Customer, ExerciseTask, ExerciseType, SidebarBlock, CustomerStatus, Product, AdConfig } from '../types';
 import { EXERCISE_TYPES, DEFAULT_SIDEBAR_BLOCKS, DEFAULT_CHEWING_INSTRUCTION } from '../constants';
 import { GoogleGenAI } from "@google/genai";
 import { toInputDateString, formatDDMM, parseVNDate, addDays, formatVNDate } from '../utils/date';
@@ -266,6 +266,114 @@ const ChewingModalContent = ({ initialValue, onSave, onCancel }: {
   );
 };
 
+const AdModalContent = ({ initialConfig, onSave, onCancel }: {
+  initialConfig?: AdConfig;
+  onSave: (val: AdConfig) => void;
+  onCancel: () => void;
+}) => {
+  const [config, setConfig] = useState<AdConfig>(initialConfig || {
+    media: [''],
+    display_now: true,
+    display_days: 7
+  });
+
+  const updateMedia = (index: number, val: string) => {
+    const newMedia = [...config.media];
+    newMedia[index] = val;
+    setConfig({ ...config, media: newMedia });
+  };
+
+  const addMedia = () => {
+    setConfig({ ...config, media: [...config.media, ''] });
+  };
+
+  const removeMedia = (index: number) => {
+    const newMedia = config.media.filter((_, i) => i !== index);
+    if (newMedia.length === 0) newMedia.push('');
+    setConfig({ ...config, media: newMedia });
+  };
+
+  return (
+    <div className="flex flex-col gap-6 p-4">
+      <div className="flex flex-col gap-4">
+        <h4 className="text-sm font-bold text-blue-900 uppercase">Hình ảnh / Video</h4>
+        {config.media.map((m, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <div className="flex-1">
+              <LineInput 
+                label={`Nội dung ${idx + 1}`} 
+                placeholder="Link ảnh hoặc video..." 
+                value={m} 
+                onChange={e => updateMedia(idx, e.target.value)} 
+              />
+            </div>
+            {idx > 0 && (
+              <button onClick={() => removeMedia(idx)} className="text-red-500 hover:text-red-700 mt-6 shrink-0"><Trash2 size={20}/></button>
+            )}
+          </div>
+        ))}
+        <Button variant="outline" size="sm" onClick={addMedia} className="w-fit"><Plus size={16} className="mr-2"/> THÊM MEDIA</Button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <LineInput 
+          label="Tên hành động (Nút CTA)" 
+          placeholder="Ví dụ: Đặt ngay, Liên hệ..." 
+          value={config.cta_name || ''} 
+          onChange={e => setConfig({ ...config, cta_name: e.target.value })} 
+        />
+        <LineInput 
+          label="Link hành động" 
+          placeholder="Link Zalo, Web, Landing Page..." 
+          value={config.cta_link || ''} 
+          onChange={e => setConfig({ ...config, cta_link: e.target.value })} 
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-[11px] font-bold text-blue-600 uppercase tracking-widest">Nội dung chi tiết quảng cáo</label>
+        <textarea 
+          className="w-full h-32 p-4 bg-gray-50 border border-gray-200 rounded-xl outline-none text-sm focus:border-blue-300 transition-all"
+          placeholder="Nhập mô tả quảng cáo. Nếu để trống sẽ không hiện nút Chi tiết."
+          value={config.description || ''}
+          onChange={e => setConfig({ ...config, description: e.target.value })}
+        />
+      </div>
+
+      <div className="flex flex-col gap-4 p-4 bg-orange-50 rounded-xl border border-orange-100">
+        <h4 className="text-sm font-bold text-orange-900 uppercase">Điều kiện hiển thị</h4>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+           <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={config.display_now} onChange={e => setConfig({ ...config, display_now: e.target.checked, start_time: e.target.checked ? new Date().toISOString() : undefined })} className="w-5 h-5 text-orange-600 rounded border-orange-300"/>
+              <span className="text-sm font-bold text-orange-900">Hiển thị ngay</span>
+           </label>
+           {config.display_now && (
+             <div className="flex items-center gap-2">
+               <span className="text-sm text-orange-800">Số ngày hiển thị:</span>
+               <input type="number" className="w-16 p-1 border-b border-orange-300 bg-transparent text-center font-bold text-orange-900 outline-none" value={config.display_days || ''} onChange={e => setConfig({ ...config, display_days: parseInt(e.target.value) || 0 })} />
+             </div>
+           )}
+        </div>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+           <div className="flex items-center gap-2">
+             <span className="text-sm text-orange-800">Từ buổi học:</span>
+             <input type="number" className="w-16 p-1 border-b border-orange-300 bg-transparent text-center font-bold text-orange-900 outline-none" value={config.from_session || ''} onChange={e => setConfig({ ...config, from_session: parseInt(e.target.value) || undefined })} />
+           </div>
+           <div className="flex items-center gap-2">
+             <span className="text-sm text-orange-800">Đến buổi học:</span>
+             <input type="number" className="w-16 p-1 border-b border-orange-300 bg-transparent text-center font-bold text-orange-900 outline-none" value={config.to_session || ''} onChange={e => setConfig({ ...config, to_session: parseInt(e.target.value) || undefined })} />
+           </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-3 mt-4">
+        <Button variant="ghost" onClick={onCancel}>HỦY</Button>
+        <Button variant="primary" onClick={() => onSave(config)}>LƯU CẤU HÌNH</Button>
+      </div>
+    </div>
+  );
+};
+
 export const PlanEditor: React.FC<{ 
   onNavigate: (page: string, params?: any) => void; 
   customerId?: string; 
@@ -316,6 +424,8 @@ export const PlanEditor: React.FC<{
   const [localNote, setLocalNote] = useState(draftCustomer?.note || "");
   const [localChewing, setLocalChewing] = useState(draftCustomer?.chewing_status || DEFAULT_CHEWING_INSTRUCTION);
   const [localBlocks, setLocalBlocks] = useState<SidebarBlock[]>([]);
+  const [localAdConfig, setLocalAdConfig] = useState<AdConfig | undefined>(draftCustomer?.ad_config);
+  const [isAdModalOpen, setIsAdModalOpen] = useState(false);
 
   // Reset local states when customer identity or data changes
   useEffect(() => {
@@ -323,7 +433,8 @@ export const PlanEditor: React.FC<{
     setLocalNote(customer.note || "");
     setLocalChewing(customer.chewing_status || "");
     setLocalBlocks(customer.sidebar_blocks_json || []);
-  }, [customer.customer_id, customer.customer_name, customer.note, customer.chewing_status, customer.sidebar_blocks_json]);
+    setLocalAdConfig(customer.ad_config);
+  }, [customer.customer_id, customer.customer_name, customer.note, customer.chewing_status, customer.sidebar_blocks_json, customer.ad_config]);
   
   const [tasks, setTasks] = useState<ExerciseTask[]>([]);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
@@ -737,7 +848,8 @@ export const PlanEditor: React.FC<{
         sidebar_blocks_json: localBlocks,
         is_customized: isCustomized,
         end_date: calculatedEndDate || customer.end_date,
-        duration_days: Number(customer.duration_days || 30)
+        duration_days: Number(customer.duration_days || 30),
+        ad_config: localAdConfig
       };
       
       console.log("PlanEditor: Saving student with payload:", payload);
@@ -1037,6 +1149,15 @@ export const PlanEditor: React.FC<{
             >
               <Copy size={14} />
               Sao chép
+            </button>
+            <button 
+              onClick={() => setIsAdModalOpen(true)}
+              disabled={loading || isSyncing}
+              className="flex items-center gap-1.5 text-purple-600 hover:text-purple-800 font-black text-[11px] sm:text-xs uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 shrink-0"
+              title="Tạo cấu hình quảng cáo"
+            >
+              <Megaphone size={14} />
+              Tạo QC
             </button>
             <button 
               onClick={handleSave}
@@ -1596,6 +1717,18 @@ export const PlanEditor: React.FC<{
           <p className="font-medium text-gray-600 leading-relaxed">{modalConfig.message}</p>
         </div>
       </Modal>
+
+        <Modal isOpen={isAdModalOpen} onClose={() => setIsAdModalOpen(false)} title="CẤU HÌNH QUẢNG CÁO">
+          <AdModalContent 
+            initialConfig={localAdConfig}
+            onSave={(val) => {
+              setLocalAdConfig(val);
+              setCustomer(prev => ({ ...prev, ad_config: val }));
+              setIsAdModalOpen(false);
+            }} 
+            onCancel={() => setIsAdModalOpen(false)} 
+          />
+        </Modal>
     </Layout>
   );
 };
