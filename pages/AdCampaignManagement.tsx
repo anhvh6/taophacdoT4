@@ -9,7 +9,7 @@ const MiniHlsPlayer = ({ url }: { url: string }) => {
   const videoRef = React.useRef<HTMLVideoElement>(null);
   React.useEffect(() => {
     if (Hls.isSupported() && videoRef.current) {
-      const hls = new Hls();
+      const hls = new Hls({ startLevel: 2, capLevelToPlayerSize: true });
       hls.loadSource(url);
       hls.attachMedia(videoRef.current);
       hls.on(Hls.Events.MANIFEST_PARSED, () => videoRef.current?.play().catch(e => console.log(e)));
@@ -19,7 +19,7 @@ const MiniHlsPlayer = ({ url }: { url: string }) => {
       videoRef.current.addEventListener('loadedmetadata', () => videoRef.current?.play().catch(e => console.log(e)));
     }
   }, [url]);
-  return <video ref={videoRef} controls playsInline className="w-full h-full object-contain" />;
+  return <video ref={videoRef} autoPlay muted playsInline loop className="w-full h-full object-contain" />;
 };
 
 const AdCampaignManagement: React.FC<{ onNavigate: (page: string) => void }> = ({ onNavigate }) => {

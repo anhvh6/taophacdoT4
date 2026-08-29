@@ -439,6 +439,23 @@ const HlsVideoPlayerCore = ({
   );
 };
 
+const MiniHlsPlayer = ({ url }: { url: string }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (Hls.isSupported() && videoRef.current) {
+      const hls = new Hls({ startLevel: 2, capLevelToPlayerSize: true });
+      hls.loadSource(url);
+      hls.attachMedia(videoRef.current);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => videoRef.current?.play().catch(e => console.log(e)));
+      return () => hls.destroy();
+    } else if (videoRef.current?.canPlayType('application/vnd.apple.mpegurl')) {
+      videoRef.current.src = url;
+      videoRef.current.addEventListener('loadedmetadata', () => videoRef.current?.play().catch(e => console.log(e)));
+    }
+  }, [url]);
+  return <video ref={videoRef} autoPlay muted playsInline loop className="w-full h-full object-contain" />;
+};
+
 const HlsVideoPlayer = ({ url }: { url: string }) => {
   const [mountKey, setMountKey] = useState(0);
   const [serverIndex, setServerIndex] = useState(0);
@@ -2499,12 +2516,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
            <div className="absolute top-0 left-0 right-0 z-10 flex justify-end items-center p-4 md:p-6 bg-gradient-to-b from-black/80 to-transparent gap-4 pointer-events-none">
               <div className="flex items-center gap-4 pointer-events-auto">
                 {activeCampaign.cta_name && activeCampaign.cta_link && (
-                   <a href={activeCampaign.cta_link} target="_blank" className="bg-blue-600 hover:bg-blue-700 text-white font-black px-6 py-2.5 rounded-full uppercase text-sm tracking-widest shadow-lg transition-all active:scale-95">{activeCampaign.cta_name}</a>
+                   <a href={activeCampaign.cta_link} target="_blank" className="bg-white/20 hover:bg-white/30 text-blue-400 font-black px-6 py-2.5 rounded-full uppercase text-sm tracking-widest shadow-lg backdrop-blur-md transition-all active:scale-95">{activeCampaign.cta_name}</a>
                 )}
                 {activeCampaign.description && (
-                   <button onClick={() => setShowAdDetails(!showAdDetails)} className="bg-white/20 hover:bg-white/30 text-white font-bold px-6 py-2.5 rounded-full text-sm transition-all shadow-lg backdrop-blur-sm">Chi tiết</button>
+                   <button onClick={() => setShowAdDetails(!showAdDetails)} className="bg-white/20 hover:bg-white/30 text-blue-400 font-bold px-6 py-2.5 rounded-full text-sm transition-all shadow-lg backdrop-blur-md">Chi tiết</button>
                 )}
-                <button onClick={() => setShowAdPopup(false)} className="bg-white/20 hover:bg-white/40 p-2.5 rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-xl flex items-center justify-center"><X size={20}/></button>
+                <button onClick={() => setShowAdPopup(false)} className="bg-white/20 hover:bg-white/40 p-2.5 rounded-full text-blue-400 backdrop-blur-md transition-all active:scale-95 shadow-xl flex items-center justify-center"><X size={20}/></button>
               </div>
            </div>
            
@@ -2524,23 +2541,24 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                  };
                  const ytEmbedUrl = getYouTubeEmbedUrl(mediaUrl);
                  
-                 let directImageUrl = mediaUrl;
                  // Xử lý link Google Drive chia sẻ công khai thành link xem trực tiếp ảnh
-                 if (mediaUrl.includes('drive.google.com/file/d/')) {
-                    const match = mediaUrl.match(/file\/d\/([a-zA-Z0-9_-]+)/);
-                    if (match && match[1]) {
-                       directImageUrl = `https://drive.google.com/uc?export=view&id=${match[1]}`;
+                 if (mediaUrl.includes('drive.google.com')) {
+                    const match = mediaUrl.match(/[-\w]{25,}/);
+                    if (match && match[0]) {
+                       return <iframe src={`https://drive.google.com/file/d/${match[0]}/preview`} className="w-full h-full border-0" allowFullScreen />;
                     }
                  }
 
                  if (isBunnyVidId) {
-                    return <div className="w-full h-full max-w-[1400px] flex items-center justify-center"><HlsVideoPlayer url={`https://video.phacdo.com/${mediaUrl}/playlist.m3u8`} /></div>;
+                    return <div className="w-full h-full max-w-[1400px] flex items-center justify-center">
+                       <MiniHlsPlayer url={`https://video.phacdo.com/${mediaUrl}/playlist.m3u8`} />
+                    </div>;
                  } else if (ytEmbedUrl) {
                     return <CustomYouTubePlayer url={ytEmbedUrl} onClose={() => {}} />;
                  } else if (mediaUrl.match(/\.(mp4|webm|m3u8)(\?.*)?$/i)) {
                     return <video src={mediaUrl} autoPlay loop muted playsInline className="w-full h-full object-contain" />;
                  } else {
-                    return <img src={directImageUrl} alt="Ad Media" className="w-full h-full object-contain" />;
+                    return <img src={mediaUrl} alt="Ad Media" className="w-full h-full object-contain" />;
                  }
               })()}
               
@@ -2556,11 +2574,18 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
            {/* Details Modal */}
            {showAdDetails && activeCampaign.description && (
               <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
-                 <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAdDetails(false)}></div>
-                 <div className="relative bg-white/95 backdrop-blur-md rounded-[2rem] shadow-2xl p-6 sm:p-8 w-full max-w-2xl max-h-[80vh] overflow-y-auto animate-in zoom-in-95 duration-300">
+                 <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto" onClick={() => setShowAdDetails(false)}></div>
+                 <div className="relative bg-white/95 backdrop-blur-md rounded-[2rem] shadow-2xl p-6 sm:p-8 w-full max-w-2xl max-h-[80vh] overflow-y-auto animate-in zoom-in-95 duration-300 pointer-events-auto flex flex-col">
                     <button onClick={() => setShowAdDetails(false)} className="absolute top-6 right-6 text-gray-500 hover:text-black p-2 bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
-                    <h3 className="text-xl font-black text-blue-900 uppercase mb-4 tracking-tight pr-10">Thông tin chi tiết</h3>
-                    <div className="whitespace-pre-wrap text-sm font-medium text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: activeCampaign.description.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 underline hover:text-blue-800">$1</a>') }} />
+                    <h3 className="text-xl sm:text-2xl font-black text-blue-900 uppercase mb-4 tracking-tight pr-10">Thông tin chi tiết</h3>
+                    <div className="whitespace-pre-wrap text-sm sm:text-base font-medium text-gray-700 leading-relaxed mb-6" dangerouslySetInnerHTML={{ __html: activeCampaign.description.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 underline hover:text-blue-800 font-bold break-all">$1</a>') }} />
+                    {activeCampaign.cta_name && activeCampaign.cta_link && (
+                       <div className="mt-auto pt-4 border-t border-gray-200 flex justify-center">
+                          <a href={activeCampaign.cta_link} target="_blank" className="bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-3 rounded-full uppercase text-sm shadow-lg transform transition hover:scale-105 active:scale-95">
+                             {activeCampaign.cta_name}
+                          </a>
+                       </div>
+                    )}
                  </div>
               </div>
            )}
