@@ -70,6 +70,7 @@ export const campaignService = {
             sdt: '0000',
             trang_thai: 0,
             trang_thai_gan: '0',
+            token: 'global_ad_token',
             raw_backup: raw
           });
         if (error) throw error;

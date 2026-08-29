@@ -3,7 +3,24 @@ import { Layout } from '../components/Layout';
 import { Button, Modal, Toast } from '../components/UI';
 import { Megaphone, Plus, Edit2, Trash2, CheckCircle, AlertTriangle, Play, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { AdCampaign, campaignService } from '../src/services/campaignService';
+import Hls from 'hls.js';
 
+const MiniHlsPlayer = ({ url }: { url: string }) => {
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  React.useEffect(() => {
+    if (Hls.isSupported() && videoRef.current) {
+      const hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(videoRef.current);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => videoRef.current?.play().catch(e => console.log(e)));
+      return () => hls.destroy();
+    } else if (videoRef.current?.canPlayType('application/vnd.apple.mpegurl')) {
+      videoRef.current.src = url;
+      videoRef.current.addEventListener('loadedmetadata', () => videoRef.current?.play().catch(e => console.log(e)));
+    }
+  }, [url]);
+  return <video ref={videoRef} controls playsInline className="w-full h-full object-contain" />;
+};
 
 const AdCampaignManagement: React.FC<{ onNavigate: (page: string) => void }> = ({ onNavigate }) => {
   const [campaigns, setCampaigns] = useState<AdCampaign[]>([]);
@@ -103,13 +120,15 @@ const AdCampaignManagement: React.FC<{ onNavigate: (page: string) => void }> = (
     const ytEmbedUrl = getYouTubeEmbedUrl(mediaUrl);
     
     let directImageUrl = mediaUrl;
-    if (mediaUrl.includes('drive.google.com/file/d/')) {
-       const match = mediaUrl.match(/file\/d\/([a-zA-Z0-9_-]+)/);
-       if (match && match[1]) directImageUrl = `https://drive.google.com/uc?export=view&id=${match[1]}`;
+    if (mediaUrl.includes('drive.google.com')) {
+       const match = mediaUrl.match(/[-\w]{25,}/);
+       if (match && match[0]) {
+           return <iframe src={`https://drive.google.com/file/d/${match[0]}/preview`} className="w-full h-full border-0" allowFullScreen />;
+       }
     }
 
     if (isBunnyVidId) {
-       return <iframe src={`https://iframe.mediadelivery.net/embed/236173/${mediaUrl}?autoplay=true`} className="w-full h-full border-0" allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture" allowFullScreen />;
+       return <MiniHlsPlayer url={`https://video.phacdo.com/${mediaUrl}/playlist.m3u8`} />;
     } else if (ytEmbedUrl) {
        return <iframe src={ytEmbedUrl} className="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />;
     } else if (mediaUrl.match(/\.(mp4|webm|m3u8)(\?.*)?$/i)) {
@@ -222,29 +241,36 @@ const AdCampaignManagement: React.FC<{ onNavigate: (page: string) => void }> = (
 
           <div className="bg-orange-50 p-4 rounded-xl">
              <label className="block text-xs font-bold text-orange-900 uppercase mb-3">Điều Kiện Hiển Thị</label>
-             <div className="flex flex-col gap-3">
-               <label className="flex items-center gap-2 cursor-pointer">
-                 <input type="checkbox" checked={!!currentCampaign.display_now} onChange={e => setCurrentCampaign({ ...currentCampaign, display_now: e.target.checked })} />
-                 <span className="text-sm font-bold">Hiển thị ngay (áp dụng mọi học viên)</span>
+             <div className="flex flex-col gap-4">
+               <label className="flex items-center gap-3 cursor-pointer">
+                 <input type="radio" name="displayType" className="w-4 h-4 text-orange-600 focus:ring-orange-500" checked={!!currentCampaign.display_now} onChange={() => setCurrentCampaign({ ...currentCampaign, display_now: true })} />
+                 <span className="text-sm font-bold text-gray-800">Hiển thị ngay (áp dụng mọi học viên)</span>
                </label>
-               {currentCampaign.display_now ? (
-                 <div className="flex items-center gap-2 pl-6">
-                   <span className="text-sm">Hiển thị trong vòng</span>
-                   <input type="number" min="0" value={currentCampaign.display_days || 0} onChange={e => setCurrentCampaign({ ...currentCampaign, display_days: parseInt(e.target.value) || 0 })} className="w-16 px-2 py-1 border rounded" />
-                   <span className="text-sm">ngày kế tiếp.</span>
+               {currentCampaign.display_now && (
+                 <div className="flex items-center gap-2 pl-7">
+                   <span className="text-sm text-gray-600">Hiển thị trong vòng</span>
+                   <input type="number" min="0" value={currentCampaign.display_days || 0} onChange={e => setCurrentCampaign({ ...currentCampaign, display_days: parseInt(e.target.value) || 0 })} className="w-20 px-2 py-1.5 border rounded-lg text-center" />
+                   <span className="text-sm text-gray-600">ngày kế tiếp.</span>
                  </div>
-               ) : (
-                 <div className="flex items-center gap-2 pl-6 flex-wrap">
-                   <span className="text-sm">Hiển thị khi học viên đạt từ buổi học:</span>
-                   <input type="number" min="0" value={currentCampaign.from_session || 0} onChange={e => setCurrentCampaign({ ...currentCampaign, from_session: parseInt(e.target.value) || 0 })} className="w-16 px-2 py-1 border rounded" />
-                   <span className="text-sm">đến buổi:</span>
-                   <input type="number" min="0" value={currentCampaign.to_session || 0} onChange={e => setCurrentCampaign({ ...currentCampaign, to_session: parseInt(e.target.value) || 0 })} className="w-16 px-2 py-1 border rounded" />
+               )}
+               
+               <label className="flex items-center gap-3 cursor-pointer mt-2">
+                 <input type="radio" name="displayType" className="w-4 h-4 text-orange-600 focus:ring-orange-500" checked={!currentCampaign.display_now} onChange={() => setCurrentCampaign({ ...currentCampaign, display_now: false })} />
+                 <span className="text-sm font-bold text-gray-800">Hiển thị theo tiến độ học của học viên</span>
+               </label>
+               {!currentCampaign.display_now && (
+                 <div className="flex flex-wrap items-center gap-2 pl-7 mt-1">
+                   <span className="text-sm text-gray-600">Từ buổi:</span>
+                   <input type="number" min="0" value={currentCampaign.from_session || 0} onChange={e => setCurrentCampaign({ ...currentCampaign, from_session: parseInt(e.target.value) || 0 })} className="w-20 px-2 py-1.5 border rounded-lg text-center" />
+                   <span className="text-sm text-gray-600 ml-2">Đến buổi:</span>
+                   <input type="number" min="0" value={currentCampaign.to_session || 0} onChange={e => setCurrentCampaign({ ...currentCampaign, to_session: parseInt(e.target.value) || 0 })} className="w-20 px-2 py-1.5 border rounded-lg text-center" />
                  </div>
                )}
              </div>
           </div>
           
-          <div className="flex justify-end pt-4">
+          <div className="flex justify-between items-center pt-4">
+            <Button variant="secondary" onClick={() => openPreview(currentCampaign as AdCampaign)}>XEM TRƯỚC</Button>
             <Button variant="primary" onClick={handleSave}>LƯU CHIẾN DỊCH</Button>
           </div>
         </div>
@@ -277,10 +303,17 @@ const AdCampaignManagement: React.FC<{ onNavigate: (page: string) => void }> = (
            {showPreviewDetails && previewCampaign.description && (
               <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowPreviewDetails(false)}></div>
-                 <div className="relative bg-white/95 backdrop-blur-md rounded-[2rem] shadow-2xl p-6 sm:p-8 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+                 <div className="relative bg-white/95 backdrop-blur-md rounded-[2rem] shadow-2xl p-6 sm:p-8 w-full max-w-2xl max-h-[80vh] overflow-y-auto flex flex-col">
                     <button onClick={() => setShowPreviewDetails(false)} className="absolute top-6 right-6 text-gray-500 hover:text-black p-2 bg-gray-100 rounded-full"><X size={20}/></button>
                     <h3 className="text-xl font-black text-blue-900 uppercase mb-4 pr-10">Thông tin chi tiết</h3>
-                    <div className="whitespace-pre-wrap text-sm font-medium text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: previewCampaign.description.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 underline hover:text-blue-800">$1</a>') }} />
+                    <div className="whitespace-pre-wrap text-sm font-medium text-gray-700 leading-relaxed mb-6" dangerouslySetInnerHTML={{ __html: previewCampaign.description.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 underline hover:text-blue-800">$1</a>') }} />
+                    {previewCampaign.cta_name && previewCampaign.cta_link && (
+                       <div className="mt-auto pt-4 border-t border-gray-200 flex justify-center">
+                          <a href={previewCampaign.cta_link} target="_blank" className="bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-3 rounded-full uppercase text-sm shadow-lg transform transition hover:scale-105 active:scale-95">
+                             {previewCampaign.cta_name}
+                          </a>
+                       </div>
+                    )}
                  </div>
               </div>
            )}
