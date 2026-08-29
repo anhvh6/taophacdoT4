@@ -453,7 +453,7 @@ const MiniHlsPlayer = ({ url }: { url: string }) => {
       videoRef.current.addEventListener('loadedmetadata', () => videoRef.current?.play().catch(e => console.log(e)));
     }
   }, [url]);
-  return <video ref={videoRef} autoPlay muted playsInline loop className="w-full h-full object-contain" />;
+  return <video ref={videoRef} autoPlay controls playsInline loop className="w-full h-full object-contain" />;
 };
 
 const HlsVideoPlayer = ({ url }: { url: string }) => {
@@ -2547,7 +2547,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                  if (mediaUrl.includes('drive.google.com')) {
                     const match = mediaUrl.match(/[-\w]{25,}/);
                     if (match && match[0]) {
-                       return <iframe src={`https://drive.google.com/file/d/${match[0]}/preview`} className="w-full h-full border-0" allowFullScreen />;
+                       return <img src={`https://lh3.googleusercontent.com/d/${match[0]}`} alt="Ad Media" className="w-full h-full object-contain" />;
                     }
                  }
 
