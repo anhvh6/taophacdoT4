@@ -855,7 +855,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
   // Xử lý logic hiển thị quảng cáo
   useEffect(() => {
-    if (loading || !customer || hasAdPrompted.current) return;
+    // Không hiển thị quảng cáo nếu đang trong chế độ preview từ Admin
+    const isPreviewMode = window.location.href.includes('preview=true');
+    if (loading || !customer || hasAdPrompted.current || isPreviewMode) return;
     
     const getActiveCampaign = async () => {
       try {
