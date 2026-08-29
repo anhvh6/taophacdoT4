@@ -144,7 +144,7 @@ const AdCampaignManagement: React.FC<{ onNavigate: (page: string) => void }> = (
       onBack={() => onNavigate('dashboard')}
       actions={
         <Button variant="primary" onClick={() => {
-          setCurrentCampaign({ is_active: true, display_now: true, media: [] });
+          setCurrentCampaign({ is_active: true, display_now: true, media: [''] });
           setIsModalOpen(true);
         }}>
           <Plus size={16} className="mr-2" /> Tạo Mới
@@ -156,10 +156,10 @@ const AdCampaignManagement: React.FC<{ onNavigate: (page: string) => void }> = (
           <table className="w-full text-sm text-left">
             <thead className="bg-gray-50 border-b border-gray-100 uppercase text-xs font-black text-gray-500">
               <tr>
-                <th className="px-6 py-4">Tên chiến dịch</th>
-                <th className="px-6 py-4">Điều kiện</th>
-                <th className="px-6 py-4">Trạng thái</th>
-                <th className="px-6 py-4 text-right">Thao tác</th>
+                <th className="px-6 py-4 whitespace-nowrap min-w-[200px]">Tên chiến dịch</th>
+                <th className="px-6 py-4 whitespace-nowrap min-w-[200px]">Điều kiện</th>
+                <th className="px-6 py-4 whitespace-nowrap min-w-[120px]">Trạng thái</th>
+                <th className="px-6 py-4 text-right whitespace-nowrap min-w-[150px]">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -170,12 +170,15 @@ const AdCampaignManagement: React.FC<{ onNavigate: (page: string) => void }> = (
               ) : (
                 campaigns.map(c => (
                   <tr key={c.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 font-bold text-blue-900">{c.name}</td>
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-blue-900 whitespace-nowrap">{c.name}</div>
+                      <div className="text-xs text-gray-400 mt-1 whitespace-nowrap">Ngày tạo: {c.created_at ? new Date(c.created_at).toLocaleDateString('vi-VN') : ''}</div>
+                    </td>
                     <td className="px-6 py-4 text-xs font-medium text-gray-600">
                       {c.display_now ? (
-                        <span className="text-green-600 bg-green-50 px-2 py-1 rounded">Hiển thị ngay (trong {c.display_days || 0} ngày)</span>
+                        <span className="text-green-600 bg-green-50 px-2 py-1 rounded whitespace-nowrap">Hiển thị ngay (trong {c.display_days || 0} ngày)</span>
                       ) : (
-                        <span className="text-orange-600 bg-orange-50 px-2 py-1 rounded">Từ buổi {c.from_session || 0} đến buổi {c.to_session || 0}</span>
+                        <span className="text-orange-600 bg-orange-50 px-2 py-1 rounded whitespace-nowrap">Từ buổi {c.from_session || 0} đến buổi {c.to_session || 0}</span>
                       )}
                     </td>
                     <td className="px-6 py-4">
@@ -279,14 +282,14 @@ const AdCampaignManagement: React.FC<{ onNavigate: (page: string) => void }> = (
       {previewCampaign && (
         <div className="fixed inset-0 z-[99999] bg-black flex flex-col justify-center">
            <div className="absolute top-0 left-0 right-0 z-10 flex justify-end items-center p-4 bg-gradient-to-b from-black/80 to-transparent gap-4">
-              <div className="bg-red-600 text-white font-bold px-3 py-1 text-xs rounded-full uppercase absolute left-4">Chế độ xem trước</div>
+              <div className="bg-white/20 backdrop-blur-md text-blue-400 font-bold px-3 py-1.5 text-xs rounded-full uppercase absolute left-4">Chế độ xem trước</div>
               {previewCampaign.cta_name && previewCampaign.cta_link && (
-                 <a href={previewCampaign.cta_link} target="_blank" className="bg-blue-600 hover:bg-blue-700 text-white font-black px-6 py-2.5 rounded-full uppercase text-sm">{previewCampaign.cta_name}</a>
+                 <a href={previewCampaign.cta_link} target="_blank" className="bg-white/20 backdrop-blur-md hover:bg-white/30 text-blue-400 font-black px-6 py-2.5 rounded-full uppercase text-sm transition-colors">{previewCampaign.cta_name}</a>
               )}
               {previewCampaign.description && (
-                 <button onClick={() => setShowPreviewDetails(!showPreviewDetails)} className="bg-white/20 hover:bg-white/30 text-white font-bold px-6 py-2.5 rounded-full text-sm">Chi tiết</button>
+                 <button onClick={() => setShowPreviewDetails(!showPreviewDetails)} className="bg-white/20 backdrop-blur-md hover:bg-white/30 text-blue-400 font-bold px-6 py-2.5 rounded-full text-sm transition-colors">Chi tiết</button>
               )}
-              <button onClick={() => setPreviewCampaign(null)} className="bg-white/20 p-2.5 rounded-full text-white"><X size={20}/></button>
+              <button onClick={() => setPreviewCampaign(null)} className="bg-white/20 backdrop-blur-md hover:bg-white/30 p-2.5 rounded-full text-blue-400 transition-colors"><X size={20}/></button>
            </div>
            
            <div className="flex-1 relative flex items-center justify-center w-full overflow-hidden">
