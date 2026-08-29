@@ -19,15 +19,27 @@ export interface AdCampaign {
 export const campaignService = {
   async getCampaigns(): Promise<AdCampaign[]> {
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('raw_backup')
-        .eq('customer_id', 'GLOBAL_AD_CAMPAIGNS')
-        .maybeSingle();
-        
-      if (error || !data) return [];
+      // Try RPC first to bypass RLS for anonymous clients (students)
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_client_customer', {
+        p_customer_id: 'GLOBAL_AD_CAMPAIGNS',
+        p_token: 'global_ad_token'
+      });
+
+      let raw: any = {};
       
-      let raw = data.raw_backup || {};
+      if (!rpcError && rpcData && rpcData.length > 0) {
+        raw = rpcData[0].raw_backup || {};
+      } else {
+        // Fallback for Admin (Service Role / Auth User)
+        const { data, error } = await supabase
+          .from('customers')
+          .select('raw_backup')
+          .eq('customer_id', 'GLOBAL_AD_CAMPAIGNS')
+          .maybeSingle();
+          
+        if (error || !data) return [];
+        raw = data.raw_backup || {};
+      }
       if (typeof raw === 'string') {
         try { raw = JSON.parse(raw); } catch(e) { raw = {}; }
       }
