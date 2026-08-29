@@ -8,6 +8,7 @@ import { VideoGroupManagement } from './pages/VideoGroupManagement';
 import { AnalyticsDashboard } from './pages/AnalyticsDashboard';
 import { PermissionsManagement } from './pages/PermissionsManagement';
 import { AdminUsersManagement } from './pages/AdminUsersManagement';
+import AdCampaignManagement from './pages/AdCampaignManagement';
 import { MigrationTool } from './src/pages/MigrationTool';
 import { customerService } from './src/services/customerService';
 import { productService } from './src/services/productService';
@@ -18,7 +19,7 @@ import { Button, Toast } from './components/UI';
 import { Customer, Product, CustomerStatus, RolePermission } from './types';
 import { permissionService } from './src/services/permissionService';
 
-type Page = 'dashboard' | 'management' | 'plan-editor' | 'products' | 'preview' | 'video-groups' | 'login' | 'migrate' | 'analytics' | 'permissions' | 'admin-users';
+type Page = 'dashboard' | 'management' | 'plan-editor' | 'products' | 'preview' | 'video-groups' | 'login' | 'migrate' | 'analytics' | 'permissions' | 'admin-users' | 'ad-campaigns';
 
 const APP_MODE = import.meta.env.VITE_APP_MODE || 'admin';
 
@@ -47,6 +48,7 @@ const App: React.FC = () => {
     if (path === '#/analytics') return 'analytics';
     if (path === '#/permissions') return 'permissions';
     if (path === '#/admin-users') return 'admin-users';
+    if (path === '#/ad-campaigns') return 'ad-campaigns';
     if (path === '#/migrate') return 'migrate';
     if (path === '#/add-student') return 'dashboard';
     return 'dashboard';
@@ -421,6 +423,9 @@ const App: React.FC = () => {
       } else if (path === '#/admin-users') {
         setCurrentPage('admin-users');
         setPageParams({});
+      } else if (path === '#/ad-campaigns') {
+        setCurrentPage('ad-campaigns');
+        setPageParams({});
       } else if (path === '#/migrate') {
         setCurrentPage('migrate');
         setPageParams({});
@@ -708,6 +713,9 @@ const App: React.FC = () => {
           )}
           {currentPage === 'admin-users' && (
             <AdminUsersManagement onNavigate={navigate} />
+          )}
+          {currentPage === 'ad-campaigns' && (
+            <AdCampaignManagement onNavigate={navigate} />
           )}
           {currentPage === 'migrate' && (
             <MigrationTool />

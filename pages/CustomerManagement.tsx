@@ -1032,7 +1032,6 @@ export const CustomerManagement: React.FC<{
         onClose={() => { 
           setIsCopyModalOpen(false); 
           setCopySearchTerm(""); 
-          localStorage.setItem('mega_pinned_copy_students', JSON.stringify(pinnedIds));
         }}
         title="CHỌN HỌC VIÊN ĐỂ COPY PHÁC ĐỒ"
         maxWidth="max-w-2xl"

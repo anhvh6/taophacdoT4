@@ -1040,9 +1040,14 @@ export const Dashboard: React.FC<{
             </Button>
           )}
           {currentUserRole === 'super_admin' && (
-            <Button variant="secondary" size="sm" onClick={() => onNavigate('permissions')}>
-              <Shield size={14} className="mr-1.5" /> Phân quyền
-            </Button>
+            <>
+              <Button variant="secondary" size="sm" onClick={() => onNavigate('permissions')}>
+                <Shield size={14} className="mr-1.5" /> Phân quyền
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => onNavigate('ad-campaigns')}>
+                <Play size={14} className="mr-1.5" /> Chiến dịch QC
+              </Button>
+            </>
           )}
           <button 
             onClick={onLogout}
@@ -1526,7 +1531,6 @@ export const Dashboard: React.FC<{
           setIsCopyModalOpen(false); 
           setCopySearchTerm(""); 
           setTargetCustomerId(null); 
-          localStorage.setItem('mega_pinned_copy_students', JSON.stringify(pinnedIds));
         }}
         title="CHỌN HỌC VIÊN ĐỂ COPY PHÁC ĐỒ"
         maxWidth="max-w-2xl"

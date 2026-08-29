@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, ChevronUp, ChevronDown, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut } from 'lucide-react';
+import { Play, Pause, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut } from 'lucide-react';
 import { Toast } from '../components/UI';
 import { customerService, generateCustomerLink } from '../src/services/customerService';
-import { planService } from '../src/services/planService';
 import { customPlanService } from '../src/services/customPlanService';
+import { planService } from '../src/services/planService';
+import { campaignService, AdCampaign } from '../src/services/campaignService';
 import { supabase } from '../src/lib/supabaseClient';
 import { Customer, ExerciseTask, CustomerStatus, ExerciseType } from '../types';
 import { toVnZeroHour, formatDDMMYYYY, getDiffDays, addDays, parseVNDate, toISODateKey } from '../utils/date';
@@ -556,6 +557,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const [showAdPopup, setShowAdPopup] = useState(false);
   const [currentAdMediaIndex, setCurrentAdMediaIndex] = useState(0);
   const [showAdDetails, setShowAdDetails] = useState(false);
+  const [activeCampaign, setActiveCampaign] = useState<AdCampaign | null>(null);
   const hasAdPrompted = useRef(false);
 
   const refreshInFlight = useRef(false);
@@ -838,33 +840,48 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   useEffect(() => {
     if (loading || !customer || hasAdPrompted.current) return;
     
-    const adConfig = customer.ad_config;
-    if (adConfig && adConfig.media && adConfig.media.length > 0) {
-       let shouldShow = true;
-       const todayDate = toVnZeroHour();
-       const start = toVnZeroHour(customer.start_date);
-       const currentAllowedDay = customer.allowed_day || getDiffDays(start, todayDate) + 1;
-       
-       if (adConfig.display_now) {
-          const startTime = adConfig.start_time ? new Date(adConfig.start_time) : new Date(customer.updated_at || new Date());
-          const diffDays = getDiffDays(toVnZeroHour(startTime), todayDate);
-          if (diffDays >= (adConfig.display_days || 0)) {
-             shouldShow = false;
+    const getActiveCampaign = async () => {
+      try {
+        const campaigns = await campaignService.getCampaigns();
+        
+        let validCampaign: AdCampaign | null = null;
+        const todayDate = toVnZeroHour();
+        const start = toVnZeroHour(customer.start_date);
+        const currentAllowedDay = customer.allowed_day || getDiffDays(start, todayDate) + 1;
+        
+        for (const camp of campaigns) {
+          if (!camp.is_active || !camp.media || camp.media.length === 0) continue;
+          
+          let shouldShow = true;
+          
+          if (camp.display_now) {
+             const startTime = camp.start_time ? new Date(camp.start_time) : new Date(camp.created_at);
+             const diffDays = getDiffDays(toVnZeroHour(startTime), todayDate);
+             if (diffDays >= (camp.display_days || 0)) {
+                shouldShow = false;
+             }
+          } else {
+             if (camp.from_session && currentAllowedDay < camp.from_session) shouldShow = false;
+             if (camp.to_session && currentAllowedDay > camp.to_session) shouldShow = false;
           }
-       } else {
-          shouldShow = false; // "Hiển thị ngay" is false, meaning it's not active
-       }
-
-       if (shouldShow) {
-          if (adConfig.from_session && currentAllowedDay < adConfig.from_session) shouldShow = false;
-          if (adConfig.to_session && currentAllowedDay > adConfig.to_session) shouldShow = false;
-       }
-
-       if (shouldShow) {
+          
+          if (shouldShow) {
+            validCampaign = camp;
+            break;
+          }
+        }
+        
+        if (validCampaign) {
+          setActiveCampaign(validCampaign);
           hasAdPrompted.current = true;
           setShowAdPopup(true);
-       }
-    }
+        }
+      } catch (err) {
+        console.error("Error evaluating campaigns:", err);
+      }
+    };
+    
+    getActiveCampaign();
   }, [customer, loading]);
 
   // Helper to mark attendance in local state for instant UI feedback
@@ -2476,15 +2493,15 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       )}
 
       {/* 🚀 AD POPUP NOTIFICATION */}
-      {showAdPopup && customer?.ad_config && (
+      {showAdPopup && activeCampaign && (
         <div className="fixed inset-0 z-[99999] bg-black flex flex-col justify-center animate-in fade-in duration-300">
            {/* Top control bar */}
            <div className="absolute top-0 left-0 right-0 z-10 flex justify-end items-center p-4 md:p-6 bg-gradient-to-b from-black/80 to-transparent gap-4 pointer-events-none">
               <div className="flex items-center gap-4 pointer-events-auto">
-                {customer.ad_config.cta_name && customer.ad_config.cta_link && (
-                   <a href={customer.ad_config.cta_link} target="_blank" className="bg-blue-600 hover:bg-blue-700 text-white font-black px-6 py-2.5 rounded-full uppercase text-sm tracking-widest shadow-lg transition-all active:scale-95">{customer.ad_config.cta_name}</a>
+                {activeCampaign.cta_name && activeCampaign.cta_link && (
+                   <a href={activeCampaign.cta_link} target="_blank" className="bg-blue-600 hover:bg-blue-700 text-white font-black px-6 py-2.5 rounded-full uppercase text-sm tracking-widest shadow-lg transition-all active:scale-95">{activeCampaign.cta_name}</a>
                 )}
-                {customer.ad_config.description && (
+                {activeCampaign.description && (
                    <button onClick={() => setShowAdDetails(!showAdDetails)} className="bg-white/20 hover:bg-white/30 text-white font-bold px-6 py-2.5 rounded-full text-sm transition-all shadow-lg backdrop-blur-sm">Chi tiết</button>
                 )}
                 <button onClick={() => setShowAdPopup(false)} className="bg-white/20 hover:bg-white/40 p-2.5 rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-xl flex items-center justify-center"><X size={20}/></button>
@@ -2493,27 +2510,58 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
            
            {/* Media Display */}
            <div className="flex-1 relative flex items-center justify-center w-full overflow-hidden">
-              {customer.ad_config.media[currentAdMediaIndex].match(/\.(mp4|webm|m3u8)(\?.*)?$/i) ? (
-                 <video src={customer.ad_config.media[currentAdMediaIndex]} autoPlay loop muted playsInline className="w-full h-full object-contain" />
-              ) : (
-                 <img src={customer.ad_config.media[currentAdMediaIndex]} alt="Ad Media" className="w-full h-full object-contain" />
-              )}
+              {(() => {
+                 const mediaUrl = activeCampaign.media[currentAdMediaIndex].trim();
+                 const isBunnyVidId = mediaUrl !== "" && !/^https?:\/\//i.test(mediaUrl);
+                 
+                 const getYouTubeEmbedUrl = (url: string) => {
+                   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
+                   const match = url.match(regExp);
+                   if (match && match[2].length === 11) {
+                     return `https://www.youtube.com/embed/${match[2]}?autoplay=1&rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&fs=0&playsinline=1`;
+                   }
+                   return null;
+                 };
+                 const ytEmbedUrl = getYouTubeEmbedUrl(mediaUrl);
+                 
+                 let directImageUrl = mediaUrl;
+                 // Xử lý link Google Drive chia sẻ công khai thành link xem trực tiếp ảnh
+                 if (mediaUrl.includes('drive.google.com/file/d/')) {
+                    const match = mediaUrl.match(/file\/d\/([a-zA-Z0-9_-]+)/);
+                    if (match && match[1]) {
+                       directImageUrl = `https://drive.google.com/uc?export=view&id=${match[1]}`;
+                    }
+                 }
+
+                 if (isBunnyVidId) {
+                    return <div className="w-full h-full max-w-[1400px] flex items-center justify-center"><HlsVideoPlayer url={`https://video.phacdo.com/${mediaUrl}/playlist.m3u8`} /></div>;
+                 } else if (ytEmbedUrl) {
+                    return <CustomYouTubePlayer url={ytEmbedUrl} onClose={() => {}} />;
+                 } else if (mediaUrl.match(/\.(mp4|webm|m3u8)(\?.*)?$/i)) {
+                    return <video src={mediaUrl} autoPlay loop muted playsInline className="w-full h-full object-contain" />;
+                 } else {
+                    return <img src={directImageUrl} alt="Ad Media" className="w-full h-full object-contain" />;
+                 }
+              })()}
               
               {/* Navigation arrows if multiple media */}
-              {customer.ad_config.media.length > 1 && (
+              {activeCampaign.media.length > 1 && (
                  <>
-                    <button onClick={() => setCurrentAdMediaIndex(prev => (prev - 1 + customer.ad_config!.media.length) % customer.ad_config!.media.length)} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-all"><ChevronLeft size={24}/></button>
-                    <button onClick={() => setCurrentAdMediaIndex(prev => (prev + 1) % customer.ad_config!.media.length)} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-all"><ChevronRight size={24}/></button>
+                    <button onClick={() => setCurrentAdMediaIndex(prev => (prev - 1 + activeCampaign.media.length) % activeCampaign.media.length)} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-all"><ChevronLeft size={24}/></button>
+                    <button onClick={() => setCurrentAdMediaIndex(prev => (prev + 1) % activeCampaign.media.length)} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-all"><ChevronRight size={24}/></button>
                  </>
               )}
            </div>
 
            {/* Details Modal */}
-           {showAdDetails && customer.ad_config.description && (
-              <div className="absolute inset-x-0 bottom-0 top-1/2 bg-white/95 backdrop-blur-md rounded-t-[2rem] shadow-2xl p-6 sm:p-8 overflow-y-auto animate-in slide-in-from-bottom-full duration-300 z-20">
-                 <button onClick={() => setShowAdDetails(false)} className="absolute top-6 right-6 text-gray-500 hover:text-black p-2 bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
-                 <h3 className="text-xl font-black text-blue-900 uppercase mb-4 tracking-tight">Thông tin chi tiết</h3>
-                 <div className="whitespace-pre-wrap text-sm font-medium text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: customer.ad_config.description.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 underline hover:text-blue-800">$1</a>') }} />
+           {showAdDetails && activeCampaign.description && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
+                 <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAdDetails(false)}></div>
+                 <div className="relative bg-white/95 backdrop-blur-md rounded-[2rem] shadow-2xl p-6 sm:p-8 w-full max-w-2xl max-h-[80vh] overflow-y-auto animate-in zoom-in-95 duration-300">
+                    <button onClick={() => setShowAdDetails(false)} className="absolute top-6 right-6 text-gray-500 hover:text-black p-2 bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
+                    <h3 className="text-xl font-black text-blue-900 uppercase mb-4 tracking-tight pr-10">Thông tin chi tiết</h3>
+                    <div className="whitespace-pre-wrap text-sm font-medium text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: activeCampaign.description.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-blue-600 underline hover:text-blue-800">$1</a>') }} />
+                 </div>
               </div>
            )}
         </div>
