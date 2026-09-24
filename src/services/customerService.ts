@@ -140,8 +140,8 @@ export const customerService = {
   },
 
   async getCustomerById(customerId: string) {
-    const customers = await mockDB.getCustomers();
-    const data = customers.find(c => c.customer_id === customerId);
+    if (!customerId || customerId === 'NEW') return null;
+    const data = await mockDB.getCustomerById(customerId);
     return data ? normalizeCustomer(data) : null;
   },
 
@@ -244,7 +244,7 @@ export const customerService = {
     }
 
     const savedCustomerResult = await mockDB.upsertCustomer(dbPayload);
-    const savedCustomer = normalizeCustomer(savedCustomerResult);
+    const savedCustomer = normalizeCustomer({ ...dbPayload, ...savedCustomerResult });
 
     if (tasks !== undefined && tasks !== null) {
       if (tasks.length > 0) {

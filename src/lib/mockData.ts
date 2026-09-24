@@ -21,17 +21,60 @@ class SupabaseDatabase {
   async getCustomers() {
     const { data, error } = await supabase
       .from('customers')
-      .select('*')
+      .select(`
+        id,
+        customer_id,
+        customer_name,
+        sdt,
+        email,
+        dia_chi,
+        san_pham,
+        gia_tien,
+        trang_thai_gan,
+        trang_thai,
+        ma_vd,
+        note,
+        chewing_status,
+        start_date,
+        end_date,
+        duration_days,
+        video_date,
+        status,
+        link,
+        token,
+        created_at,
+        updated_at,
+        app_title,
+        app_slogan,
+        is_customized,
+        require_google_auth,
+        require_device_limit,
+        pending_email,
+        is_deposit,
+        deposit_amount,
+        is_consultation,
+        raw_backup
+      `)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return (data || []) as Customer[];
+  }
+
+  async getCustomerById(id: string) {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('customer_id', id)
+      .maybeSingle();
+    if (error) throw error;
+    return data as Customer | null;
   }
 
   async upsertCustomer(c: Partial<Customer>) {
     const { data, error } = await supabase
       .from('customers')
       .upsert(c, { onConflict: 'customer_id' })
-      .select('*')
+      .select('customer_id, customer_name, email, updated_at')
       .single();
     if (error) throw error;
     return data as Customer;
