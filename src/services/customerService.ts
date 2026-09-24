@@ -148,25 +148,6 @@ export const customerService = {
   async getCustomers() {
     const customers = await mockDB.getCustomers();
     
-    // ĐỒNG BỘ NỀN: Lấy Email xác thực từ Supabase thế chỗ vào MockDB của Admin để Admin thấy Email học viên
-    try {
-      const { data: sbCustomers } = await supabase.from('customers').select('customer_id, email');
-      if (sbCustomers && Array.isArray(sbCustomers)) {
-         let hasUpdates = false;
-         for (const c of customers) {
-            const sbC = sbCustomers.find(sc => sc.customer_id === c.customer_id);
-            if (sbC && sbC.email && sbC.email.trim() !== '' && c.email !== sbC.email) {
-               c.email = sbC.email;
-               hasUpdates = true;
-               // Cập nhật ngầm vào mockDB từng bản ghi
-               await mockDB.upsertCustomer(c);
-            }
-         }
-      }
-    } catch(e) {
-      console.warn("Background email sync failed:", e);
-    }
-
     // Sort descending by created_at conceptually
     customers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     return customers.map(normalizeCustomer);
