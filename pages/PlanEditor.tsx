@@ -10,6 +10,7 @@ import { Customer, ExerciseTask, ExerciseType, SidebarBlock, CustomerStatus, Pro
 import { EXERCISE_TYPES, DEFAULT_SIDEBAR_BLOCKS, DEFAULT_CHEWING_INSTRUCTION } from '../constants';
 import { GoogleGenAI } from "@google/genai";
 import { toInputDateString, formatDDMM, parseVNDate, addDays, formatVNDate } from '../utils/date';
+import { matchesSearch } from '../utils/search';
 import { safeSetLocalStorage } from '../src/utils/storage';
 
 const isFlagEnabled = (value: any, fallback = true) => {
@@ -985,10 +986,10 @@ export const PlanEditor: React.FC<{
   };
 
   const filteredCustomersForCopy = useMemo(() => {
-    const term = copySearchTerm.toLowerCase();
     const list = allCustomers.filter(c => 
-      String(c.customer_name || '').toLowerCase().includes(term) ||
-      String(c.customer_id || '').toLowerCase().includes(term)
+      matchesSearch(c.customer_name, copySearchTerm) ||
+      matchesSearch(c.customer_id, copySearchTerm) ||
+      matchesSearch(c.sdt, copySearchTerm)
     );
     
     const pinnedList: Customer[] = [];

@@ -13,6 +13,7 @@ import { api } from '../services/api';
 import { Customer, Product, CustomerStatus } from '../types';
 import { calcRevenueCostProfit, isChuaGan, buildProductMap, getProfitMonth } from '../utils/finance';
 import { toVnZeroHour, getDiffDays, formatDDMM, formatDDMMYYYY, toInputDateString, toISODateKey, parseVNDate, addDays } from '../utils/date';
+import { matchesSearch } from '../utils/search';
 import { ProfitChartModal } from '../components/ProfitChartModal';
 import { generateCustomerLink } from '../src/services/customerService';
 
@@ -76,10 +77,10 @@ export const CustomerManagement: React.FC<{
   };
 
   const filteredCopyCustomers = useMemo(() => {
-    const term = copySearchTerm.toLowerCase();
     const list = customers.filter(c => c.video_date && (
-      String(c.customer_name || '').toLowerCase().includes(term) ||
-      String(c.sdt || '').includes(copySearchTerm)
+      matchesSearch(c.customer_name, copySearchTerm) ||
+      matchesSearch(c.sdt, copySearchTerm) ||
+      matchesSearch(c.customer_id, copySearchTerm)
     ));
     
     const pinnedList: Customer[] = [];
@@ -354,13 +355,14 @@ export const CustomerManagement: React.FC<{
   const formatVND = (num: number) => new Intl.NumberFormat('vi-VN').format(num);
 
   const baseFiltered = useMemo(() => {
-    const term = searchTerm.toLowerCase();
     return customers.filter(c => {
       if (c.status === CustomerStatus.DELETED) return false;
 
-      const matchSearch = String(c.customer_name || "").toLowerCase().includes(term) || 
-                          String(c.ma_vd || "").toLowerCase().includes(term) ||
-                          String(c.sdt || "").includes(searchTerm);
+      const matchSearch = matchesSearch(c.customer_name, searchTerm) || 
+                          matchesSearch(c.ma_vd, searchTerm) ||
+                          matchesSearch(c.sdt, searchTerm) ||
+                          matchesSearch(c.email, searchTerm) ||
+                          matchesSearch(c.customer_id, searchTerm);
       
       const createdAtISO = toISODateKey(c.created_at);
       const matchDate = (!dateFrom || createdAtISO >= dateFrom) && (!dateTo || createdAtISO <= dateTo);

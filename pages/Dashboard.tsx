@@ -9,6 +9,7 @@ import { generateCustomerLink, customerService } from '../src/services/customerS
 import { Customer, CustomerStatus, Product } from '../types';
 import { calcRevenueCostProfit, isChuaGan, buildProductMap, getProfitMonth } from '../utils/finance';
 import { formatDDMM, formatDDMMYYYY, toISODateKey, parseVNDate, getDiffDays } from '../utils/date';
+import { matchesSearch, normalizeSearchText } from '../utils/search';
 import { ProfitChartModal } from '../components/ProfitChartModal';
 
 const formatVND = (num: number) => new Intl.NumberFormat('vi-VN').format(num);
@@ -360,10 +361,9 @@ export const Dashboard: React.FC<{
   };
 
   const filteredCopyCustomers = useMemo(() => {
-    const term = copySearchTerm.toLowerCase();
     const list = customers.filter(c => c.video_date && (
-      String(c.customer_name || '').toLowerCase().includes(term) ||
-      String(c.sdt || '').includes(copySearchTerm)
+      matchesSearch(c.customer_name, copySearchTerm) ||
+      matchesSearch(c.sdt, copySearchTerm)
     ));
     
     const pinnedList: Customer[] = [];
@@ -715,11 +715,11 @@ export const Dashboard: React.FC<{
   };
 
   const filteredBySearch = useMemo(() => {
-    const term = searchTerm.toLowerCase();
     return customers.filter(c => {
-      const matchSearch = String(c.customer_name || '').toLowerCase().includes(term) || 
-                          String(c.ma_vd || '').toLowerCase().includes(term) || 
-                          String(c.sdt || '').includes(searchTerm);
+      const matchSearch = matchesSearch(c.customer_name, searchTerm) || 
+                          matchesSearch(c.ma_vd, searchTerm) || 
+                          matchesSearch(c.sdt, searchTerm) ||
+                          matchesSearch(c.customer_id, searchTerm);
       
       let matchFilter = true;
       if (dashboardFilter) {
