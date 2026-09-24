@@ -742,7 +742,7 @@ export const Dashboard: React.FC<{
         matchCreator = c.creator_email === creatorFilter;
       }
 
-      if (term) return matchSearch && matchFilter && matchCreator;
+      if (searchTerm.trim()) return matchSearch && matchFilter && matchCreator;
 
       let matchVideoOpen = true;
       if (videoOpenFilter) {
