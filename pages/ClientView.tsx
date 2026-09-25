@@ -32,12 +32,14 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isReady, setIsReady] = useState(false);
   
+  const [isMuted, setIsMuted] = useState(false);
+  
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const progressInterval = useRef<any>(null);
 
   const formatTime = (seconds: number) => {
-    if (isNaN(seconds)) return '0:00';
+    if (isNaN(seconds) || seconds <= 0) return '0:00';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
@@ -49,7 +51,10 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
   useEffect(() => {
     if (!videoId || !containerRef.current) return;
 
+    let isSubscribed = true;
+
     const initPlayer = () => {
+      if (!containerRef.current) return;
       playerRef.current = new window.YT.Player(containerRef.current, {
         videoId,
         playerVars: {
@@ -62,14 +67,17 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
           disablekb: 1,
           playsinline: 1,
           autoplay: 1,
+          mute: 0,
           vq: 'hd1080',
           cc_load_policy: 0,
           origin: window.location.origin
         },
         events: {
           onReady: (e: any) => {
+            if (!isSubscribed) return;
             setIsReady(true);
-            setDuration(e.target.getDuration());
+            const dur = e.target.getDuration();
+            if (dur && dur > 0) setDuration(dur);
             
             // Resume from saved time
             const savedTime = localStorage.getItem(`phacdo_yt_progress_${videoId}`);
@@ -84,11 +92,37 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
                   e.target.unloadModule('cc');
                }
             } catch(err) {}
-            e.target.playVideo();
+
+            // Modern browser Autoplay handling:
+            // 1. First attempt to play unmuted
+            // 2. If browser blocks unmuted autoplay, mute and play automatically so video always starts!
+            const playPromise = e.target.playVideo();
+            // In case playVideo returns promise or fails silently
+            setTimeout(() => {
+              if (playerRef.current && playerRef.current.getPlayerState) {
+                const state = playerRef.current.getPlayerState();
+                if (state !== 1 && state !== 3) { // Not PLAYING or BUFFERING
+                  console.warn('[Autoplay] Direct autoplay blocked by browser policy, fallback to muted autoplay');
+                  playerRef.current.mute();
+                  setIsMuted(true);
+                  playerRef.current.playVideo();
+                }
+              }
+            }, 300);
           },
           onStateChange: (e: any) => {
-            if (e.data === 1) {
+            if (!isSubscribed) return;
+            const curDur = e.target.getDuration();
+            if (curDur && curDur > 0) {
+               setDuration(curDur);
+            }
+            if (e.data === 1) { // PLAYING
                setPlaying(true);
+               if (e.target.isMuted && e.target.isMuted()) {
+                 setIsMuted(true);
+               } else {
+                 setIsMuted(false);
+               }
                try {
                   if (e.target.setPlaybackQuality) e.target.setPlaybackQuality('hd1080');
                } catch(err) {}
@@ -114,8 +148,11 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
     }
 
     return () => {
+      isSubscribed = false;
       if (playerRef.current && playerRef.current.destroy) {
-        playerRef.current.destroy();
+        try {
+          playerRef.current.destroy();
+        } catch(err) {}
       }
       clearInterval(progressInterval.current);
     };
@@ -130,14 +167,18 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
        return;
     }
     progressInterval.current = setInterval(() => {
-      if (playerRef.current && playerRef.current.getCurrentTime && duration > 0) {
+      if (playerRef.current && playerRef.current.getCurrentTime) {
         const currentTime = playerRef.current.getCurrentTime();
-        setPlayed(currentTime / duration);
+        const curDur = duration > 0 ? duration : (playerRef.current.getDuration ? playerRef.current.getDuration() : 0);
+        if (curDur > 0) {
+          if (duration !== curDur) setDuration(curDur);
+          setPlayed(currentTime / curDur);
+        }
         if (videoId) {
           localStorage.setItem(`phacdo_yt_progress_${videoId}`, currentTime.toString());
         }
       }
-    }, 1000);
+    }, 500);
     return () => clearInterval(progressInterval.current);
   }, [isReady, playing, duration, videoId]);
 
@@ -153,6 +194,13 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
   const handleVideoTap = () => {
      setShowControls(true);
      if (!playerRef.current) return;
+     // If it was playing in muted mode due to autoplay policy, un-mute it on first user tap
+     if (isMuted) {
+       try {
+         playerRef.current.unMute();
+         setIsMuted(false);
+       } catch (err) {}
+     }
      if (playing) {
         playerRef.current.pauseVideo();
      } else {
@@ -161,9 +209,25 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
   };
 
   const handleSeek = (pos: number) => {
-     if (!playerRef.current || duration === 0) return;
-     playerRef.current.seekTo(pos * duration, true);
-     setPlayed(pos);
+     if (!playerRef.current) return;
+     const curDur = duration > 0 ? duration : (playerRef.current.getDuration ? playerRef.current.getDuration() : 0);
+     if (curDur > 0) {
+       setDuration(curDur);
+       playerRef.current.seekTo(pos * curDur, true);
+       setPlayed(pos);
+     }
+  };
+
+  const toggleMute = (e: React.MouseEvent) => {
+     e.stopPropagation();
+     if (!playerRef.current) return;
+     if (isMuted) {
+       playerRef.current.unMute();
+       setIsMuted(false);
+     } else {
+       playerRef.current.mute();
+       setIsMuted(true);
+     }
   };
 
   const handleSpeedChange = (speed: number) => {
@@ -204,9 +268,27 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
       <div 
          className={`absolute bottom-0 left-0 right-0 flex flex-col justify-end pt-8 pb-4 px-4 gap-2 transition-all duration-300 pointer-events-auto z-[1000] ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}
          onClick={(e) => e.stopPropagation()}
+         onMouseDown={(e) => e.stopPropagation()}
+         onTouchStart={(e) => e.stopPropagation()}
       >
+         {/* Muted Autoplay Notice if muted */}
+         {isMuted && playing && (
+            <div 
+               onClick={toggleMute}
+               className="self-center bg-black/75 hover:bg-black/90 text-white text-xs px-3 py-1.5 rounded-full border border-white/20 backdrop-blur-md flex items-center gap-1.5 cursor-pointer shadow-lg animate-pulse mb-1"
+            >
+               <VolumeX size={14} className="text-yellow-400" />
+               <span>Chạm để bật âm thanh</span>
+            </div>
+         )}
+
          {/* Top row: Full width Scrubber */}
-         <div className="w-full flex items-center relative py-2">
+         <div 
+            className="w-full flex items-center relative py-2"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+         >
             <input 
                type="range" 
                min={0} 
@@ -214,9 +296,10 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
                step="any"
                value={played}
                onChange={(e) => handleSeek(parseFloat(e.target.value))}
-               onMouseDown={() => setShowControls(true)}
-               onTouchStart={() => setShowControls(true)}
-               className="w-full h-1 bg-white/30 rounded-full appearance-none cursor-pointer outline-none relative z-10"
+               onInput={(e: any) => handleSeek(parseFloat(e.target.value))}
+               onMouseDown={(e) => { e.stopPropagation(); setShowControls(true); }}
+               onTouchStart={(e) => { e.stopPropagation(); setShowControls(true); }}
+               className="w-full h-2 bg-white/30 rounded-full appearance-none cursor-pointer outline-none relative z-10"
                style={{
                   background: `linear-gradient(to right, #ff0000 ${played * 100}%, rgba(255,255,255,0.3) ${played * 100}%)`
                }}
@@ -225,34 +308,68 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
                {`
                   input[type=range]::-webkit-slider-thumb {
                      -webkit-appearance: none;
-                     height: 12px;
-                     width: 12px;
+                     height: 16px;
+                     width: 16px;
                      border-radius: 50%;
                      background: #ff0000;
                      cursor: pointer;
-                     box-shadow: 0 0 10px rgba(0,0,0,0.5);
+                     box-shadow: 0 0 10px rgba(0,0,0,0.7);
                      transition: transform 0.1s;
                   }
                   input[type=range]::-webkit-slider-thumb:active {
-                     transform: scale(1.5);
+                     transform: scale(1.4);
                   }
                   input[type=range]::-moz-range-thumb {
-                     height: 12px;
-                     width: 12px;
+                     height: 16px;
+                     width: 16px;
                      border-radius: 50%;
                      background: #ff0000;
                      cursor: pointer;
                      border: none;
-                     box-shadow: 0 0 10px rgba(0,0,0,0.5);
+                     box-shadow: 0 0 10px rgba(0,0,0,0.7);
                   }
                `}
             </style>
          </div>
          
-         {/* Bottom row: Time and Speed */}
+         {/* Bottom row: Controls, Time, Sound and Speed */}
          <div className="w-full flex justify-between items-center px-1">
-            <div className="text-white text-[11px] font-medium tabular-nums drop-shadow-md">
-               {formatTime(played * duration)} / {formatTime(duration)}
+            <div className="flex items-center gap-3">
+               {/* Play/Pause Button */}
+               <button 
+                  type="button"
+                  onClick={(e) => {
+                     e.stopPropagation();
+                     if (!playerRef.current) return;
+                     if (playing) {
+                        playerRef.current.pauseVideo();
+                     } else {
+                        if (isMuted) {
+                           try { playerRef.current.unMute(); setIsMuted(false); } catch(err) {}
+                        }
+                        playerRef.current.playVideo();
+                     }
+                  }}
+                  className="text-white hover:text-white/80 p-1 rounded-full transition-transform active:scale-90 cursor-pointer"
+                  title={playing ? "Tạm dừng" : "Phát"}
+               >
+                  {playing ? <Pause size={20} className="fill-white" /> : <Play size={20} className="fill-white" />}
+               </button>
+
+               {/* Mute/Unmute Button */}
+               <button 
+                  type="button"
+                  onClick={toggleMute}
+                  className="text-white hover:text-white/80 p-1 rounded-full transition-transform active:scale-90 cursor-pointer"
+                  title={isMuted ? "Bật tiếng" : "Tắt tiếng"}
+               >
+                  {isMuted ? <VolumeX size={18} className="text-yellow-400" /> : <Volume2 size={18} />}
+               </button>
+
+               {/* Time Display */}
+               <div className="text-white text-[12px] font-medium tabular-nums drop-shadow-md">
+                  {formatTime(played * duration)} / {formatTime(duration)}
+               </div>
             </div>
             
             <div className="flex items-center bg-black/40 rounded-lg px-2 py-1 backdrop-blur-md">
@@ -276,8 +393,18 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
       
       {/* Giant center play button when paused */}
       {!playing && isReady && (
-         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[500]">
-            <div className="w-20 h-20 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white/90 shadow-2xl">
+         <div 
+            onClick={(e) => {
+               e.stopPropagation();
+               if (!playerRef.current) return;
+               if (isMuted) {
+                  try { playerRef.current.unMute(); setIsMuted(false); } catch(err) {}
+               }
+               playerRef.current.playVideo();
+            }}
+            className="absolute inset-0 flex items-center justify-center cursor-pointer z-[500]"
+         >
+            <div className="w-20 h-20 bg-black/60 hover:bg-black/80 hover:scale-105 active:scale-95 transition-all backdrop-blur-md rounded-full flex items-center justify-center text-white/90 shadow-2xl">
                <Play size={40} fill="currentColor" className="ml-2"/>
             </div>
          </div>
