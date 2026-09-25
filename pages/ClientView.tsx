@@ -25,7 +25,7 @@ declare global {
 // ==========================================
 // 🚀 CUSTOM YOUTUBE PLAYER COMPONENT
 // ==========================================
-const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => void }) => {
+const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: () => void, onEnded?: () => void }) => {
   const [playing, setPlaying] = useState(false);
   const [played, setPlayed] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -93,7 +93,11 @@ const CustomYouTubePlayer = ({ url, onClose }: { url: string, onClose: () => voi
                   if (e.target.setPlaybackQuality) e.target.setPlaybackQuality('hd1080');
                } catch(err) {}
             }
-            if (e.data === 2 || e.data === 0) setPlaying(false); // PAUSED or ENDED
+            if (e.data === 2) setPlaying(false); // PAUSED
+            if (e.data === 0) { // ENDED
+               setPlaying(false);
+               if (onEnded) onEnded();
+            }
           }
         }
       });
@@ -439,21 +443,45 @@ const HlsVideoPlayerCore = ({
   );
 };
 
-const MiniHlsPlayer = ({ url }: { url: string }) => {
+const MiniHlsPlayer = ({ url, onEnded }: { url: string, onEnded?: () => void }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     if (Hls.isSupported() && videoRef.current) {
       const hls = new Hls({ startLevel: 2, capLevelToPlayerSize: true });
       hls.loadSource(url);
       hls.attachMedia(videoRef.current);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => videoRef.current?.play().catch(e => console.log(e)));
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        videoRef.current?.play().catch(() => {
+          if (videoRef.current) {
+            videoRef.current.muted = true;
+            videoRef.current.play().catch(e => console.log(e));
+          }
+        });
+      });
       return () => hls.destroy();
     } else if (videoRef.current?.canPlayType('application/vnd.apple.mpegurl')) {
       videoRef.current.src = url;
-      videoRef.current.addEventListener('loadedmetadata', () => videoRef.current?.play().catch(e => console.log(e)));
+      videoRef.current.addEventListener('loadedmetadata', () => {
+        videoRef.current?.play().catch(() => {
+          if (videoRef.current) {
+            videoRef.current.muted = true;
+            videoRef.current.play().catch(e => console.log(e));
+          }
+        });
+      });
     }
   }, [url]);
-  return <video ref={videoRef} autoPlay controls playsInline loop className="w-full h-full object-contain" />;
+  return (
+    <video 
+      ref={videoRef} 
+      autoPlay 
+      controls 
+      playsInline 
+      loop={!onEnded} 
+      onEnded={onEnded} 
+      className="w-full h-full object-contain" 
+    />
+  );
 };
 
 const HlsVideoPlayer = ({ url }: { url: string }) => {
@@ -2571,14 +2599,40 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     }
                  }
 
+                 const isSingleMedia = activeCampaign.media.length === 1;
+                 const handleVideoEnded = () => {
+                   if (isSingleMedia) {
+                     setShowAdPopup(false);
+                   }
+                 };
+
                  if (isBunnyVidId) {
                     return <div className="w-full h-full max-w-[1400px] flex items-center justify-center">
-                       <MiniHlsPlayer url={`https://video.phacdo.com/${mediaUrl}/playlist.m3u8`} />
+                       <MiniHlsPlayer 
+                          url={`https://video.phacdo.com/${mediaUrl}/playlist.m3u8`} 
+                          onEnded={handleVideoEnded}
+                       />
                     </div>;
                  } else if (ytEmbedUrl) {
-                    return <CustomYouTubePlayer url={ytEmbedUrl} onClose={() => setShowAdPopup(false)} />;
+                    return (
+                       <CustomYouTubePlayer 
+                          url={ytEmbedUrl} 
+                          onClose={() => setShowAdPopup(false)} 
+                          onEnded={handleVideoEnded}
+                       />
+                    );
                  } else if (mediaUrl.match(/\.(mp4|webm|m3u8)(\?.*)?$/i)) {
-                    return <video src={mediaUrl} autoPlay loop muted playsInline className="w-full h-full object-contain" />;
+                    return (
+                       <video 
+                          src={mediaUrl} 
+                          autoPlay 
+                          loop={!isSingleMedia} 
+                          muted 
+                          playsInline 
+                          onEnded={handleVideoEnded} 
+                          className="w-full h-full object-contain" 
+                       />
+                    );
                  } else {
                     return <img src={mediaUrl} alt="Ad Media" className="w-full h-full object-contain" />;
                  }
