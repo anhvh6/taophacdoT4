@@ -70,6 +70,7 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
           mute: 0,
           vq: 'hd1080',
           cc_load_policy: 0,
+          cc_lang_pref: 'none',
           origin: window.location.origin
         },
         events: {
@@ -85,30 +86,42 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
                e.target.seekTo(parseFloat(savedTime), true);
             }
 
+            // Triệt để tắt phụ đề (captions / subtitles)
             try {
                if (e.target.setPlaybackQuality) e.target.setPlaybackQuality('hd1080');
                if (e.target.unloadModule) {
                   e.target.unloadModule('captions');
                   e.target.unloadModule('cc');
                }
+               if (e.target.setOption) {
+                  e.target.setOption('captions', 'track', {});
+                  e.target.setOption('cc', 'track', {});
+               }
             } catch(err) {}
 
-            // Modern browser Autoplay handling:
-            // 1. First attempt to play unmuted
-            // 2. If browser blocks unmuted autoplay, mute and play automatically so video always starts!
-            const playPromise = e.target.playVideo();
-            // In case playVideo returns promise or fails silently
+            // Đảm bảo mở tiếng và tự động phát
+            try {
+               e.target.unMute();
+               e.target.setVolume(100);
+               setIsMuted(false);
+            } catch(err) {}
+
+            e.target.playVideo();
+
+            // Nếu trình duyệt (Chrome Autoplay Policy) cố gắng chặn phát có tiếng sau 600ms
             setTimeout(() => {
               if (playerRef.current && playerRef.current.getPlayerState) {
                 const state = playerRef.current.getPlayerState();
-                if (state !== 1 && state !== 3) { // Not PLAYING or BUFFERING
-                  console.warn('[Autoplay] Direct autoplay blocked by browser policy, fallback to muted autoplay');
-                  playerRef.current.mute();
-                  setIsMuted(true);
-                  playerRef.current.playVideo();
+                if (state !== 1 && state !== 3) { // Không phải PLAYING hoặc BUFFERING
+                  console.warn('[Autoplay] Browser strictly blocked unmuted autoplay, falling back to muted autoplay');
+                  try {
+                    playerRef.current.mute();
+                    setIsMuted(true);
+                    playerRef.current.playVideo();
+                  } catch (err) {}
                 }
               }
-            }, 300);
+            }, 600);
           },
           onStateChange: (e: any) => {
             if (!isSubscribed) return;
@@ -118,19 +131,30 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
             }
             if (e.data === 1) { // PLAYING
                setPlaying(true);
+               // Tắt phụ đề khi video bắt đầu chạy
+               try {
+                  if (e.target.unloadModule) {
+                     e.target.unloadModule('captions');
+                     e.target.unloadModule('cc');
+                  }
+                  if (e.target.setOption) {
+                     e.target.setOption('captions', 'track', {});
+                  }
+               } catch(err) {}
+               
                if (e.target.isMuted && e.target.isMuted()) {
                  setIsMuted(true);
                } else {
                  setIsMuted(false);
                }
-               try {
-                  if (e.target.setPlaybackQuality) e.target.setPlaybackQuality('hd1080');
-               } catch(err) {}
             }
             if (e.data === 2) setPlaying(false); // PAUSED
-            if (e.data === 0) { // ENDED
+            if (e.data === 0) { // ENDED (Hết video)
+               console.log('[Ad Video] Video finished playing!');
                setPlaying(false);
-               if (onEnded) onEnded();
+               if (onEnded) {
+                 onEnded();
+               }
             }
           }
         }
@@ -166,6 +190,7 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
        clearInterval(progressInterval.current);
        return;
     }
+    let endedTriggered = false;
     progressInterval.current = setInterval(() => {
       if (playerRef.current && playerRef.current.getCurrentTime) {
         const currentTime = playerRef.current.getCurrentTime();
@@ -173,6 +198,14 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
         if (curDur > 0) {
           if (duration !== curDur) setDuration(curDur);
           setPlayed(currentTime / curDur);
+
+          // Nếu video chạy tới cuối (còn <= 0.3s) mà sự kiện onStateChange chưa kịp bắn
+          if (curDur - currentTime <= 0.3 && !endedTriggered && currentTime > 1) {
+            endedTriggered = true;
+            console.log('[Ad Video] Progress reached end of video!');
+            setPlaying(false);
+            if (onEnded) onEnded();
+          }
         }
         if (videoId) {
           localStorage.setItem(`phacdo_yt_progress_${videoId}`, currentTime.toString());
@@ -180,7 +213,28 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
       }
     }, 500);
     return () => clearInterval(progressInterval.current);
-  }, [isReady, playing, duration, videoId]);
+  }, [isReady, playing, duration, videoId, onEnded]);
+
+  // Tự động bật tiếng ngay khi người dùng chạm hoặc click bất cứ đâu
+  useEffect(() => {
+    const handleGlobalUserInteract = () => {
+      if (playerRef.current && playerRef.current.isMuted && playerRef.current.isMuted()) {
+        try {
+          playerRef.current.unMute();
+          playerRef.current.setVolume(100);
+          setIsMuted(false);
+        } catch(e) {}
+      }
+    };
+    window.addEventListener('click', handleGlobalUserInteract, { once: true });
+    window.addEventListener('touchstart', handleGlobalUserInteract, { once: true });
+    window.addEventListener('keydown', handleGlobalUserInteract, { once: true });
+    return () => {
+      window.removeEventListener('click', handleGlobalUserInteract);
+      window.removeEventListener('touchstart', handleGlobalUserInteract);
+      window.removeEventListener('keydown', handleGlobalUserInteract);
+    };
+  }, []);
 
   // Auto-hide controls
   useEffect(() => {
@@ -198,6 +252,7 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
      if (isMuted) {
        try {
          playerRef.current.unMute();
+         playerRef.current.setVolume(100);
          setIsMuted(false);
        } catch (err) {}
      }
