@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut } from 'lucide-react';
 import { Toast } from '../components/UI';
 import { customerService, generateCustomerLink } from '../src/services/customerService';
 import { customPlanService } from '../src/services/customPlanService';
