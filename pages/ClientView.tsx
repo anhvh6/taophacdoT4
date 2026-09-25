@@ -2515,15 +2515,35 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       {showAdPopup && activeCampaign && (
         <div className="fixed inset-0 z-[99999] bg-black flex flex-col justify-center animate-in fade-in duration-300">
            {/* Top control bar */}
-           <div className="absolute top-0 left-0 right-0 z-10 flex justify-end items-center p-4 md:p-6 bg-gradient-to-b from-black/80 to-transparent gap-4 pointer-events-none">
-              <div className="flex items-center gap-4 pointer-events-auto">
+           <div className="absolute top-0 left-0 right-0 z-[100000] flex justify-end items-center p-4 md:p-6 bg-gradient-to-b from-black/90 via-black/50 to-transparent gap-4 pointer-events-none">
+              <div className="flex items-center gap-3 sm:gap-4 pointer-events-auto">
                 {activeCampaign.cta_name && activeCampaign.cta_link && (
-                   <a href={activeCampaign.cta_link} target="_blank" className="bg-white/20 hover:bg-white/30 text-blue-400 font-black px-6 py-2.5 rounded-full uppercase text-sm tracking-widest shadow-lg backdrop-blur-md transition-all active:scale-95">{activeCampaign.cta_name}</a>
+                   <a 
+                      href={activeCampaign.cta_link} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="bg-black/50 hover:bg-black/70 border border-white/30 text-white font-black px-5 sm:px-6 py-2 sm:py-2.5 rounded-full uppercase text-xs sm:text-sm tracking-widest shadow-xl backdrop-blur-md transition-all active:scale-95 cursor-pointer drop-shadow-md"
+                   >
+                      {activeCampaign.cta_name}
+                   </a>
                 )}
                 {activeCampaign.description && (
-                   <button onClick={() => setShowAdDetails(!showAdDetails)} className="bg-white/20 hover:bg-white/30 text-blue-400 font-bold px-6 py-2.5 rounded-full text-sm transition-all shadow-lg backdrop-blur-md">Chi tiết</button>
+                   <button 
+                      type="button" 
+                      onClick={() => setShowAdDetails(!showAdDetails)} 
+                      className="bg-black/50 hover:bg-black/70 border border-white/30 text-white font-bold px-5 sm:px-6 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm transition-all shadow-xl backdrop-blur-md active:scale-95 cursor-pointer drop-shadow-md"
+                   >
+                      Chi tiết
+                   </button>
                 )}
-                <button onClick={() => setShowAdPopup(false)} className="bg-white/20 hover:bg-white/40 p-2.5 rounded-full text-blue-400 backdrop-blur-md transition-all active:scale-95 shadow-xl flex items-center justify-center"><X size={20}/></button>
+                <button 
+                   type="button" 
+                   onClick={() => setShowAdPopup(false)} 
+                   className="bg-black/50 hover:bg-black/70 border border-white/30 p-2 sm:p-2.5 rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-xl flex items-center justify-center cursor-pointer"
+                   title="Đóng quảng cáo"
+                >
+                   <X size={20} className="text-white" />
+                </button>
               </div>
            </div>
            
@@ -2556,7 +2576,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                        <MiniHlsPlayer url={`https://video.phacdo.com/${mediaUrl}/playlist.m3u8`} />
                     </div>;
                  } else if (ytEmbedUrl) {
-                    return <CustomYouTubePlayer url={ytEmbedUrl} onClose={() => {}} />;
+                    return <CustomYouTubePlayer url={ytEmbedUrl} onClose={() => setShowAdPopup(false)} />;
                  } else if (mediaUrl.match(/\.(mp4|webm|m3u8)(\?.*)?$/i)) {
                     return <video src={mediaUrl} autoPlay loop muted playsInline className="w-full h-full object-contain" />;
                  } else {
@@ -2575,7 +2595,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
            {/* Details Modal */}
            {showAdDetails && activeCampaign.description && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
+              <div className="absolute inset-0 z-[100001] flex items-center justify-center p-4">
                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto" onClick={() => setShowAdDetails(false)}></div>
                  <div className="relative bg-white/95 backdrop-blur-md rounded-[2rem] shadow-2xl p-6 sm:p-8 w-full max-w-2xl max-h-[80vh] overflow-y-auto animate-in zoom-in-95 duration-300 pointer-events-auto flex flex-col">
                     <button onClick={() => setShowAdDetails(false)} className="absolute top-6 right-6 text-gray-500 hover:text-black p-2 bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
