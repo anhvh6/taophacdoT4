@@ -66,7 +66,7 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
           fs: 0,
           disablekb: 1,
           playsinline: 1,
-          autoplay: 1,
+          autoplay: 0,
           mute: 0,
           vq: 'hd1080',
           cc_load_policy: 0,
@@ -83,7 +83,7 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
             // Resume from saved time
             const savedTime = localStorage.getItem(`phacdo_yt_progress_${videoId}`);
             if (savedTime && parseFloat(savedTime) > 0) {
-               e.target.seekTo(parseFloat(savedTime), true);
+               e.target.seekTo(parseFloat(savedTime), false);
             }
 
             // Triệt để tắt phụ đề (captions / subtitles)
@@ -99,30 +99,12 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
                }
             } catch(err) {}
 
-            // Đảm bảo âm lượng 100%
+            // Đảm bảo mở tiếng và âm lượng 100% khi người dùng bấm phát
             try {
-               e.target.setVolume(100);
                e.target.unMute();
+               e.target.setVolume(100);
                setIsMuted(false);
             } catch(err) {}
-
-            // Thử phát video
-            const playPromise = e.target.playVideo();
-
-            // Nếu sau 1.5s video vẫn không chạy do trình duyệt chặn tiếng hoàn toàn (Chrome policy)
-            setTimeout(() => {
-              if (playerRef.current && playerRef.current.getPlayerState) {
-                const state = playerRef.current.getPlayerState();
-                if (state !== 1 && state !== 3) { // Chưa chạy
-                  console.warn('[Autoplay] Chrome requires mute to start autoplay');
-                  try {
-                    playerRef.current.mute();
-                    setIsMuted(true);
-                    playerRef.current.playVideo();
-                  } catch (err) {}
-                }
-              }
-            }, 1200);
           },
           onStateChange: (e: any) => {
             if (!isSubscribed) return;
@@ -313,26 +295,6 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
         {/* Transparent Overlay to block ALL YouTube interactions */}
         <div className="absolute inset-0 z-[100]"></div>
 
-        {/* PROMINENT SOUND ACTIVATION OVERLAY WHEN MUTED */}
-        {isMuted && isReady && (
-           <div 
-              onClick={(e) => {
-                 e.stopPropagation();
-                 if (playerRef.current) {
-                    try {
-                       playerRef.current.unMute();
-                       playerRef.current.setVolume(100);
-                       setIsMuted(false);
-                    } catch(err) {}
-                 }
-              }}
-              className="absolute top-5 left-5 z-[500] flex items-center gap-2.5 bg-red-600/90 hover:bg-red-600 text-white font-bold text-xs sm:text-sm px-4 py-2 rounded-full shadow-2xl backdrop-blur-md cursor-pointer transition-all hover:scale-105 active:scale-95 animate-bounce"
-           >
-              <VolumeX size={18} className="text-white" />
-              <span>BẬT TIẾNG VIDEO</span>
-           </div>
-        )}
-
         {/* Cover top area to hide YouTube title, avatar, and share button with a smooth gradient */}
         <div className={`absolute top-0 left-0 right-0 h-[90px] bg-gradient-to-b from-black via-black/90 to-transparent z-[120] pointer-events-none transition-opacity duration-500 ${showControls ? 'opacity-90' : 'opacity-0'}`}></div>
         
@@ -347,16 +309,6 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
          onMouseDown={(e) => e.stopPropagation()}
          onTouchStart={(e) => e.stopPropagation()}
       >
-         {/* Muted Autoplay Notice if muted */}
-         {isMuted && playing && (
-            <div 
-               onClick={toggleMute}
-               className="self-center bg-black/75 hover:bg-black/90 text-white text-xs px-3 py-1.5 rounded-full border border-white/20 backdrop-blur-md flex items-center gap-1.5 cursor-pointer shadow-lg animate-pulse mb-1"
-            >
-               <VolumeX size={14} className="text-yellow-400" />
-               <span>Chạm để bật âm thanh</span>
-            </div>
-         )}
 
          {/* Top row: Full width Scrubber */}
          <div 
@@ -1181,7 +1133,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
       const match = url.match(regExp);
       if (match && match[2].length === 11) {
-        return `https://www.youtube.com/embed/${match[2]}?autoplay=1&rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&fs=0&playsinline=1`;
+        return `https://www.youtube.com/embed/${match[2]}?autoplay=0&rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&fs=0&playsinline=1`;
       }
       return null;
     };
@@ -2788,7 +2740,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
                    const match = url.match(regExp);
                    if (match && match[2].length === 11) {
-                     return `https://www.youtube.com/embed/${match[2]}?autoplay=1&rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&fs=0&playsinline=1`;
+                     return `https://www.youtube.com/embed/${match[2]}?autoplay=0&rel=0&modestbranding=1&controls=1&showinfo=0&iv_load_policy=3&fs=0&playsinline=1`;
                    }
                    return null;
                  };
