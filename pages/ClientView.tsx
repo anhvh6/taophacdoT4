@@ -80,11 +80,10 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
             const dur = e.target.getDuration();
             if (dur && dur > 0) setDuration(dur);
             
-            // Resume from saved time
-            const savedTime = localStorage.getItem(`phacdo_yt_progress_${videoId}`);
-            if (savedTime && parseFloat(savedTime) > 0) {
-               e.target.seekTo(parseFloat(savedTime), false);
-            }
+            // Quảng cáo luôn phát từ đầu (0:00), không nhớ vị trí cũ tránh bị nhảy thẳng tới cuối video làm tắt popup
+            try {
+               e.target.seekTo(0, true);
+            } catch(err) {}
 
             // Triệt để tắt phụ đề (captions / subtitles)
             try {
@@ -114,8 +113,11 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
             }
             if (e.data === 1) { // PLAYING
                setPlaying(true);
-               // Tắt phụ đề khi video bắt đầu chạy
+               // Đảm bảo có tiếng 100% và tắt phụ đề
                try {
+                  e.target.unMute();
+                  e.target.setVolume(100);
+                  setIsMuted(false);
                   if (e.target.unloadModule) {
                      e.target.unloadModule('captions');
                      e.target.unloadModule('cc');
@@ -124,19 +126,17 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
                      e.target.setOption('captions', 'track', {});
                   }
                } catch(err) {}
-               
-               if (e.target.isMuted && e.target.isMuted()) {
-                 setIsMuted(true);
-               } else {
-                 setIsMuted(false);
-               }
             }
             if (e.data === 2) setPlaying(false); // PAUSED
             if (e.data === 0) { // ENDED (Hết video)
-               console.log('[Ad Video] Video finished playing!');
-               setPlaying(false);
-               if (onEnded) {
-                 onEnded();
+               const curTime = e.target.getCurrentTime ? e.target.getCurrentTime() : 0;
+               // Chỉ coi là kết thúc nếu video thực sự đã chạy qua ít nhất 2 giây
+               if (curTime > 2) {
+                  console.log('[Ad Video] Video finished playing!');
+                  setPlaying(false);
+                  if (onEnded) {
+                    onEnded();
+                  }
                }
             }
           }
@@ -157,9 +157,9 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
     return () => {
       isSubscribed = false;
       if (playerRef.current && playerRef.current.destroy) {
-        try {
-          playerRef.current.destroy();
-        } catch(err) {}
+         try {
+           playerRef.current.destroy();
+         } catch(err) {}
       }
       clearInterval(progressInterval.current);
     };
@@ -182,16 +182,13 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
           if (duration !== curDur) setDuration(curDur);
           setPlayed(currentTime / curDur);
 
-          // Nếu video chạy tới cuối (còn <= 0.3s) mà sự kiện onStateChange chưa kịp bắn
-          if (curDur - currentTime <= 0.3 && !endedTriggered && currentTime > 1) {
+          // Nếu video chạy tới cuối (còn <= 0.3s) và đã phát ít nhất 2s
+          if (curDur - currentTime <= 0.3 && !endedTriggered && currentTime > 2) {
             endedTriggered = true;
             console.log('[Ad Video] Progress reached end of video!');
             setPlaying(false);
             if (onEnded) onEnded();
           }
-        }
-        if (videoId) {
-          localStorage.setItem(`phacdo_yt_progress_${videoId}`, currentTime.toString());
         }
       }
     }, 500);
@@ -600,42 +597,82 @@ const HlsVideoPlayerCore = ({
 
 const MiniHlsPlayer = ({ url, onEnded }: { url: string, onEnded?: () => void }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
   useEffect(() => {
-    if (Hls.isSupported() && videoRef.current) {
-      const hls = new Hls({ startLevel: 2, capLevelToPlayerSize: true });
+    let hls: Hls | null = null;
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.currentTime = 0;
+    video.muted = false;
+    video.volume = 1;
+
+    if (Hls.isSupported()) {
+      hls = new Hls({ startLevel: 2, capLevelToPlayerSize: true });
       hls.loadSource(url);
-      hls.attachMedia(videoRef.current);
+      hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        videoRef.current?.play().catch(() => {
-          if (videoRef.current) {
-            videoRef.current.muted = true;
-            videoRef.current.play().catch(e => console.log(e));
-          }
-        });
+        setIsLoaded(true);
       });
-      return () => hls.destroy();
-    } else if (videoRef.current?.canPlayType('application/vnd.apple.mpegurl')) {
-      videoRef.current.src = url;
-      videoRef.current.addEventListener('loadedmetadata', () => {
-        videoRef.current?.play().catch(() => {
-          if (videoRef.current) {
-            videoRef.current.muted = true;
-            videoRef.current.play().catch(e => console.log(e));
-          }
-        });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = url;
+      video.addEventListener('loadedmetadata', () => {
+        setIsLoaded(true);
       });
     }
-  }, [url]);
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      if (video.currentTime > 2 && onEnded) {
+        console.log('[Ad Bunny Video] Finished playing!');
+        onEnded();
+      }
+    };
+
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('ended', handleEnded);
+
+    return () => {
+      if (hls) hls.destroy();
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('ended', handleEnded);
+    };
+  }, [url, onEnded]);
+
+  const handlePlayClick = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = false;
+      videoRef.current.volume = 1;
+      videoRef.current.play().catch(e => console.log('Play error:', e));
+    }
+  };
+
   return (
-    <video 
-      ref={videoRef} 
-      autoPlay 
-      controls 
-      playsInline 
-      loop={!onEnded} 
-      onEnded={onEnded} 
-      className="w-full h-full object-contain" 
-    />
+    <div className="relative w-full h-full max-w-[1400px] mx-auto flex items-center justify-center bg-black group md:rounded-[1rem] overflow-hidden">
+      <video 
+        ref={videoRef} 
+        controls 
+        playsInline 
+        loop={false}
+        className="w-full h-full object-contain" 
+      />
+      {!isPlaying && (
+        <div 
+          onClick={handlePlayClick}
+          className="absolute inset-0 flex items-center justify-center cursor-pointer z-30 bg-black/30 hover:bg-black/40 transition-colors"
+        >
+          <div className="w-20 h-20 bg-black/60 hover:bg-black/80 hover:scale-105 active:scale-95 transition-all backdrop-blur-md rounded-full flex items-center justify-center text-white shadow-2xl">
+            <Play size={40} fill="currentColor" className="ml-2" />
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -2734,7 +2771,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
            <div className="flex-1 relative flex items-center justify-center w-full overflow-hidden">
               {(() => {
                  const mediaUrl = activeCampaign.media[currentAdMediaIndex].trim();
-                 const isBunnyVidId = mediaUrl !== "" && !/^https?:\/\//i.test(mediaUrl);
+                 const isBunnyVidId = mediaUrl !== "" && (!/^https?:\/\//i.test(mediaUrl) || mediaUrl.includes('video.phacdo.com') || mediaUrl.includes('b-cdn.net') || mediaUrl.includes('mediadelivery.net'));
                  
                  const getYouTubeEmbedUrl = (url: string) => {
                    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
@@ -2766,9 +2803,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                   };
 
                  if (isBunnyVidId) {
+                    const bunnyStreamUrl = mediaUrl.startsWith('http') 
+                       ? mediaUrl 
+                       : `https://video.phacdo.com/${mediaUrl}/playlist.m3u8`;
                     return <div className="w-full h-full max-w-[1400px] flex items-center justify-center">
                        <MiniHlsPlayer 
-                          url={`https://video.phacdo.com/${mediaUrl}/playlist.m3u8`} 
+                          url={bunnyStreamUrl} 
                           onEnded={handleVideoEnded}
                        />
                     </div>;
@@ -2780,13 +2820,11 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                           onEnded={handleVideoEnded}
                        />
                     );
-                 } else if (mediaUrl.match(/\.(mp4|webm|m3u8)(\?.*)?$/i)) {
+                 } else if (mediaUrl.match(/\.(mp4|webm)(\?.*)?$/i)) {
                     return (
                        <video 
                           src={mediaUrl} 
-                          autoPlay 
-                          loop={!isSingleMedia} 
-                          muted 
+                          controls 
                           playsInline 
                           onEnded={handleVideoEnded} 
                           className="w-full h-full object-contain" 
