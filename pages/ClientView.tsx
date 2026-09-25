@@ -788,7 +788,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const [selfApprovalLoading, setSelfApprovalLoading] = useState(false);
   const [selfApprovalError, setSelfApprovalError] = useState('');
   const [isAttendanceExpanded, setIsAttendanceExpanded] = useState(false);
-  const [showDay3Popup, setShowDay3Popup] = useState(false);
 
   // Ad Popup State
   const [showAdPopup, setShowAdPopup] = useState(false);
@@ -1514,14 +1513,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       if (allowedDay > maxDay) {
          displayActiveDay = allowedDay % maxDay;
          if (displayActiveDay === 0) displayActiveDay = maxDay;
-      }
-      
-      if (displayActiveDay === 3) {
-        const popupKey = `hasSeenDay3PopupV4_${customer.customer_id}`;
-        if (!localStorage.getItem(popupKey)) {
-          setShowDay3Popup(true);
-          localStorage.setItem(popupKey, 'true');
-        }
       }
     }
   }, [customer, isAdmin]);
@@ -2696,40 +2687,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       
       <a href="https://zalo.me/0378243131" target="_blank" className="fixed bottom-6 right-6 w-14 h-14 bg-[#0068ff] rounded-full flex items-center justify-center shadow-2xl z-[5000] border-2 border-white"><img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Icon_of_Zalo.svg" alt="Zalo" className="w-8 h-8" /></a>
       
-      {/* 🚀 DAY 3 POPUP NOTIFICATION */}
-      {showDay3Popup && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowDay3Popup(false)}></div>
-          <div className="bg-[#E6F3FE] w-full max-w-md rounded-[2rem] p-6 sm:p-8 relative z-10 shadow-2xl text-[#1E3A8A]">
-             <h3 className="text-lg sm:text-xl font-black mb-4 text-[#1E3A8A] uppercase tracking-tight text-center flex items-center justify-center gap-2">
-               <AlertTriangle size={24} className="text-orange-500" />
-               THÔNG BÁO QUAN TRỌNG
-             </h3>
-             <p className="text-[14px] sm:text-[15px] font-medium leading-relaxed mb-4 text-justify">
-               Bạn lưu ý hãy chuẩn bị các dụng cụ để <b>từ ngày 8</b> bạn sẽ cần dùng tới nó nhé, hãy liên hệ trong nhóm Zalo để được hỗ trợ. Các Dụng cụ cần có:
-             </p>
-             <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-blue-100 mb-6 text-[13px] sm:text-[14px] font-bold text-gray-700 leading-relaxed">
-                <p className="text-blue-600 font-black mb-3 flex items-start gap-2">
-                  <span className="text-lg">👉</span> Combo gồm 5 dụng cụ (giá 260K) và Enterosgel (giá 450K) Gồm:
-                </p>
-                <ul className="list-disc pl-5 space-y-2 marker:text-blue-400 font-medium">
-                  <li><b className="text-blue-900">Bóng trơn:</b> tăng lưu thông máu</li>
-                  <li><b className="text-blue-900">Bóng gai:</b> tác động sâu hơn</li>
-                  <li><b className="text-blue-900">Găng tay y tế:</b> massage nội miệng</li>
-                  <li><b className="text-blue-900">1 cốc hút:</b> size M</li>
-                  <li><b className="text-blue-900">Dây kháng lực:</b> tập cổ – vai – gáy</li>
-                  <li><b className="text-orange-600">Enterosgel:</b> thải độc ruột (rất quan trọng)</li>
-                </ul>
-             </div>
-             <button 
-               onClick={() => setShowDay3Popup(false)} 
-               className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-full uppercase text-sm tracking-widest shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
-             >
-               <CheckCircle size={18} /> Đã hiểu và Đóng
-             </button>
-          </div>
-        </div>
-      )}
+
 
       {/* 🚀 AD POPUP NOTIFICATION */}
       {showAdPopup && activeCampaign && (
