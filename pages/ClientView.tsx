@@ -313,6 +313,26 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
         {/* Transparent Overlay to block ALL YouTube interactions */}
         <div className="absolute inset-0 z-[100]"></div>
 
+        {/* PROMINENT SOUND ACTIVATION OVERLAY WHEN MUTED */}
+        {isMuted && isReady && (
+           <div 
+              onClick={(e) => {
+                 e.stopPropagation();
+                 if (playerRef.current) {
+                    try {
+                       playerRef.current.unMute();
+                       playerRef.current.setVolume(100);
+                       setIsMuted(false);
+                    } catch(err) {}
+                 }
+              }}
+              className="absolute top-5 left-5 z-[500] flex items-center gap-2.5 bg-red-600/90 hover:bg-red-600 text-white font-bold text-xs sm:text-sm px-4 py-2 rounded-full shadow-2xl backdrop-blur-md cursor-pointer transition-all hover:scale-105 active:scale-95 animate-bounce"
+           >
+              <VolumeX size={18} className="text-white" />
+              <span>BẬT TIẾNG VIDEO</span>
+           </div>
+        )}
+
         {/* Cover top area to hide YouTube title, avatar, and share button with a smooth gradient */}
         <div className={`absolute top-0 left-0 right-0 h-[90px] bg-gradient-to-b from-black via-black/90 to-transparent z-[120] pointer-events-none transition-opacity duration-500 ${showControls ? 'opacity-90' : 'opacity-0'}`}></div>
         
