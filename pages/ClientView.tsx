@@ -99,21 +99,22 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
                }
             } catch(err) {}
 
-            // Đảm bảo mở tiếng và tự động phát
+            // Đảm bảo âm lượng 100%
             try {
-               e.target.unMute();
                e.target.setVolume(100);
+               e.target.unMute();
                setIsMuted(false);
             } catch(err) {}
 
-            e.target.playVideo();
+            // Thử phát video
+            const playPromise = e.target.playVideo();
 
-            // Nếu trình duyệt (Chrome Autoplay Policy) cố gắng chặn phát có tiếng sau 600ms
+            // Nếu sau 1.5s video vẫn không chạy do trình duyệt chặn tiếng hoàn toàn (Chrome policy)
             setTimeout(() => {
               if (playerRef.current && playerRef.current.getPlayerState) {
                 const state = playerRef.current.getPlayerState();
-                if (state !== 1 && state !== 3) { // Không phải PLAYING hoặc BUFFERING
-                  console.warn('[Autoplay] Browser strictly blocked unmuted autoplay, falling back to muted autoplay');
+                if (state !== 1 && state !== 3) { // Chưa chạy
+                  console.warn('[Autoplay] Chrome requires mute to start autoplay');
                   try {
                     playerRef.current.mute();
                     setIsMuted(true);
@@ -121,7 +122,7 @@ const CustomYouTubePlayer = ({ url, onClose, onEnded }: { url: string, onClose: 
                   } catch (err) {}
                 }
               }
-            }, 600);
+            }, 1200);
           },
           onStateChange: (e: any) => {
             if (!isSubscribed) return;
@@ -2781,12 +2782,16 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     }
                  }
 
-                 const isSingleMedia = activeCampaign.media.length === 1;
-                 const handleVideoEnded = () => {
-                   if (isSingleMedia) {
-                     setShowAdPopup(false);
-                   }
-                 };
+                 const validMediaList = (activeCampaign.media || []).filter((m: string) => m && m.trim() !== "");
+                  const isLastMedia = currentAdMediaIndex >= validMediaList.length - 1;
+                  const handleVideoEnded = () => {
+                    console.log(`[Ad Video Finished] current: ${currentAdMediaIndex}, total: ${validMediaList.length}`);
+                    if (validMediaList.length <= 1 || isLastMedia) {
+                      setShowAdPopup(false);
+                    } else {
+                      setCurrentAdMediaIndex(prev => prev + 1);
+                    }
+                  };
 
                  if (isBunnyVidId) {
                     return <div className="w-full h-full max-w-[1400px] flex items-center justify-center">
