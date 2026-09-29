@@ -1158,11 +1158,25 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   };
 
   // Play Video Logic
+  // Play Video Logic
   const handlePlayVideo = async (link?: string, skipAuthCheck: boolean = false, dayNum?: number) => {
     if (!link) return;
     
-    const trimmedLink = link.trim();
-    const isBunnyVidId = typeof trimmedLink === "string" && trimmedLink !== "" && !/^https?:\/\//i.test(trimmedLink);
+    let trimmedLink = link.trim();
+    if (trimmedLink && typeof trimmedLink === 'string') {
+      trimmedLink = trimmedLink.replace('vz-371142c2-906.b-cdn.net', 'video.phacdo.com');
+    }
+
+    const extractBunnyId = (raw: string) => {
+      if (!raw) return null;
+      const s = raw.trim();
+      if (!/^https?:\/\//i.test(s)) return s;
+      const match = s.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      return match ? match[0] : null;
+    };
+
+    const bunnyVidId = extractBunnyId(trimmedLink);
+    const isBunnyVidId = !!bunnyVidId;
     const isExternalUrl = typeof trimmedLink === "string" && /^https?:\/\//i.test(trimmedLink) && !trimmedLink.includes('mediadelivery.net');
     
     const getYouTubeEmbedUrl = (url: string) => {
@@ -1174,9 +1188,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       return null;
     };
     const ytEmbedUrl = getYouTubeEmbedUrl(trimmedLink);
-    const isIframeable = isBunnyVidId || trimmedLink.includes('mediadelivery.net') || ytEmbedUrl !== null;
-
-    let newTab: Window | null = null;
 
     if (isAdmin && (checkPermission ? !checkPermission('view_video') : adminRole === 'qlhv')) {
       setInfoModal({
@@ -1189,46 +1200,19 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       return;
     }
 
-    // Mở newTab giả định nếu là external URL và KHÔNG phải video có thể nhúng trực tiếp
-    if (isExternalUrl && !isIframeable && !onNavigate && !skipAuthCheck) {
-      try {
-        newTab = window.open('about:blank', '_blank');
-        if (newTab) {
-          newTab.document.title = "Đang chuyển hướng...";
-          newTab.document.body.innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8FBFF; color: #1E3A8A; margin: 0; text-align: center; padding: 20px;">
-              <div style="font-size: 24px; font-weight: bold; margin-bottom: 12px; letter-spacing: -0.025em; text-transform: uppercase;">ĐANG CHUYỂN HƯỚNG</div>
-              <div style="font-size: 14px; opacity: 0.8; margin-bottom: 24px; font-weight: 500;">Vui lòng đợi trong giây lát khi chúng tôi xác thực quyền truy cập của bạn...</div>
-              <div style="width: 40px; height: 40px; border: 4px solid #E2E8F0; border-top-color: #2563EB; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-              <style>
-                @keyframes spin {
-                  to { transform: rotate(360deg); }
-                }
-              </style>
-            </div>
-          `;
-        }
-      } catch (e) {
-        console.error("Failed to open blank tab synchronously:", e);
-      }
-    }
-
-    // Admin thực thụ (có session) thì cho xem thoải mái
     const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
     if (onNavigate || isAdmin || isPreviewDomain) {
-      if (isBunnyVidId) {
-         // Nếu là Admin thì lấy token luôn cho nhanh chứ ko mở tab mới
+      if (isBunnyVidId && bunnyVidId) {
          const dbToken = (customer?.token || token || "").trim();
          const dbCustomerId = customer?.customer_id || customerId;
          try {
              const { data } = await supabase.functions.invoke('get-bunny-video-token', {
-                 body: { video_id: trimmedLink, customer_id: dbCustomerId, token: dbToken }
+                 body: { video_id: bunnyVidId, customer_id: dbCustomerId, token: dbToken }
              });
-             // Bypass iframe block bằng cách dùng thẳng link m3u8 có kèm token
              if (data?.signed_embed_url) {
-                 let finalUrl = `https://video.phacdo.com/${trimmedLink}/playlist.m3u8`;
+                 let finalUrl = `https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`;
                  try {
-                     const hlsUrlObj = new URL(`https://video.phacdo.com/${trimmedLink}/playlist.m3u8`);
+                     const hlsUrlObj = new URL(`https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`);
                      const urlObj = new URL(data.signed_embed_url);
                      const t = urlObj.searchParams.get('token');
                      const e = urlObj.searchParams.get('expires');
@@ -1238,8 +1222,12 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                      finalUrl = hlsUrlObj.toString();
                  } catch (err) {}
                  setPlayingVideo(finalUrl);
+             } else {
+                 setPlayingVideo(`https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`);
              }
-         } catch(e) {}
+         } catch(e) {
+             setPlayingVideo(`https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`);
+         }
          return;
       }
       if (trimmedLink.includes('mediadelivery.net')) {
@@ -1250,7 +1238,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
          setPlayingVideo(ytEmbedUrl);
          return;
       }
-      window.open(trimmedLink, '_blank');
+      setPlayingVideo(trimmedLink);
       return;
     }
 
@@ -1265,7 +1253,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           type: "WARNING",
           color: "red"
        });
-       if (newTab) newTab.close();
        return;
     }
 
@@ -1275,24 +1262,21 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     if (!skipAuthCheck && needsDeviceLimit) {
       if (deviceAuthLoading) {
         setToast("Đang xác thực thiết bị của bạn, vui lòng đợi trong giây lát...");
-        if (newTab) newTab.close();
         return;
       }
       if (!deviceAuthorized) {
         setDeviceModal({ isOpen: true });
-        if (newTab) newTab.close();
         return;
       }
     }
 
      if (!skipAuthCheck && isFlagEnabled(customer?.require_google_auth, true) && !isPreviewDomain) {
-        // Fetch latest customer data from server to ensure email is still valid
         let latestCustomer = customer;
         try {
            const freshData = await customerService.getCustomerById(customerId!);
            if (freshData) {
               latestCustomer = freshData;
-              setCustomer(freshData); // Sync local state
+              setCustomer(freshData);
            }
         } catch (e) {
            console.warn("Failed to refresh customer data for security check:", e);
@@ -1302,29 +1286,19 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         const dbEmail = (latestCustomer?.email || "").toLowerCase().trim();
         
         if (!storedEmail || (dbEmail && storedEmail.toLowerCase().trim() !== dbEmail)) {
-           // Nếu chưa verify HOẶC email đã lưu không còn khớp với DB (Admin vừa đổi email)
            localStorage.removeItem(`verified_email_${customerId}`);
            setIsVerified(false);
            setToast("Email đăng ký đã thay đổi hoặc phiên làm việc hết hạn. Vui lòng đăng nhập lại!");
            setAuthModal({isOpen: true, link, day: dayNum});
-           if (newTab) newTab.close();
            return;
         }
      }
-
-    // 2. Kiểm tra xác thực Google (Email matching)
-    console.log("handlePlayVideo: Security Check:", {
-      require_google_auth: customer?.require_google_auth,
-      isVerified: isVerified,
-      customerEmail: customer?.email
-    });
 
     const needsGoogleAuth = isFlagEnabled(customer?.require_google_auth, true) && !isPreviewDomain;
 
     if (!skipAuthCheck && needsGoogleAuth && !isVerified) {
        console.log("handlePlayVideo: Authentication required, opening AuthModal");
        setAuthModal({isOpen: true, link: link, day: dayNum});
-       if (newTab) newTab.close();
        return;
     }
 
@@ -1340,18 +1314,17 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           type: "WARNING", 
           color: "red" 
         });
-        if (newTab) newTab.close();
         return;
       }
     }
 
-    if (isBunnyVidId) {
+    if (isBunnyVidId && bunnyVidId) {
         try {
             const dbToken = (customer?.token || token || "").trim();
             const dbCustomerId = customer?.customer_id || customerId;
             const { data, error } = await supabase.functions.invoke('get-bunny-video-token', {
                 body: { 
-                   video_id: trimmedLink,
+                   video_id: bunnyVidId,
                    customer_id: dbCustomerId,
                    token: dbToken
                 }
@@ -1373,8 +1346,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             }
 
             if (data?.signed_embed_url) {
-                // Sử dụng custom player với link video trực tiếp
-                let finalHlsUrl = `https://video.phacdo.com/${trimmedLink}/playlist.m3u8`;
+                let finalHlsUrl = `https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`;
                 try {
                     const hlsUrlObj = new URL(finalHlsUrl);
                     const urlObj = new URL(data.signed_embed_url);
@@ -1393,18 +1365,20 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
                     markAttendanceLocally(dayNum);
                 }
-            } else if (!data?.error) {
-                throw new Error("Không nhận được token từ server");
+            } else {
+                setPlayingVideo(`https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`);
+                if (isStudent) {
+                    customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
+                    markAttendanceLocally(dayNum);
+                }
             }
         } catch (err: any) {
             console.error("Bunny API Error:", err);
-            setInfoModal({
-                isOpen: true,
-                title: "Lỗi phát video",
-                message: err.message || "Không thể kết nối đến máy chủ bảo mật. Vui lòng thử lại sau.",
-                type: "WARNING",
-                color: "red"
-            });
+            setPlayingVideo(`https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`);
+            if (isStudent) {
+                customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
+                markAttendanceLocally(dayNum);
+            }
         }
     } else if (trimmedLink.includes('mediadelivery.net')) {
       setToast("Cảnh báo: Video này sử dụng đường dẫn cũ và không được bảo vệ bằng Token.");
@@ -1420,24 +1394,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           markAttendanceLocally(dayNum);
       }
     } else {
-      setToast("Cảnh báo: Video này là liên kết ngoài, không được bảo vệ chống tải.");
-      let finalLink = link;
-      if (finalLink && typeof finalLink === 'string') {
-        finalLink = finalLink.replace('vz-371142c2-906.b-cdn.net', 'video.phacdo.com');
-      }
-
-      if (newTab) {
-        try {
-          newTab.location.href = finalLink;
-          if (isStudent) {
-              customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
-              markAttendanceLocally(dayNum);
-          }
-        } catch (e) {
-          window.location.href = finalLink;
-        }
-      } else {
-        window.location.href = finalLink;
+      setPlayingVideo(trimmedLink);
+      if (isStudent) {
+          customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
+          markAttendanceLocally(dayNum);
       }
     }
   };
@@ -2013,25 +1973,11 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     <button onClick={() => setIsImmersiveOpen(true)} className={`w-full py-4 rounded-full font-black text-[10px] uppercase flex items-center justify-center gap-2 transition-all active:scale-95 ${block.type === 'dark' ? 'bg-white text-[#1E3A8A] hover:bg-blue-50' : 'bg-[#1E3A8A] text-white hover:bg-blue-900'}`}>💬 Chat cùng chuyên gia</button>
                  ) : block.video_link ? (
                     <button onClick={() => {
-                        if (isAdmin && (checkPermission ? !checkPermission('view_video') : adminRole === 'qlhv')) {
-                            setInfoModal({
-                                isOpen: true,
-                                title: "BỊ TỪ CHỐI",
-                                message: "Bạn không có quyền xem video của học viên.",
-                                type: "WARNING",
-                                color: "red"
-                            });
-                            return;
-                        }
                         let finalUrl = block.video_link;
                         if (finalUrl && typeof finalUrl === 'string') {
                             finalUrl = finalUrl.replace('vz-371142c2-906.b-cdn.net', 'video.phacdo.com');
                         }
-                        if (finalUrl && typeof finalUrl === 'string' && (finalUrl.includes('youtube.com') || finalUrl.includes('youtu.be'))) {
-                            handlePlayVideo(finalUrl, false, 0);
-                        } else {
-                            window.open(finalUrl, '_blank');
-                        }
+                        handlePlayVideo(finalUrl, false, 0);
                     }} className={`w-full py-3.5 text-[11px] font-black rounded-full flex items-center justify-center gap-2 transition-all active:scale-95 ${block.type === 'dark' ? 'bg-white text-[#1E3A8A] hover:bg-blue-50' : 'bg-[#1E3A8A] text-white hover:bg-blue-900'}`}>▶ Xem hướng dẫn video</button>
                  ) : null}
                </div>
