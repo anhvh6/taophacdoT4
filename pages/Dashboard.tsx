@@ -129,8 +129,7 @@ const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, pro
 
   const handleCardClick = () => {
     if (customer.status === CustomerStatus.DELETED) onEdit(customer.customer_id);
-    else if (hasPlan) onPreview(customer.customer_id, customer.token);
-    else onEdit(customer.customer_id);
+    else onPreview(customer.customer_id, customer.token);
   };
 
   return (
@@ -213,27 +212,47 @@ const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, pro
             </div>
 
             <div className="flex items-center gap-1">
-              {hasPlan && customer.status !== CustomerStatus.DELETED && (
+              {customer.status !== CustomerStatus.DELETED && (
                 <>
-                  <button onClick={(e) => { e.stopPropagation(); onCopyLink(customer.link, customer); }} className="w-7 h-7 flex items-center justify-center text-blue-600 bg-white/80 hover:bg-blue-600 hover:text-white rounded-lg transition-all shadow-sm border border-blue-50 active:scale-90"><Copy size={12} /></button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onCopyLink(customer.link, customer); }} 
+                    className="w-7 h-7 flex items-center justify-center text-blue-600 bg-white/80 hover:bg-blue-600 hover:text-white rounded-lg transition-all shadow-sm border border-blue-50 active:scale-90"
+                    title="Copy link phác đồ"
+                  >
+                    <Copy size={12} />
+                  </button>
                   <button 
                     onClick={(e) => { e.stopPropagation(); onDuplicate(customer.customer_id); }} 
                     className="w-7 h-7 flex items-center justify-center text-orange-600 bg-white/80 hover:bg-orange-600 hover:text-white rounded-lg transition-all shadow-sm border border-orange-50 active:scale-90"
+                    title="Nhân bản phác đồ"
                   >
                     <CopyPlus size={12} />
                   </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onCopyPlan(customer.customer_id); }} 
+                    className="w-7 h-7 flex items-center justify-center text-purple-600 bg-white/80 hover:bg-purple-600 hover:text-white rounded-lg transition-all shadow-sm border border-purple-50 active:scale-90"
+                    title="Copy phác đồ từ học viên khác"
+                  >
+                    <ClipboardList size={12} />
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onEdit(customer.customer_id); }} 
+                    className="w-7 h-7 flex items-center justify-center text-green-600 bg-white/80 hover:bg-green-600 hover:text-white rounded-lg transition-all shadow-sm border border-green-50 active:scale-90"
+                    title="Sửa phác đồ"
+                  >
+                    <Edit2 size={12} />
+                  </button>
                 </>
               )}
-              {!hasPlan && customer.status !== CustomerStatus.DELETED && (
+              {customer.status === CustomerStatus.DELETED && (
                 <button 
-                  onClick={(e) => { e.stopPropagation(); onCopyPlan(customer.customer_id); }} 
-                  className="w-7 h-7 flex items-center justify-center text-orange-600 bg-white/80 hover:bg-orange-600 hover:text-white rounded-lg transition-all shadow-sm border border-orange-50 active:scale-90"
-                  title="Copy phác đồ từ học viên khác"
+                  onClick={(e) => { e.stopPropagation(); onEdit(customer.customer_id); }} 
+                  className="w-7 h-7 flex items-center justify-center text-gray-500 bg-white/80 hover:bg-gray-600 hover:text-white rounded-lg transition-all shadow-sm border border-gray-100 active:scale-90"
+                  title="Chi tiết / Khôi phục"
                 >
-                  <ClipboardList size={12} />
+                  <Edit2 size={12} />
                 </button>
               )}
-              <button onClick={(e) => { e.stopPropagation(); onEdit(customer.customer_id); }} className="w-7 h-7 flex items-center justify-center text-green-600 bg-white/80 hover:bg-green-600 hover:text-white rounded-lg transition-all shadow-sm border border-green-50 active:scale-90"><Edit2 size={12} /></button>
             </div>
           </div>
         </div>

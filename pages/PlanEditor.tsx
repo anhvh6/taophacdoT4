@@ -589,6 +589,12 @@ export const PlanEditor: React.FC<{
       
       setCustomer(prev => ({
         ...prev,
+        // Đảm bảo không dính bất kỳ định danh nào từ phác đồ mẫu A
+        customer_id: customerId ? prev.customer_id : undefined,
+        id: customerId ? prev.id : undefined,
+        token: customerId ? prev.token : undefined,
+        link: customerId ? prev.link : undefined,
+        status: CustomerStatus.ACTIVE,
         duration_days: source.duration_days,
         start_date: toInputDateString(new Date()),
         video_date: source.video_date,
@@ -729,7 +735,7 @@ export const PlanEditor: React.FC<{
       }
 
       // Đảm bảo lấy dữ liệu mới nhất từ local state
-      const payload = { 
+      const payload: any = { 
         ...customer, 
         customer_name: localName,
         note: localNote,
@@ -741,6 +747,15 @@ export const PlanEditor: React.FC<{
         end_date: calculatedEndDate || customer.end_date,
         duration_days: Number(customer.duration_days || 30)
       };
+
+      // Đảm bảo khi tạo mới/nhân bản (!customerId), B luôn có ID và token mới riêng biệt, không dùng ID của phác đồ mẫu A
+      if (!customerId) {
+        delete payload.customer_id;
+        delete payload.id;
+        delete payload.token;
+        delete payload.link;
+        payload.status = CustomerStatus.ACTIVE;
+      }
       
       console.log("PlanEditor: Saving student with payload:", payload);
       console.log("PlanEditor: Note being saved:", payload.note);
