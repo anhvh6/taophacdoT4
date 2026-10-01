@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Volume2, VolumeX, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut, ExternalLink } from 'lucide-react';
 import { Toast } from '../components/UI';
 import { customerService, generateCustomerLink } from '../src/services/customerService';
 import { customPlanService } from '../src/services/customPlanService';
@@ -14,6 +14,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 import FingerprintJS from '@fingerprintjs/fingerprintjs';
 import Hls from 'hls.js';
+import { BunnyVideoPlayer } from '../components/BunnyVideoPlayer';
 
 declare global {
   interface Window {
@@ -1159,12 +1160,63 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
   // Play Video Logic
   // Play Video Logic
+  // One short-lived entry: scoped to this viewer and its customer credentials.
+  const preparedVideo = useRef<{ key: string; until: number; result: Promise<any> } | null>(null);
+  const getVideoAccess = (videoId: string) => {
+    const credentials = { video_id: videoId, customer_id: customer?.customer_id || customerId, token: (customer?.token || token || '').trim() };
+    const key = JSON.stringify(credentials);
+    const cached = preparedVideo.current;
+    if (cached?.key === key && cached.until > Date.now()) return cached.result;
+    const started = performance.now();
+    const entry = { key, until: Date.now() + 30000, result: null as Promise<any> | null };
+    entry.result = supabase.functions.invoke('get-bunny-video-token', { body: credentials }).then(result => {
+      if (window.location.hostname === 'localhost') console.debug('[Video timing] token ms:', Math.round(performance.now() - started));
+      if (preparedVideo.current === entry) {
+        const expires = Number(result.data?.signed_embed_url ? new URL(result.data.signed_embed_url).searchParams.get('expires') : 0) * 1000;
+        entry.until = result.error || !expires ? 0 : Math.min(entry.until, expires - 30000);
+      }
+      return result;
+    }).catch(error => { if (preparedVideo.current === entry) preparedVideo.current = null; throw error; });
+    preparedVideo.current = entry;
+    return entry.result;
+  };
+
+  useEffect(() => {
+    const id = selectedTask?.link?.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0];
+    if (id) void getVideoAccess(id).catch(() => {});
+  }, [selectedTask?.link, customerId, customer?.token, token]);
+
   const handlePlayVideo = async (link?: string, skipAuthCheck: boolean = false, dayNum?: number) => {
     if (!link) return;
     
     let trimmedLink = link.trim();
     if (trimmedLink && typeof trimmedLink === 'string') {
       trimmedLink = trimmedLink.replace('vz-371142c2-906.b-cdn.net', 'video.phacdo.com');
+    }
+
+    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
+    const isStudent = !onNavigate && !isAdmin && !isPreviewDomain;
+
+    // 🚀 XỬ LÝ ZALO & SOCIAL CHAT LINKS -> Mở trực tiếp tab mới (tránh bị chặn iframe)
+    const isZaloLink = /zalo\.me|chat\.zalo\.me/i.test(trimmedLink);
+    const isSocialLink = isZaloLink || /facebook\.com|fb\.me|m\.me|t\.me|messenger\.com|tiktok\.com/i.test(trimmedLink);
+
+    if (isSocialLink) {
+      window.open(trimmedLink, '_blank', 'noopener,noreferrer');
+      if (isStudent && customerId) {
+        customerService.logVideoOpen(customerId, customer?.token || token || '', dayNum);
+        markAttendanceLocally(dayNum);
+      }
+      return;
+    }
+
+    // 🚀 XỬ LÝ GOOGLE DRIVE LINKS -> Đổi /view thành /preview để embed iframe không bị lỗi xác thực
+    const isDriveLink = /drive\.google\.com/i.test(trimmedLink);
+    if (isDriveLink) {
+      const match = trimmedLink.match(/[-\w]{25,}/);
+      if (match && match[0]) {
+        trimmedLink = `https://drive.google.com/file/d/${match[0]}/preview`;
+      }
     }
 
     const extractBunnyId = (raw: string) => {
@@ -1200,33 +1252,18 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       return;
     }
 
-    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
     if (onNavigate || isAdmin || isPreviewDomain) {
       if (isBunnyVidId && bunnyVidId) {
-         const dbToken = (customer?.token || token || "").trim();
-         const dbCustomerId = customer?.customer_id || customerId;
          try {
-             const { data } = await supabase.functions.invoke('get-bunny-video-token', {
-                 body: { video_id: bunnyVidId, customer_id: dbCustomerId, token: dbToken }
-             });
+             const { data, error } = await getVideoAccess(bunnyVidId);
+             if (error) throw new Error('Không lấy được quyền xem video. Vui lòng thử lại.');
              if (data?.signed_embed_url) {
-                 let finalUrl = `https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`;
-                 try {
-                     const hlsUrlObj = new URL(`https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`);
-                     const urlObj = new URL(data.signed_embed_url);
-                     const t = urlObj.searchParams.get('token');
-                     const e = urlObj.searchParams.get('expires');
-                     if (t) hlsUrlObj.searchParams.set('token', t);
-                     if (e) hlsUrlObj.searchParams.set('expires', e);
-                     hlsUrlObj.searchParams.set('fallback_embed', data.signed_embed_url);
-                     finalUrl = hlsUrlObj.toString();
-                 } catch (err) {}
-                 setPlayingVideo(finalUrl);
+                 setPlayingVideo(data.signed_embed_url);
              } else {
-                 setPlayingVideo(`https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`);
+                 throw new Error(data?.error || 'Không lấy được quyền xem video. Vui lòng thử lại.');
              }
          } catch(e) {
-             setPlayingVideo(`https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`);
+             setInfoModal({ isOpen: true, title: 'KHÔNG TẢI ĐƯỢC VIDEO', message: e instanceof Error ? e.message : 'Không thể kết nối máy chủ video.', type: 'WARNING', color: 'red' });
          }
          return;
       }
@@ -1243,7 +1280,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     }
 
     // 0. Kiểm tra yêu cầu đổi email đang chờ phê duyệt
-    const isStudent = !onNavigate && !isAdmin && !isPreviewDomain;
     if (isStudent && customer?.pending_email && customer.pending_email.trim() !== '') {
        setToast("Tài khoản của bạn đang có yêu cầu đổi email chờ phê duyệt.");
        setInfoModal({
@@ -1320,15 +1356,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
     if (isBunnyVidId && bunnyVidId) {
         try {
-            const dbToken = (customer?.token || token || "").trim();
-            const dbCustomerId = customer?.customer_id || customerId;
-            const { data, error } = await supabase.functions.invoke('get-bunny-video-token', {
-                body: { 
-                   video_id: bunnyVidId,
-                   customer_id: dbCustomerId,
-                   token: dbToken
-                }
-            });
+            const { data, error } = await getVideoAccess(bunnyVidId);
 
             if (error) {
               throw new Error(error.message);
@@ -1346,39 +1374,16 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             }
 
             if (data?.signed_embed_url) {
-                let finalHlsUrl = `https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`;
-                try {
-                    const hlsUrlObj = new URL(finalHlsUrl);
-                    const urlObj = new URL(data.signed_embed_url);
-                    const tokenParam = urlObj.searchParams.get('token');
-                    const expiresParam = urlObj.searchParams.get('expires');
-                    if (tokenParam) hlsUrlObj.searchParams.set('token', tokenParam);
-                    if (expiresParam) hlsUrlObj.searchParams.set('expires', expiresParam);
-                    hlsUrlObj.searchParams.set('fallback_embed', data.signed_embed_url);
-                    finalHlsUrl = hlsUrlObj.toString();
-                } catch (e) {
-                    console.warn("Failed to parse signed_embed_url", e);
-                }
-                
-                setPlayingVideo(finalHlsUrl);
+                setPlayingVideo(data.signed_embed_url);
                 if (isStudent) {
                     customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
                     markAttendanceLocally(dayNum);
                 }
             } else {
-                setPlayingVideo(`https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`);
-                if (isStudent) {
-                    customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
-                    markAttendanceLocally(dayNum);
-                }
+                throw new Error('Không lấy được quyền xem video. Vui lòng thử lại.');
             }
         } catch (err: any) {
-            console.error("Bunny API Error:", err);
-            setPlayingVideo(`https://video.phacdo.com/${bunnyVidId}/playlist.m3u8`);
-            if (isStudent) {
-                customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
-                markAttendanceLocally(dayNum);
-            }
+            setInfoModal({ isOpen: true, title: 'KHÔNG TẢI ĐƯỢC VIDEO', message: err?.message || 'Không thể kết nối máy chủ video.', type: 'WARNING', color: 'red' });
         }
     } else if (trimmedLink.includes('mediadelivery.net')) {
       setToast("Cảnh báo: Video này sử dụng đường dẫn cũ và không được bảo vệ bằng Token.");
@@ -1580,9 +1585,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   };
 
   const handleCopyLink = () => {
-    // Use the token from the loaded customer state if available, fallback to prop
-    const dbToken = (customer?.token || token || "").trim();
+    const dbToken = (customer?.token || token || '').trim();
     const dbCustomerId = customer?.customer_id || customerId;
+    // Use the token from the loaded customer state if available, fallback to prop
 
     if (!dbToken && onNavigate) {
        setInfoModal({
@@ -2588,7 +2593,17 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                }, 3000);
             }
          }}>
-           <div id="bunny-close-btn" className="absolute top-6 right-6 z-[9999] flex gap-4 transition-opacity duration-300">
+           <div id="bunny-close-btn" className="absolute top-6 right-6 z-[9999] flex items-center gap-3 transition-opacity duration-300">
+              <a 
+                href={playingVideo.includes('drive.google.com') && playingVideo.match(/[-w]{25,}/)?.[0] ? `https://drive.google.com/file/d/${playingVideo.match(/[-w]{25,}/)?.[0]}/view` : playingVideo} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="bg-white/20 hover:bg-white/40 px-4 py-3 rounded-full text-white text-xs font-bold backdrop-blur-md transition-all flex items-center gap-2 shadow-xl active:scale-95 cursor-pointer"
+                title="Mở trong tab mới"
+              >
+                <ExternalLink size={18} />
+                <span className="hidden sm:inline">Mở tab mới</span>
+              </a>
              <button onClick={() => {
                 setPlayingVideo(null);
                 try {
@@ -2601,7 +2616,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
              }} className="bg-white/20 hover:bg-white/40 p-4 rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-xl"><X size={20}/></button>
            </div>
            <div className="flex-1 flex items-center justify-center p-0 md:p-10 w-full h-full">
-              {playingVideo.includes('.m3u8') ? (
+              {playingVideo.includes('mediadelivery.net/embed/') || playingVideo.includes('video.phacdo.com/embed/') ? (
+                 <BunnyVideoPlayer key={playingVideo} url={playingVideo.replace('https://video.phacdo.com/embed/', 'https://iframe.mediadelivery.net/embed/')} />
+              ) : playingVideo.includes('.m3u8') ? (
                  <div className="w-full h-full max-w-[1400px] mx-auto flex items-center justify-center">
                     <HlsVideoPlayer url={playingVideo} />
                  </div>
@@ -2615,15 +2632,48 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                        } catch(e) {}
                     }} />
                  ) : (
-                    <div className="relative w-full h-full max-w-[1400px] mx-auto flex items-center justify-center bg-black">
-                        <iframe 
-                           src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
-                           className="w-full h-full md:rounded-[1rem] shadow-2xl border-none outline-none bg-black"
-                           loading="lazy" 
-                           allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-                           sandbox="allow-scripts allow-same-origin allow-presentation"
-                        ></iframe>
-                    </div>
+                    playingVideo.includes('drive.google.com') ? (
+                  (() => {
+                    const match = playingVideo.match(/[-w]{25,}/);
+                    const driveId = match ? match[0] : null;
+                    const previewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/preview` : playingVideo;
+                    const imgUrl = driveId ? `https://lh3.googleusercontent.com/d/${driveId}` : null;
+                    
+                    return (
+                      <div className="relative w-full h-full max-w-[1400px] mx-auto flex flex-col items-center justify-center bg-black rounded-[1rem] overflow-hidden p-2 sm:p-4">
+                         {imgUrl && (
+                            <img 
+                               src={imgUrl} 
+                               alt="Google Drive Content" 
+                               className="w-full h-full object-contain max-h-[85vh]"
+                               onError={(e) => {
+                                  (e.currentTarget as HTMLElement).style.display = 'none';
+                                  const iframeEl = document.getElementById('gdrive-fallback-iframe');
+                                  if (iframeEl) iframeEl.style.display = 'block';
+                               }}
+                            />
+                         )}
+                         <iframe 
+                            id="gdrive-fallback-iframe"
+                            src={previewUrl}
+                            className="w-full h-full md:rounded-[1rem] shadow-2xl border-none outline-none bg-black"
+                            style={{ display: imgUrl ? 'none' : 'block' }}
+                            loading="lazy" 
+                            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                         ></iframe>
+                      </div>
+                    );
+                  })()
+               ) : (
+                  <div className="relative w-full h-full max-w-[1400px] mx-auto flex items-center justify-center bg-black">
+                      <iframe 
+                         src={playingVideo.includes('player.mediadelivery.net/play/') ? playingVideo.replace('player.mediadelivery.net/play/', 'iframe.mediadelivery.net/embed/') : playingVideo}
+                         className="w-full h-full md:rounded-[1rem] shadow-2xl border-none outline-none bg-black"
+                         loading="lazy" 
+                         allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                      ></iframe>
+                  </div>
+               )
                  )
               )}
            </div>
