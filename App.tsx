@@ -445,7 +445,7 @@ const App: React.FC = () => {
   // Redirect to login if not authenticated for admin pages
   useEffect(() => {
     if (APP_MODE === 'client') return;
-    if (!authLoading && !session && currentPage !== 'preview' && currentPage !== 'login' && currentPage !== 'migrate') {
+    if (!authLoading && !session && currentPage !== 'preview' && currentPage !== 'login') {
       window.location.hash = '#/login';
     }
   }, [session, authLoading, currentPage]);

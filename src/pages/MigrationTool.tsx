@@ -7,7 +7,6 @@ const supabase = {
 };
 import { Database, Code, Copy, Check } from 'lucide-react';
 import { Button } from '../../components/UI';
-import data from '../../migration/data_export.json';
 
 const SQL_SCHEMA = `-- Supabase Schema for Mega Phương Facial Yoga Management System
 
