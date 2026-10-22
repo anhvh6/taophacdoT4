@@ -1,3 +1,5 @@
+const getClientCacheKey = (cId: string, tok?: string, isAdm?: boolean) => 
+  `phacdo_cache_${cId}_${(tok || (isAdm ? 'admin' : 'public')).trim()}`;
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Volume2, VolumeX, X, Copy, CopyPlus, Pencil, User, Home, Calendar, AlertTriangle, Layout as LayoutIcon, MessageSquare, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, RefreshCw, CheckCircle, ArrowDownToLine, Share2, LogOut, ExternalLink } from 'lucide-react';
 import { Toast } from '../components/UI';
@@ -797,6 +799,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const [activeCampaign, setActiveCampaign] = useState<AdCampaign | null>(null);
   const hasAdPrompted = useRef(false);
 
+  const CLIENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 phút cache để tiết kiệm Egress cho gói Free
+  const lastBackgroundRefreshRef = useRef<number>(0);
   const refreshInFlight = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const hasScrolledRef = useRef(false);
@@ -811,8 +815,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     }
 
     // Thử lấy từ cache trước để hiển thị ngay lập tức (Stale-While-Revalidate)
+    const cacheKey = getClientCacheKey(customerId, token, !!onNavigate);
     if (useCache) {
-      const cached = localStorage.getItem(`phacdo_cache_${customerId}`);
+      const cached = localStorage.getItem(cacheKey);
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
@@ -821,6 +826,18 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             if (parsed.tasks) setTasks(parsed.tasks);
             // Hiển thị dữ liệu cũ TRƯỚC khi tải dữ liệu mới (UX nhanh tức thì)
             setLoading(false);
+
+            // TỐI ƯU BĂNG THÔNG (EGRESS) CHO GÓI FREE:
+            // Nếu dữ liệu cache còn mới (< 20 phút) và không bị ép làm mới (forceRefresh = false)
+            // và không phải đang ở trang Admin (onNavigate = undefined)
+            // -> Dùng luôn cache, KHÔNG gọi lại Supabase API để tiết kiệm tối đa Egress!
+            const serverFetchedTime = parsed.lastFetchedAt || parsed.timestamp || 0;
+            const cacheAge = Date.now() - serverFetchedTime;
+            if (!forceRefresh && !onNavigate && serverFetchedTime > 0 && cacheAge < CLIENT_CACHE_TTL_MS) {
+              console.log("[ClientView Cache Hit] Phác đồ còn mới (" + Math.round(cacheAge / 1000) + "s), bỏ qua API request để tiết kiệm Egress.");
+              lastBackgroundRefreshRef.current = serverFetchedTime;
+              return;
+            }
           }
         } catch (e) {
           console.error("Lỗi parse cache:", e);
@@ -855,47 +872,19 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       const actualId = customerData.customer_id || customerId;
             console.log("Custom tasks result count:", customTasks?.length || 0);
       
-      if (customTasks && customTasks.length > 0) {
+// LOẠI BỎ TRUY VẤN TRÙNG: Chỉ tải master plan 1 lần duy nhất nếu học viên chưa cá nhân hóa
+      if (customerData.is_customized && customTasks && customTasks.length > 0) {
         planTasks = customTasks;
-        // Even if customized, if they somehow contain tasks from other groups (due to old bugs), filter them
         if (customerData.ma_vd) {
           planTasks = planTasks.filter(t => !t.nhom || t.nhom === customerData.ma_vd);
         }
       } else {
-        // Fallback to master plan using video_date
+        // Học viên dùng phác đồ mẫu chuẩn (master plan): Tải 1 lần duy nhất từ master_video_tasks
         const videoDate = customerData.video_date || customerData.Video_date;
-        console.log("No custom tasks, falling back to master plan for date:", videoDate);
         if (videoDate) {
-          planTasks = await planService.getMasterPlan(videoDate);
-          if (customerData.ma_vd) {
-            planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
-          }
-          console.log("Master plan tasks result count:", planTasks?.length || 0);
-        }
-      }
-
-      // CRITICAL: Tự động cập nhật nội dung mới nhất từ Lich phac do khi load trang
-      // Chỉ tự động cập nhật nếu khách hàng CHƯA tùy chỉnh. Nếu đã tùy chỉnh, tôn trọng dữ liệu đã lưu.
-      const videoDate = customerData.video_date || customerData.Video_date;
-      let syncOccurred = false;
-      if (videoDate && planTasks.length > 0 && !customerData.is_customized) {
-        const todayDate = toVnZeroHour();
-        const start = toVnZeroHour(customerData.start_date);
-        const currentAllowedDay = customerData.allowed_day || getDiffDays(start, todayDate) + 1;
-        
-        // Đồng bộ toàn bộ phác đồ từ master
-        if (currentAllowedDay > 0) {
-          try {
-            const masterTasks = await planService.getMasterPlan(videoDate);
-            if (masterTasks && masterTasks.length > 0) {
-              planTasks = masterTasks;
-              if (customerData.ma_vd) {
-                planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
-              }
-              syncOccurred = true;
-            }
-          } catch (e) {
-            console.warn("Failed to auto-sync master tasks on load", e);
+          const masterTasks = await planService.getMasterPlan(videoDate);
+          if (masterTasks && masterTasks.length > 0) {
+            planTasks = customerData.ma_vd ? masterTasks.filter(t => t.nhom === customerData.ma_vd) : masterTasks;
           }
         }
       }
@@ -919,11 +908,14 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       
       setTasks(cleanTasks);
 
-      // Lưu vào cache cho lần sau
-      safeSetLocalStorage(`phacdo_cache_${customerId}`, JSON.stringify({
+      // Lưu vào cache cho lần sau (gắn với token và ghi nhận mốc lastFetchedAt từ server)
+      const fetchNow = Date.now();
+      lastBackgroundRefreshRef.current = fetchNow;
+      safeSetLocalStorage(cacheKey, JSON.stringify({
         customer: customerData,
         tasks: cleanTasks,
-        timestamp: Date.now()
+        lastFetchedAt: fetchNow,
+        localUpdatedAt: fetchNow
       }));
       
       if (customerData.expire_warning === true) {
@@ -1151,10 +1143,21 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     setCustomer(updatedCustomer);
     
     // Update cache to persist the checkmark locally until next refresh
-    safeSetLocalStorage(`phacdo_cache_${customerId}`, JSON.stringify({
+    // TÁCH BIỆT: Giữ nguyên lastFetchedAt từ server, KHÔNG làm mới mốc thời gian tải
+    const markCacheKey = getClientCacheKey(customerId, token, !!onNavigate);
+    const currentCached = localStorage.getItem(markCacheKey);
+    let existingLastFetchedAt = 0;
+    if (currentCached) {
+      try {
+        const parsed = JSON.parse(currentCached);
+        existingLastFetchedAt = parsed.lastFetchedAt || parsed.timestamp || 0;
+      } catch (e) {}
+    }
+    safeSetLocalStorage(markCacheKey, JSON.stringify({
       customer: updatedCustomer,
       tasks: tasks,
-      timestamp: Date.now()
+      lastFetchedAt: existingLastFetchedAt,
+      localUpdatedAt: Date.now()
     }));
   };
 
@@ -1484,6 +1487,16 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
   const triggerBackgroundRefresh = async (currentTask?: ExerciseTask) => {
     if (refreshInFlight.current) return;
+
+    // TỐI ƯU BĂNG THÔNG (EGRESS) CHO GÓI FREE:
+    // Khi học viên click vào từng bài tập, nếu bài đã có sẵn link video và lần refresh gần nhất chưa quá 20 phút
+    // -> BỎ QUA không gọi lại Supabase để tránh tốn hàng gigabyte băng thông tải lại 60 ngày bài tập!
+    const isMissingLink = currentTask && (!currentTask.link || String(currentTask.link).trim() === '');
+    const timeSinceLastRefresh = Date.now() - lastBackgroundRefreshRef.current;
+    if (!isMissingLink && timeSinceLastRefresh < CLIENT_CACHE_TTL_MS) {
+      return;
+    }
+
     refreshInFlight.current = true;
     setIsRefreshing(true);
     try {
@@ -1561,11 +1574,15 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           });
         setTasks(cleanTasks);
 
-        // Lưu vào cache cho lần sau (không ghi đè db để tránh Supabase Timeout)
-        localStorage.setItem(`phacdo_cache_${customerId}`, JSON.stringify({
+        // Lưu vào cache cho lần sau và cập nhật lastBackgroundRefreshRef KHI THÀNH CÔNG
+        const bgNow = Date.now();
+        lastBackgroundRefreshRef.current = bgNow;
+        const bgCacheKey = getClientCacheKey(customerId, token, !!onNavigate);
+        safeSetLocalStorage(bgCacheKey, JSON.stringify({
           customer: customerData,
           tasks: cleanTasks,
-          timestamp: Date.now()
+          lastFetchedAt: bgNow,
+          localUpdatedAt: bgNow
         }));
         
         if (currentTask) {
