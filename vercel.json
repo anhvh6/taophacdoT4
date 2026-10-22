@@ -10,7 +10,7 @@
       "destination": "/api/client?id=:id"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

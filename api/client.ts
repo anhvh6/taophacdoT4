@@ -74,8 +74,10 @@ export default async function handler(req: any, res: any) {
       }
     });
 
-    // Inject debug info into a hidden comment for verification
-    html = html.replace('</body>', `<!-- OG Debug: ${debugInfo} | ${new Date().toISOString()} -->\n</body>`);
+    // Inject debug info into a hidden comment only if explicitly requested
+    if (debug === 'true') {
+      html = html.replace('</body>', `<!-- OG Debug: ${debugInfo} | ${new Date().toISOString()} -->\n</body>`);
+    }
 
     res.setHeader('Content-Type', 'text/html');
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
