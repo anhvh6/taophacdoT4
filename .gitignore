@@ -12,6 +12,8 @@ dist
 dist-ssr
 *.local
 .env
+.env.*
+!.env.example
 .puppeteer_data/
 
 # Editor directories and files
