@@ -807,7 +807,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
   const fetchData = async (useCache = true, forceRefresh = false) => {
     // Nếu không có token và không có onNavigate (không phải admin), từ chối ngay
-    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
+    const isPreviewDomain = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     if (!token && !onNavigate && !isAdmin && !isPreviewDomain) {
       setAccessDenied(true);
       setLoading(false);
@@ -956,7 +956,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         setDeviceId(fpId);
 
         // If in admin mode or preview domain, always authorized
-        const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
+        const isPreviewDomain = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         if (onNavigate || isAdmin || isPreviewDomain) {
           setDeviceAuthorized(true);
           setDeviceAuthLoading(false);
@@ -1044,7 +1044,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     if (loading || !customer) return;
     
     const hasEmail = customer.email && String(customer.email).trim() !== "";
-    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
+    const isPreviewDomain = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const isSkipAuth = onNavigate || isAdmin || isPreviewDomain;
     const needsGoogleAuth = isFlagEnabled(customer.require_google_auth, true) && !isSkipAuth;
     const needsDeviceLimit = isFlagEnabled(customer.require_device_limit, true) && !isSkipAuth;
@@ -1197,7 +1197,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       trimmedLink = trimmedLink.replace('vz-371142c2-906.b-cdn.net', 'video.phacdo.com');
     }
 
-    const isPreviewDomain = window.location.hostname.includes('taophacdot4') || window.location.hostname.includes('taophacdo.vercel.app') || window.location.hostname.includes('localhost');
+    const isPreviewDomain = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const isStudent = !onNavigate && !isAdmin && !isPreviewDomain;
 
     // 🚀 XỬ LÝ ZALO & SOCIAL CHAT LINKS -> Mở trực tiếp tab mới (tránh bị chặn iframe)

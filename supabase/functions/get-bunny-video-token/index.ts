@@ -41,7 +41,16 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (authHeader && authHeader.startsWith('Bearer ')) {
        const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
-       if (user) hasAccess = true;
+       if (user) {
+          const { data: adminRecord } = await supabaseAdmin
+             .from('admin_users')
+             .select('id, role')
+             .eq('id', user.id)
+             .maybeSingle();
+          if (adminRecord) {
+             hasAccess = true;
+          }
+       }
     }
 
     if (!hasAccess && customer_id && token) {

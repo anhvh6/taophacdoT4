@@ -54,9 +54,15 @@ async function startServer() {
 
   // MOCK: Disabled Migration Endpoints for Local Mocks
   
-  // Endpoint điều khiển Youtube Puppeteer
+  // Endpoint điều khiển Youtube Puppeteer (Bảo mật bằng Secret Token)
   app.post("/api/youtube/action", async (req, res) => {
     try {
+      const secret = req.headers["x-internal-secret"] || req.headers["authorization"];
+      const expectedSecret = process.env.INTERNAL_API_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (expectedSecret && secret !== expectedSecret && secret !== `Bearer ${expectedSecret}`) {
+        return res.status(403).json({ error: "Forbidden: Không có quyền truy cập endpoint này." });
+      }
+
       const { action, email, links } = req.body;
       if (!action || !email || !links || !Array.isArray(links)) {
         return res.status(400).json({ error: "Thiếu tham số" });

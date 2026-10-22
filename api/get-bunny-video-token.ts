@@ -42,8 +42,16 @@ export default async function handler(req: any, res: any) {
     const bearer = authHeader.split('Bearer ')[1];
     const { data: { user }, error: authErr } = await supabase.auth.getUser(bearer);
     if (!authErr && user) {
-       isAdmin = true;
-       authUserId = user.id;
+       const { data: adminRecord } = await supabase
+         .from('admin_users')
+         .select('id, role')
+         .eq('id', user.id)
+         .maybeSingle();
+
+       if (adminRecord) {
+         isAdmin = true;
+         authUserId = user.id;
+       }
     }
   }
 

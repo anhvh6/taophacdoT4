@@ -402,23 +402,21 @@ begin
     return json_build_object('success', true, 'message', 'Limit disabled');
   end if;
 
-  -- Check if device already exists either by device_id OR an approved device with the same name
+  -- Check if device already exists by device_id
   select is_approved into v_is_approved
   from customer_devices 
-  where customer_id = p_customer_id 
-    and (device_id = p_device_id or (device_name = p_device_name and is_approved = true))
+  where customer_id = p_customer_id and device_id = p_device_id
   limit 1;
 
   if found then
     if v_is_approved then
-        -- If it was found via device_name, we should ensure the new device_id is also inserted/approved silently
-        -- to keep the device_id updated without bothering the user
-        insert into customer_devices (customer_id, device_id, device_name, is_approved, approved_at, last_used_at)
-        values (p_customer_id, p_device_id, p_device_name, true, now(), now())
-        on conflict (customer_id, device_id) do update 
-        set is_approved = true, last_used_at = now(), device_name = p_device_name;
+        -- Device already approved -> update last_used_at
+        update customer_devices
+        set last_used_at = now(),
+            device_name = coalesce(nullif(p_device_name, ''), device_name)
+        where customer_id = p_customer_id and device_id = p_device_id;
         
-        return json_build_object('success', true, 'message', 'Already approved or matched by device name');
+        return json_build_object('success', true, 'message', 'Already approved');
     else
         -- If found but pending (matched by exact device_id), check if we can auto-approve now (if approved count < 3)
         select count(*) into v_count from customer_devices where customer_id = p_customer_id and is_approved = true;
