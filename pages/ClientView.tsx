@@ -872,14 +872,14 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       const actualId = customerData.customer_id || customerId;
             console.log("Custom tasks result count:", customTasks?.length || 0);
       
-// LOẠI BỎ TRUY VẤN TRÙNG: Chỉ tải master plan 1 lần duy nhất nếu học viên chưa cá nhân hóa
-      if (customerData.is_customized && customTasks && customTasks.length > 0) {
+      // TỐI ƯU HÓA: Dùng trực tiếp danh sách bài tập nếu đã được tải từ get_client_tasks, không gọi lại getMasterPlan
+      if (customTasks && customTasks.length > 0) {
         planTasks = customTasks;
         if (customerData.ma_vd) {
           planTasks = planTasks.filter(t => !t.nhom || t.nhom === customerData.ma_vd);
         }
       } else {
-        // Học viên dùng phác đồ mẫu chuẩn (master plan): Tải 1 lần duy nhất từ master_video_tasks
+        // Fallback: chỉ tải từ master_video_tasks nếu customTasks rỗng (ví dụ Admin xem trước)
         const videoDate = customerData.video_date || customerData.Video_date;
         if (videoDate) {
           const masterTasks = await planService.getMasterPlan(videoDate, token ? { customerId: actualId, token } : undefined);

@@ -20,53 +20,71 @@ class SupabaseDatabase {
 
   async getCustomers() {
     const PAGE_SIZE = 1000;
-    let all: Customer[] = [];
-    let page = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from('customers')
-        .select(`
-          id,
-          customer_id,
-          customer_name,
-          sdt,
-          email,
-          dia_chi,
-          san_pham,
-          gia_tien,
-          trang_thai_gan,
-          trang_thai,
-          ma_vd,
-          note,
-          chewing_status,
-          start_date,
-          end_date,
-          duration_days,
-          video_date,
-          status,
-          link,
-          token,
-          created_at,
-          updated_at,
-          app_title,
-          app_slogan,
-          is_customized,
-          require_google_auth,
-          require_device_limit,
-          pending_email,
-          is_deposit,
-          deposit_amount,
-          is_consultation,
-          raw_backup
-        `)
-        .order('created_at', { ascending: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    const customerSelect = `
+      id,
+      customer_id,
+      customer_name,
+      sdt,
+      email,
+      dia_chi,
+      san_pham,
+      gia_tien,
+      trang_thai_gan,
+      trang_thai,
+      ma_vd,
+      note,
+      chewing_status,
+      start_date,
+      end_date,
+      duration_days,
+      video_date,
+      status,
+      link,
+      token,
+      created_at,
+      updated_at,
+      app_title,
+      app_slogan,
+      is_customized,
+      require_google_auth,
+      require_device_limit,
+      pending_email,
+      is_deposit,
+      deposit_amount,
+      is_consultation,
+      raw_backup
+    `;
 
-      if (error) throw error;
-      if (!data || data.length === 0) break;
-      all = all.concat(data as Customer[]);
-      if (data.length < PAGE_SIZE) break;
-      page++;
+    const { data: firstBatch, error, count } = await supabase
+      .from('customers')
+      .select(customerSelect, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(0, PAGE_SIZE - 1);
+
+    if (error) throw error;
+    if (!firstBatch || firstBatch.length === 0) return [];
+
+    let all: Customer[] = [...(firstBatch as Customer[])];
+    const totalCount = count ?? firstBatch.length;
+
+    if (totalCount > PAGE_SIZE) {
+      const remainingPages = Math.ceil((totalCount - PAGE_SIZE) / PAGE_SIZE);
+      const promises = Array.from({ length: remainingPages }, (_, i) => {
+        const pageIdx = i + 1;
+        return supabase
+          .from('customers')
+          .select(customerSelect)
+          .order('created_at', { ascending: false })
+          .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE - 1);
+      });
+
+      const results = await Promise.all(promises);
+      for (const res of results) {
+        if (res.error) throw res.error;
+        if (res.data) {
+          all = all.concat(res.data as Customer[]);
+        }
+      }
     }
     return all;
   }
@@ -136,22 +154,40 @@ class SupabaseDatabase {
 
   async getAllMasterTasks() {
     const PAGE_SIZE = 1000;
-    let all: any[] = [];
-    let page = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from('master_video_tasks')
-        .select('*')
-        .order('video_date', { ascending: false })
-        .order('day', { ascending: true })
-        .order('sort_order', { ascending: true })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    const { data: firstBatch, error, count } = await supabase
+      .from('master_video_tasks')
+      .select('*', { count: 'exact' })
+      .order('video_date', { ascending: false })
+      .order('day', { ascending: true })
+      .order('sort_order', { ascending: true })
+      .range(0, PAGE_SIZE - 1);
 
-      if (error) throw error;
-      if (!data || data.length === 0) break;
-      all = all.concat(data);
-      if (data.length < PAGE_SIZE) break;
-      page++;
+    if (error) throw error;
+    if (!firstBatch || firstBatch.length === 0) return [];
+
+    let all: any[] = [...firstBatch];
+    const totalCount = count ?? firstBatch.length;
+
+    if (totalCount > PAGE_SIZE) {
+      const remainingPages = Math.ceil((totalCount - PAGE_SIZE) / PAGE_SIZE);
+      const promises = Array.from({ length: remainingPages }, (_, i) => {
+        const pageIdx = i + 1;
+        return supabase
+          .from('master_video_tasks')
+          .select('*')
+          .order('video_date', { ascending: false })
+          .order('day', { ascending: true })
+          .order('sort_order', { ascending: true })
+          .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE - 1);
+      });
+
+      const results = await Promise.all(promises);
+      for (const res of results) {
+        if (res.error) throw res.error;
+        if (res.data) {
+          all = all.concat(res.data);
+        }
+      }
     }
     return all.map((row) => this.mapTaskRow(row));
   }

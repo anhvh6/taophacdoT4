@@ -1,6 +1,6 @@
 
 import { Search, UserPlus, Users, Calendar, ExternalLink, Edit2, Copy, Package, Clock, AlertTriangle, CheckCircle, Archive, Zap, CopyPlus, UserCircle, Filter, Eraser, AlertCircle, X, Plus, Mail, MapPin, Truck, FileWarning, User, Play, List, ChevronDown, ChevronRight, ChevronLeft, Trash2, RefreshCw, ShoppingBag, Phone, ClipboardList, BookOpen, LogOut, BarChart3, Bell, Shield, Pin, DollarSign } from 'lucide-react';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { Layout } from '../components/Layout';
 import { Card, Button, LineInput, Modal, Toast } from '../components/UI';
 import { DateInput } from '../components/DateInput';
@@ -335,6 +335,9 @@ export const Dashboard: React.FC<{
 }> = ({ onNavigate, initialAction, filterStatus, customers, products, loading, onRefresh, onUpsert, onDelete, onLogout, currentUserRole = 'super_admin', checkPermission }) => {
   const hasPerm = (perm: string) => checkPermission ? checkPermission(perm) : true;
   const [searchTerm, setSearchTerm] = useState("");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const [expiredDisplayCount, setExpiredDisplayCount] = useState(36);
+  const [deletedDisplayCount, setDeletedDisplayCount] = useState(36);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [dateFilters, setDateFilters] = useState<Record<string, {from: string, to: string}>>({
@@ -735,11 +738,11 @@ export const Dashboard: React.FC<{
 
   const filteredBySearch = useMemo(() => {
     return customers.filter(c => {
-      const matchSearch = matchesSearch(c.customer_name, searchTerm) || 
-                          matchesSearch(c.ma_vd, searchTerm) || 
-                          matchesSearch(c.sdt, searchTerm) ||
-                          matchesSearch(c.email, searchTerm) ||
-                          matchesSearch(c.customer_id, searchTerm);
+      const matchSearch = matchesSearch(c.customer_name, deferredSearchTerm) || 
+                          matchesSearch(c.ma_vd, deferredSearchTerm) || 
+                          matchesSearch(c.sdt, deferredSearchTerm) ||
+                          matchesSearch(c.email, deferredSearchTerm) ||
+                          matchesSearch(c.customer_id, deferredSearchTerm);
       
       let matchFilter = true;
       if (dashboardFilter) {
@@ -762,7 +765,7 @@ export const Dashboard: React.FC<{
         matchCreator = c.creator_email === creatorFilter;
       }
 
-      if (searchTerm.trim()) return matchSearch && matchFilter && matchCreator;
+      if (deferredSearchTerm.trim()) return matchSearch && matchFilter && matchCreator;
 
       let matchVideoOpen = true;
       if (videoOpenFilter) {
@@ -788,7 +791,7 @@ export const Dashboard: React.FC<{
 
       return matchSearch && matchVideoOpen && matchFilter && matchCreator;
     });
-  }, [customers, searchTerm, videoOpenFilter, products, productMap, creatorFilter, dashboardFilter]);
+  }, [customers, deferredSearchTerm, videoOpenFilter, products, productMap, creatorFilter, dashboardFilter]);
 
   // Helper function for sorting by most recent creation (using full timestamp)
   const getCreationTime = (c: Customer) => {
@@ -812,7 +815,7 @@ export const Dashboard: React.FC<{
     const notStarted: Customer[] = [];
     const expired: Customer[] = [];
 
-    const isSearching = searchTerm.trim() !== "";
+    const isSearching = deferredSearchTerm.trim() !== "";
 
     const checkDateObj = (dateObj: Date | null | undefined, filterFrom: string, filterTo: string) => {
       if (isSearching || videoOpenFilter) return true;
@@ -883,7 +886,7 @@ export const Dashboard: React.FC<{
     expired.sort((a, b) => (calcInfo(b).start.getTime() + (b.duration_days || 0) * 86400000) - (calcInfo(a).start.getTime() + (a.duration_days || 0) * 86400000));
 
     return { newToday, consultation, deposit, noPlan, expiring, active, notStarted, expired, deleted };
-  }, [filteredBySearch, todayStr, dateFilters, dateFrom, dateTo, searchTerm, videoOpenFilter]);
+  }, [filteredBySearch, todayStr, dateFilters, dateFrom, dateTo, deferredSearchTerm, videoOpenFilter]);
 
   const summaryStats = useMemo(() => {
     // Calculate "Hoạt động" count independent of date filter
@@ -906,7 +909,7 @@ export const Dashboard: React.FC<{
     };
   }, [groups, customers, filteredBySearch]);
 
-  const isSearching = searchTerm.trim() !== "";
+  const isSearching = deferredSearchTerm.trim() !== "";
 
   const hvVaoHocCount = useMemo(() => {
     let count = 0;
@@ -1239,9 +1242,32 @@ export const Dashboard: React.FC<{
             <div id="group-expired">
               <GroupHeader icon={Archive} title="Đã kết thúc" count={groups.expired.length} colorClass="text-red-800" isCollapsed={!!collapsedGroups['expired'] && !isSearching} onToggle={() => toggleGroup('expired')} filterLabel="Hết hạn từ" filterFrom={dateFilters.expired.from} filterTo={dateFilters.expired.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, expired: {from, to}})} />
               {(!collapsedGroups['expired'] || isSearching) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-                  {groups.expired.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={Archive} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
-                  {groups.expired.length === 0 && <div className="col-span-full py-4 text-center text-sm text-gray-400 italic">Không có học viên nào</div>}
+                <div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
+                    {(isSearching ? groups.expired : groups.expired.slice(0, expiredDisplayCount)).map(c => (
+                      <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={Archive} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />
+                    ))}
+                    {groups.expired.length === 0 && <div className="col-span-full py-4 text-center text-sm text-gray-400 italic">Không có học viên nào</div>}
+                  </div>
+                  {!isSearching && groups.expired.length > expiredDisplayCount && (
+                    <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setExpiredDisplayCount(prev => prev + 36)}
+                        className="px-5 py-2.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-2"
+                      >
+                        <ChevronDown size={14} />
+                        Xem thêm 36 học viên (còn {groups.expired.length - expiredDisplayCount} người)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExpiredDisplayCount(groups.expired.length)}
+                        className="px-4 py-2.5 text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                      >
+                        Hiện tất cả ({groups.expired.length})
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1249,9 +1275,32 @@ export const Dashboard: React.FC<{
             <div>
               <GroupHeader icon={Trash2} title="Đã xóa" count={groups.deleted.length} colorClass="text-gray-500" isCollapsed={!!collapsedGroups['deleted'] && !isSearching} onToggle={() => toggleGroup('deleted')} filterLabel="Ngày xóa từ" filterFrom={dateFilters.deleted.from} filterTo={dateFilters.deleted.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, deleted: {from, to}})} />
               {(!collapsedGroups['deleted'] || isSearching) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300 opacity-70 grayscale-[0.3]">
-                  {groups.deleted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-gray-400" groupIcon={Trash2} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
-                  {groups.deleted.length === 0 && <div className="col-span-full py-4 text-center text-sm text-gray-400 italic">Không có học viên nào</div>}
+                <div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300 opacity-70 grayscale-[0.3]">
+                    {(isSearching ? groups.deleted : groups.deleted.slice(0, deletedDisplayCount)).map(c => (
+                      <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-gray-400" groupIcon={Trash2} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />
+                    ))}
+                    {groups.deleted.length === 0 && <div className="col-span-full py-4 text-center text-sm text-gray-400 italic">Không có học viên nào</div>}
+                  </div>
+                  {!isSearching && groups.deleted.length > deletedDisplayCount && (
+                    <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setDeletedDisplayCount(prev => prev + 36)}
+                        className="px-5 py-2.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-2"
+                      >
+                        <ChevronDown size={14} />
+                        Xem thêm 36 học viên (còn {groups.deleted.length - deletedDisplayCount} người)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletedDisplayCount(groups.deleted.length)}
+                        className="px-4 py-2.5 text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                      >
+                        Hiện tất cả ({groups.deleted.length})
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

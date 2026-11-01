@@ -1,15 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { Dashboard } from './pages/Dashboard';
-import { CustomerManagement } from './pages/CustomerManagement';
-import { PlanEditor } from './pages/PlanEditor';
-import { ProductManagement } from './pages/ProductManagement';
-import { ClientView } from './pages/ClientView';
-import { VideoGroupManagement } from './pages/VideoGroupManagement';
-import { AnalyticsDashboard } from './pages/AnalyticsDashboard';
-import { PermissionsManagement } from './pages/PermissionsManagement';
-import { AdminUsersManagement } from './pages/AdminUsersManagement';
-import AdCampaignManagement from './pages/AdCampaignManagement';
-import { MigrationTool } from './src/pages/MigrationTool';
+import React, { useState, useEffect, useLayoutEffect, useRef, Suspense } from 'react';
 import { customerService } from './src/services/customerService';
 import { productService } from './src/services/productService';
 import { auth } from './src/lib/auth';
@@ -18,6 +7,20 @@ import { Button, Toast } from './components/UI';
 
 import { Customer, Product, CustomerStatus, RolePermission } from './types';
 import { permissionService } from './src/services/permissionService';
+
+// Dynamic code-split pages for high-speed initial loading
+const Dashboard = React.lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const CustomerManagement = React.lazy(() => import('./pages/CustomerManagement').then(m => ({ default: m.CustomerManagement })));
+const PlanEditor = React.lazy(() => import('./pages/PlanEditor').then(m => ({ default: m.PlanEditor })));
+const ProductManagement = React.lazy(() => import('./pages/ProductManagement').then(m => ({ default: m.ProductManagement })));
+const ClientView = React.lazy(() => import('./pages/ClientView').then(m => ({ default: m.ClientView })));
+const VideoGroupManagement = React.lazy(() => import('./pages/VideoGroupManagement').then(m => ({ default: m.VideoGroupManagement })));
+const AnalyticsDashboard = React.lazy(() => import('./pages/AnalyticsDashboard').then(m => ({ default: m.AnalyticsDashboard })));
+const PermissionsManagement = React.lazy(() => import('./pages/PermissionsManagement').then(m => ({ default: m.PermissionsManagement })));
+const AdminUsersManagement = React.lazy(() => import('./pages/AdminUsersManagement').then(m => ({ default: m.AdminUsersManagement })));
+const AdCampaignManagement = React.lazy(() => import('./pages/AdCampaignManagement'));
+const MigrationTool = React.lazy(() => import('./src/pages/MigrationTool').then(m => ({ default: m.MigrationTool })));
+
 
 type Page = 'dashboard' | 'management' | 'plan-editor' | 'products' | 'preview' | 'video-groups' | 'login' | 'migrate' | 'analytics' | 'permissions' | 'admin-users' | 'ad-campaigns';
 
@@ -631,14 +634,20 @@ const App: React.FC = () => {
 
   if (currentPage === 'preview') {
     return (
-      <ClientView
-        customerId={pageParams.customerId}
-        token={pageParams.token}
-        onNavigate={isAdmin ? navigate : undefined}
-        isAdmin={isAdmin}
-        adminRole={adminRole}
-        checkPermission={checkPermission}
-      />
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-blue-50/50">
+          <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
+        </div>
+      }>
+        <ClientView
+          customerId={pageParams.customerId}
+          token={pageParams.token}
+          onNavigate={isAdmin ? navigate : undefined}
+          isAdmin={isAdmin}
+          adminRole={adminRole}
+          checkPermission={checkPermission}
+        />
+      </Suspense>
     );
   }
 
@@ -659,7 +668,12 @@ const App: React.FC = () => {
           <p className="text-blue-900 font-bold uppercase tracking-widest text-xs">Đang nạp dữ liệu...</p>
         </div>
       ) : (
-        <>
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <RefreshCw size={40} className="animate-spin text-blue-600" />
+            <p className="text-blue-900 font-bold uppercase tracking-widest text-xs">Đang tải...</p>
+          </div>
+        }>
           {currentPage === 'dashboard' && (
             <Dashboard 
               onNavigate={navigate} 
@@ -724,7 +738,7 @@ const App: React.FC = () => {
           {currentPage === 'migrate' && (
             <MigrationTool />
           )}
-        </>
+        </Suspense>
       )}
       {globalToast && <Toast message={globalToast} onClose={() => setGlobalToast(null)} />}
     </div>
