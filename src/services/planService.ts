@@ -32,8 +32,22 @@ const mapTask = (t: any) => {
 };
 
 export const planService = {
-  async getMasterPlan(videoDate: string) {
+  async getMasterPlan(videoDate: string, clientAccess?: { customerId: string; token: string }) {
     if (!videoDate) return [];
+    // Student requests use the customer's stored video date and token in SQL.
+    // Never fall back to the legacy date-only RPC when token access fails.
+    if (clientAccess) {
+      if (!clientAccess.customerId?.trim() || !clientAccess.token?.trim()) return [];
+      const { data, error } = await supabase.rpc('get_client_master_tasks', {
+        p_customer_id: clientAccess.customerId.trim(),
+        p_token: clientAccess.token.trim()
+      });
+      if (error) {
+        console.error('get_client_master_tasks RPC:', error);
+        return [];
+      }
+      return (data || []).map(mapTask).filter(t => t.day >= 0).sort((a, b) => a.day - b.day);
+    }
     const dateKey = toISODateKey(videoDate);
     
     // Use direct query instead of RPC to ensure we get the 'id' field

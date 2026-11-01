@@ -231,7 +231,11 @@ const App: React.FC = () => {
     }
 
     if (!force) {
-      const cachedCust = localStorage.getItem('mega_customers_cache');
+      // Clear legacy cache if present
+      if (localStorage.getItem('mega_customers_cache')) {
+        try { localStorage.removeItem('mega_customers_cache'); } catch (e) {}
+      }
+      const cachedCust = localStorage.getItem('mega_customers_cache_v4');
       const cachedProd = localStorage.getItem('mega_products_cache');
       if (cachedCust && cachedProd) {
         try {
@@ -267,7 +271,7 @@ const App: React.FC = () => {
       setProducts(validProd);
       
       try {
-        localStorage.setItem('mega_customers_cache', JSON.stringify(uniqueCust));
+        localStorage.setItem('mega_customers_cache_v4', JSON.stringify(uniqueCust));
         localStorage.setItem('mega_products_cache', JSON.stringify(validProd));
       } catch (e) {}
     } catch (e: any) {
@@ -310,7 +314,7 @@ const App: React.FC = () => {
         // Optimization: Defer localStorage update to avoid blocking the main thread
         setTimeout(() => {
           try {
-            localStorage.setItem('mega_customers_cache', JSON.stringify(next));
+            localStorage.setItem('mega_customers_cache_v4', JSON.stringify(next));
           } catch(e) {
             console.warn("QuotaExceededError in App.tsx cache", e);
           }
@@ -331,7 +335,7 @@ const App: React.FC = () => {
     lastMutationTime.current = Date.now();
     setCustomers(prev => {
       const next = prev.filter(c => c.customer_id !== id);
-      localStorage.setItem('mega_customers_cache', JSON.stringify(next));
+      localStorage.setItem('mega_customers_cache_v4', JSON.stringify(next));
       return next;
     });
 
@@ -633,7 +637,7 @@ const App: React.FC = () => {
         onNavigate={isAdmin ? navigate : undefined}
         isAdmin={isAdmin}
         adminRole={adminRole}
-        checkPermission={(perm) => checkPermission(perm, adminRole)}
+        checkPermission={checkPermission}
       />
     );
   }
@@ -681,7 +685,7 @@ const App: React.FC = () => {
               loading={loading}
               onUpsert={handleUpsertCustomer}
               onDelete={handleDeleteCustomer}
-              checkPermission={(perm) => checkPermission(perm, adminRole)}
+              checkPermission={checkPermission}
               currentUserRole={adminRole || 'super_admin'}
             />
           )}
@@ -696,7 +700,7 @@ const App: React.FC = () => {
               onUpsert={handleUpsertCustomer}
               onDelete={handleDeleteCustomer}
               currentUserRole={adminRole || 'super_admin'}
-              checkPermission={(perm) => checkPermission(perm, adminRole)}
+              checkPermission={checkPermission}
             />
           )}
           {currentPage === 'products' && (

@@ -12,6 +12,7 @@ export const normalizeSearchText = (str: any): string => {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'd')
+    .replace(/[–—−‐⁃‑]/g, '-')
     .replace(/\s+/g, '');
 };
 

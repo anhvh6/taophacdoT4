@@ -738,6 +738,7 @@ export const Dashboard: React.FC<{
       const matchSearch = matchesSearch(c.customer_name, searchTerm) || 
                           matchesSearch(c.ma_vd, searchTerm) || 
                           matchesSearch(c.sdt, searchTerm) ||
+                          matchesSearch(c.email, searchTerm) ||
                           matchesSearch(c.customer_id, searchTerm);
       
       let matchFilter = true;

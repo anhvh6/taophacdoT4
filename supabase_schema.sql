@@ -143,7 +143,9 @@ create index if not exists idx_customer_tasks_lookup on customer_tasks(customer_
 
 -- 3) updated_at trigger
 create or replace function update_updated_at_column()
-returns trigger as $$
+returns trigger
+set search_path = ''
+as $$
 begin
   new.updated_at = now();
   return new;

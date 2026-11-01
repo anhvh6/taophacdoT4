@@ -19,45 +19,56 @@ class SupabaseDatabase {
   }
 
   async getCustomers() {
-    const { data, error } = await supabase
-      .from('customers')
-      .select(`
-        id,
-        customer_id,
-        customer_name,
-        sdt,
-        email,
-        dia_chi,
-        san_pham,
-        gia_tien,
-        trang_thai_gan,
-        trang_thai,
-        ma_vd,
-        note,
-        chewing_status,
-        start_date,
-        end_date,
-        duration_days,
-        video_date,
-        status,
-        link,
-        token,
-        created_at,
-        updated_at,
-        app_title,
-        app_slogan,
-        is_customized,
-        require_google_auth,
-        require_device_limit,
-        pending_email,
-        is_deposit,
-        deposit_amount,
-        is_consultation,
-        raw_backup
-      `)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return (data || []) as Customer[];
+    const PAGE_SIZE = 1000;
+    let all: Customer[] = [];
+    let page = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('customers')
+        .select(`
+          id,
+          customer_id,
+          customer_name,
+          sdt,
+          email,
+          dia_chi,
+          san_pham,
+          gia_tien,
+          trang_thai_gan,
+          trang_thai,
+          ma_vd,
+          note,
+          chewing_status,
+          start_date,
+          end_date,
+          duration_days,
+          video_date,
+          status,
+          link,
+          token,
+          created_at,
+          updated_at,
+          app_title,
+          app_slogan,
+          is_customized,
+          require_google_auth,
+          require_device_limit,
+          pending_email,
+          is_deposit,
+          deposit_amount,
+          is_consultation,
+          raw_backup
+        `)
+        .order('created_at', { ascending: false })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all = all.concat(data as Customer[]);
+      if (data.length < PAGE_SIZE) break;
+      page++;
+    }
+    return all;
   }
 
   async getCustomerById(id: string) {
@@ -124,14 +135,25 @@ class SupabaseDatabase {
   }
 
   async getAllMasterTasks() {
-    const { data, error } = await supabase
-      .from('master_video_tasks')
-      .select('*')
-      .order('video_date', { ascending: false })
-      .order('day', { ascending: true })
-      .order('sort_order', { ascending: true });
-    if (error) throw error;
-    return (data || []).map((row) => this.mapTaskRow(row));
+    const PAGE_SIZE = 1000;
+    let all: any[] = [];
+    let page = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('master_video_tasks')
+        .select('*')
+        .order('video_date', { ascending: false })
+        .order('day', { ascending: true })
+        .order('sort_order', { ascending: true })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all = all.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      page++;
+    }
+    return all.map((row) => this.mapTaskRow(row));
   }
 
   async getPlan(date: string) {

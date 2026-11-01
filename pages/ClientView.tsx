@@ -882,7 +882,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         // Học viên dùng phác đồ mẫu chuẩn (master plan): Tải 1 lần duy nhất từ master_video_tasks
         const videoDate = customerData.video_date || customerData.Video_date;
         if (videoDate) {
-          const masterTasks = await planService.getMasterPlan(videoDate);
+          const masterTasks = await planService.getMasterPlan(videoDate, token ? { customerId: actualId, token } : undefined);
           if (masterTasks && masterTasks.length > 0) {
             planTasks = customerData.ma_vd ? masterTasks.filter(t => t.nhom === customerData.ma_vd) : masterTasks;
           }
@@ -1516,7 +1516,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         } else {
           const videoDate = customerData.video_date || customerData.Video_date;
           if (videoDate) {
-            planTasks = await planService.getMasterPlan(videoDate);
+            planTasks = await planService.getMasterPlan(videoDate, { customerId: actualId, token: token || '' });
             if (customerData.ma_vd) {
               planTasks = planTasks.filter(t => t.nhom === customerData.ma_vd);
             }
@@ -1529,7 +1529,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           const videoDate = customerData.video_date || customerData.Video_date;
           if (videoDate) {
             console.log(`Merging with latest master plan to display latest content or heal missing links...`);
-            const masterTasks = await planService.getMasterPlan(videoDate);
+            const masterTasks = await planService.getMasterPlan(videoDate, { customerId: actualId, token: token || '' });
             
             if (masterTasks && masterTasks.length > 0) {
               let actualMaVd = customerData.ma_vd;

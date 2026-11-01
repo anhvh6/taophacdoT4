@@ -8,6 +8,10 @@ CREATE TABLE IF NOT EXISTS attendance_logs (
     UNIQUE(customer_id, access_date)
 );
 
+-- Server-only writes: api/log_video.ts validates the customer token and uses
+-- service_role. No browser policies are needed for this attendance table.
+ALTER TABLE public.attendance_logs ENABLE ROW LEVEL SECURITY;
+
 -- 2) Tạo index để biểu đồ thống kê chạy cực nhanh
 CREATE INDEX IF NOT EXISTS idx_attendance_logs_date ON attendance_logs(access_date);
 CREATE INDEX IF NOT EXISTS idx_attendance_logs_customer ON attendance_logs(customer_id);
