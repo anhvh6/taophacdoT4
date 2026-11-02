@@ -51,16 +51,35 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  // Generate Daily Verification Code (VN Timezone)
-  const vnTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
-  const dayStr = String(vnTime.getDate()).padStart(2, '0');
-  const monthStr = String(vnTime.getMonth() + 1).padStart(2, '0');
-  let hour12 = vnTime.getHours() % 12;
-  if (hour12 === 0) hour12 = 12;
-  const expectedCode = `${hour12}${dayStr[0]}${monthStr}${dayStr[1]}`;
+  // Generate Verification Code (VN Timezone)
+  // Quy tắc: Mã 4 chữ số gồm [Giờ hiện tại 12 tiếng: 01-12] + [Ngày hiện tại: 01-31] của Việt Nam
+  const getVnCode = (date: Date) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour12: true,
+      hour: 'numeric',
+      day: '2-digit'
+    }).formatToParts(date);
+    
+    const hour = parts.find(p => p.type === 'hour')?.value || '12';
+    const day = parts.find(p => p.type === 'day')?.value || '01';
+    const h12 = String(parseInt(hour, 10)).padStart(2, '0');
+    const dStr = String(parseInt(day, 10)).padStart(2, '0');
+    return `${h12}${dStr}`;
+  };
+
+  const now = new Date();
+  const expectedCode = getVnCode(now);
+  // Cho phép mã của giờ vừa qua trong 10 phút đầu của mỗi giờ để hỗ trợ học viên nhập trễ
+  const prevCode = getVnCode(new Date(now.getTime() - 10 * 60 * 1000));
   const masterSecret = process.env.SELF_APPROVAL_SECRET;
 
-  const isCodeValid = (code === expectedCode) || (masterSecret && code === masterSecret);
+  const normalizedInput = String(code || '').trim().padStart(4, '0');
+  const isCodeValid = (normalizedInput === expectedCode) || 
+                      (normalizedInput === prevCode) || 
+                      (code === expectedCode) || 
+                      (code === prevCode) || 
+                      Boolean(masterSecret && code === masterSecret);
 
   if (!isCodeValid) {
     const currentRecord = failedAttempts.get(rateLimitKey) || { count: 0, resetAt: now + 15 * 60 * 1000 };

@@ -21,7 +21,7 @@ Hệ thống sử dụng bảo mật đa tầng để ngăn chặn chia sẻ tà
 1. **Device Limit (Kiểm tra thiết bị):** Dùng `FingerprintJS` sinh `visitorId`. Lần đầu tiên truy cập, học viên được duyệt thiết bị trên phiên bản hiện tại.
 2. **Email Verification qua Google OAuth:** Yêu cầu đăng nhập Google để định danh học viên. Hệ thống tự động so khớp email đã học với email đăng ký.
 3. **Tính năng Tự Phê Duyệt Hệ Thống (Self-Approval):** 
-   - Thay vì yêu cầu Admin thay thông tin cho trường hợp sai thiết bị/thiết bị mới hoặc đổi Email đăng nhập, học viên có thể nhấp vào **Nhập mã xác thực** (mã 4 số sinh theo công thức Date).
+   - Thay vì yêu cầu Admin thay thông tin cho trường hợp sai thiết bị/thiết bị mới hoặc đổi Email đăng nhập, học viên có thể nhấp vào **Nhập mã xác thực** (mã 4 số: Giờ hiện tại hệ 12 tiếng [01-12] + Ngày hiện tại [01-31] theo múi giờ Việt Nam).
    - Nếu mã chính xác, Backend tự động cập nhật Database cập nhật lại thiết bị/email. Trải nghiệm học viên được liền mạch thay vì gián đoạn chờ duyệt.
 4. **Anti-tamper (Chống DevTools):**
    - Trong view học viên (`pages/ClientView.tsx`), hệ thống đã Disable toàn bộ:

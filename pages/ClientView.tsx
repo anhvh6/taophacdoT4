@@ -2361,13 +2361,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                        <input 
                          type="text" 
                          value={selfApprovalCode}
-                         onChange={(e) => setSelfApprovalCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                         onChange={(e) => setSelfApprovalCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
                          placeholder="Mã số"
                          className="flex-1 bg-gray-50 border border-gray-200 text-center text-lg font-bold rounded-xl tracking-[0.2em] outline-none focus:border-blue-500 focus:bg-blue-50 transition-all text-[#1E3A8A]"
                          disabled={selfApprovalLoading}
                        />
                        <button
-                         disabled={selfApprovalCode.length < 5 || selfApprovalLoading}
+                         disabled={selfApprovalCode.length < 4 || selfApprovalLoading}
                          onClick={async () => {
                             setSelfApprovalLoading(true);
                             setSelfApprovalError('');
@@ -2546,13 +2546,13 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                   <input 
                      type="text" 
                      value={selfApprovalCode}
-                     onChange={(e) => setSelfApprovalCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                     onChange={(e) => setSelfApprovalCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
                      placeholder="Mã số"
                      className="flex-1 bg-gray-50 border border-gray-200 text-center text-lg font-bold rounded-xl tracking-[0.2em] outline-none focus:border-blue-500 focus:bg-blue-50 transition-all text-[#1E3A8A]"
                      disabled={selfApprovalLoading}
                   />
                   <button
-                     disabled={selfApprovalCode.length < 5 || selfApprovalLoading}
+                     disabled={selfApprovalCode.length < 4 || selfApprovalLoading}
                      onClick={async () => {
                         if (!customerId || !token || !deviceId) return;
                         setSelfApprovalLoading(true);
