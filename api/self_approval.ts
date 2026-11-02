@@ -68,10 +68,10 @@ export default async function handler(req: any, res: any) {
     return `${h12}${dStr}`;
   };
 
-  const now = new Date();
-  const expectedCode = getVnCode(now);
+  const currentDate = new Date();
+  const expectedCode = getVnCode(currentDate);
   // Cho phép mã của giờ vừa qua trong 10 phút đầu của mỗi giờ để hỗ trợ học viên nhập trễ
-  const prevCode = getVnCode(new Date(now.getTime() - 10 * 60 * 1000));
+  const prevCode = getVnCode(new Date(currentDate.getTime() - 10 * 60 * 1000));
   const masterSecret = process.env.SELF_APPROVAL_SECRET;
 
   const normalizedInput = String(code || '').trim().padStart(4, '0');
