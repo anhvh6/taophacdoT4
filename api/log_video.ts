@@ -64,19 +64,28 @@ export default async function handler(req: any, res: any) {
       raw_backup.completed_days = [];
     }
 
-    if (day !== undefined && day !== null) {
-      const dayNum = parseInt(day, 10);
-      if (!isNaN(dayNum) && !raw_backup.completed_days.includes(dayNum)) {
-        raw_backup.completed_days.push(dayNum);
-      }
+    if (!raw_backup.completed_days_map || typeof raw_backup.completed_days_map !== 'object') {
+      raw_backup.completed_days_map = {};
     }
-    
+
     // Convert to VN timezone YYYY-MM-DD
     const vnTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
     const yyyy = vnTime.getFullYear();
     const mm = String(vnTime.getMonth() + 1).padStart(2, '0');
     const dd = String(vnTime.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
+
+    if (day !== undefined && day !== null) {
+      const dayNum = parseInt(day, 10);
+      if (!isNaN(dayNum)) {
+        if (!raw_backup.completed_days.includes(dayNum)) {
+          raw_backup.completed_days.push(dayNum);
+        }
+        if (!raw_backup.completed_days_map[dayNum]) {
+          raw_backup.completed_days_map[dayNum] = dateStr;
+        }
+      }
+    }
     
     if (!raw_backup.video_open_dates.includes(dateStr)) {
       raw_backup.video_open_dates.push(dateStr);

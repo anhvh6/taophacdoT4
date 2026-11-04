@@ -758,6 +758,92 @@ const getOrCreateDeviceId = async (customerId: string) => {
   return randomId;
 };
 
+export const calculateLessonAccess = (customer: Customer | any, today: Date = toVnZeroHour()) => {
+  if (!customer) {
+    return { unlockedDay: 1, visibleDay: 2, isNotStarted: false, activeDay: 1 };
+  }
+
+  const startDate = customer.start_date ? toVnZeroHour(customer.start_date) : today;
+  const calendarDay = customer.start_date ? getDiffDays(startDate, today) + 1 : 1;
+  const isNotStarted = calendarDay < 1;
+
+  if (isNotStarted) {
+    return { unlockedDay: 0, visibleDay: 1, isNotStarted: true, activeDay: 1 };
+  }
+
+  const rawBackup = customer.raw_backup || {};
+  const completedDays: number[] = Array.isArray(rawBackup.completed_days) ? rawBackup.completed_days : [];
+  const maxOpenedDay = completedDays.length > 0 ? Math.max(...completedDays) : 0;
+  const completedDaysMap: Record<number, string> = rawBackup.completed_days_map || {};
+  const todayStr = toISODateKey(today);
+
+  // 1. Trường hợp học viên đã học (được mở đủ 30 ngày rồi) mà thời gian phác đồ vẫn còn thời hạn:
+  // Vẫn mở đủ 30 ngày học đó cho học viên.
+  if (maxOpenedDay >= 30) {
+    return {
+      unlockedDay: 30,
+      visibleDay: 30,
+      isNotStarted: false,
+      activeDay: 30
+    };
+  }
+
+  // 2. Ngày đầu tiên khi phác đồ được mở (calendarDay === 1):
+  // Ngày số 1 được mở cho phép học, ngày số 2 được hiển thị (chỉ xem tiêu đề).
+  if (calendarDay === 1) {
+    return {
+      unlockedDay: 1,
+      visibleDay: 2,
+      isNotStarted: false,
+      activeDay: 1
+    };
+  }
+
+  // 3. Khi calendarDay > 1:
+  // Kiểm tra xem bài mà học viên học gần nhất có phải là bài ngày hôm qua hoặc hôm nay không
+  // (bài hôm qua = calendarDay - 1, bài hôm nay = calendarDay):
+  const isStudiedYesterdayOrToday = maxOpenedDay >= (calendarDay - 1);
+
+  let unlockedDay = 1;
+  let visibleDay = 2;
+
+  if (isStudiedYesterdayOrToday) {
+    // Trong trường hợp hiện tại ngày hôm nay bài đã được mở theo luật cũ dù học hay chưa học
+    // thì vẫn mở các bài đó và áp dụng luật mới luôn.
+    unlockedDay = Math.min(30, calendarDay);
+    visibleDay = Math.min(30, calendarDay + 1);
+  } else {
+    // Trong trường hợp hôm nay đã được mở mà ngày mà học viên học gần nhất lại không phải
+    // là bài ngày hôm qua hoặc hôm nay thì sẽ ẩn các bài trước đó đi,
+    // chỉ hiển thị bài mà học viên đã vào học gần nhất + 1 để học viên vào học tiếp.
+    const nextStudyDay = Math.max(1, maxOpenedDay + 1);
+
+    // Nếu bài maxOpenedDay vừa mới hoàn thành trong HÔM NAY:
+    // Theo nguyên tắc "bài học sẽ được mở vào ngày mai và khi bạn hoàn thành bài học của ngày trước đó"
+    // => bài tiếp theo (maxOpenedDay + 1) chỉ mở vào ngày mai! Hôm nay chỉ xem tiêu đề.
+    // Ngược lại, nếu maxOpenedDay đã hoàn thành từ trước hôm nay (hoặc chưa học bài nào):
+    // => Hôm nay đã là ngày mới, nên nextStudyDay được mở cho học viên vào học tiếp!
+    const wasMaxOpenedStudiedToday = maxOpenedDay > 0 && completedDaysMap[maxOpenedDay] === todayStr;
+
+    if (wasMaxOpenedStudiedToday) {
+      unlockedDay = Math.min(30, maxOpenedDay);
+      visibleDay = Math.min(30, maxOpenedDay + 1);
+    } else {
+      unlockedDay = Math.min(30, nextStudyDay);
+      visibleDay = Math.min(30, nextStudyDay + 1);
+    }
+  }
+
+  const activeDay = Math.min(30, Math.max(1, unlockedDay));
+
+  return {
+    unlockedDay,
+    visibleDay,
+    isNotStarted: false,
+    activeDay
+  };
+};
+
 export const ClientView: React.FC<{ customerId: string; token?: string; onNavigate?: (page: string, params?: any) => void; isAdmin?: boolean; adminRole?: string | null; checkPermission?: (perm: string) => boolean }> = ({ customerId, token, onNavigate, isAdmin, adminRole, checkPermission }) => {
   const [customer, setCustomer] = useState<Customer | any>(null);
   const [tasks, setTasks] = useState<ExerciseTask[]>([]);
@@ -1078,7 +1164,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         let validCampaign: AdCampaign | null = null;
         const todayDate = toVnZeroHour();
         const start = toVnZeroHour(customer.start_date);
-        const currentAllowedDay = customer.allowed_day || getDiffDays(start, todayDate) + 1;
+        const currentAllowedDay = calculateLessonAccess(customer, todayDate).unlockedDay;
         
         for (const camp of campaigns) {
           if (!camp.is_active || !camp.media || camp.media.length === 0) continue;
@@ -1127,9 +1213,19 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       updatedDates = [...currentDates, dateStr];
     }
     
+    const currentMap = customer.raw_backup?.completed_days_map || {};
     let updatedCompletedDays = currentCompletedDays;
-    if (dayNum !== undefined && !currentCompletedDays.includes(dayNum)) {
-      updatedCompletedDays = [...currentCompletedDays, dayNum];
+    let updatedMap = { ...currentMap };
+    if (dayNum !== undefined) {
+      const d = Number(dayNum);
+      if (!isNaN(d)) {
+        if (!currentCompletedDays.includes(d)) {
+          updatedCompletedDays = [...currentCompletedDays, d];
+        }
+        if (!updatedMap[d]) {
+          updatedMap[d] = dateStr;
+        }
+      }
     }
     
     const updatedCustomer = {
@@ -1137,7 +1233,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       raw_backup: {
         ...(customer.raw_backup || {}),
         video_open_dates: updatedDates,
-        completed_days: updatedCompletedDays
+        completed_days: updatedCompletedDays,
+        completed_days_map: updatedMap
       }
     };
     setCustomer(updatedCustomer);
@@ -1438,10 +1535,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   useEffect(() => {
     if (!loading && customer && !hasScrolledRef.current) {
       const today = toVnZeroHour();
-      const startDate = toVnZeroHour(customer.start_date);
-      const allowedDay = customer.allowed_day || getDiffDays(startDate, today) + 1;
+      const access = calculateLessonAccess(customer, today);
 
-      if (allowedDay >= 2) {
+      if (access.activeDay >= 2) {
         hasScrolledRef.current = true; // Đánh dấu ngay lập tức để không bị trigger nhiều lần
         let retries = 0;
         const scrollLoop = setInterval(() => {
@@ -1669,11 +1765,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
   const handleTaskClick = (task: ExerciseTask) => {
     const today = toVnZeroHour();
-    const startDate = toVnZeroHour(customer.start_date);
-    const allowedDay = customer.allowed_day || getDiffDays(startDate, today) + 1;
-    const isNotStarted = allowedDay < 1;
+    const access = calculateLessonAccess(customer, today);
 
-    if (isNotStarted) {
+    if (access.isNotStarted) {
       setInfoModal({ 
         isOpen: true, 
         title: "Chưa đến thời gian tập", 
@@ -1683,12 +1777,11 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       return;
     }
 
-    if (task.day > allowedDay) {
-      const unlockDate = addDays(startDate, task.day - 1);
+    if (task.day > access.unlockedDay) {
       setInfoModal({ 
         isOpen: true, 
         title: "Chưa đến ngày mở bài", 
-        message: `Bài học này sẽ được mở vào ngày ${formatDDMMYYYY(unlockDate)}. Vui lòng quay lại sau nhé!`, 
+        message: "Bài học này sẽ được mở vào ngày mai và khi bạn hoàn thành bài học của ngày trước đó. Vui lòng quay lại sau nhé!", 
         type: "LOCKED" 
       });
       return;
@@ -1903,8 +1996,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
   if (!customer) return null;
   const startDate = toVnZeroHour(customer.start_date);
-  const allowedDay = customer.allowed_day || getDiffDays(startDate, today) + 1;
-  const isNotStarted = allowedDay < 1;
+  const lessonAccess = calculateLessonAccess(customer, today);
+  const allowedDay = lessonAccess.unlockedDay;
+  const isNotStarted = lessonAccess.isNotStarted;
   const sidebarBlocks = customer.sidebar_blocks_json || customer.blocks || [];
 
   return (
@@ -2013,17 +2107,27 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                 const cycle = Math.max(0, Math.floor((diffDays - 1) / 60));
                 const cycleStartDate = addDays(start, cycle * 60);
 
-                // Tính toán số liệu chuyên cần trong chu kỳ hiện tại
-                const completedDays = customer.raw_backup?.completed_days || [];
-                let attendedCount = 0;
-                let missedCount = 0;
+                // Tính toán số liệu chuyên cần trong chu kỳ 60 ngày hiện tại:
+                // Tích ngày học viên có mở bất kỳ video nào trong ngày đó (theo video_open_dates)
+                const rawBackup = customer.raw_backup || {};
+                const videoOpenDates: string[] = Array.isArray(rawBackup.video_open_dates) ? rawBackup.video_open_dates : [];
+                const normalizedVideoDates = new Set(
+                  videoOpenDates.map((d: string) => toISODateKey(d)).filter(Boolean)
+                );
+
                 const currentDayInCycle = Math.min(60, Math.max(1, getDiffDays(cycleStartDate, today) + 1));
 
+                let attendedCount = 0;
+                let missedCount = 0;
+
                 for (let i = 1; i <= currentDayInCycle; i++) {
-                  const checkDay = (i - 1) % 30 + 1;
-                  if (completedDays.includes(checkDay)) {
+                  const actualDate = addDays(cycleStartDate, i - 1);
+                  const dateKey = toISODateKey(actualDate);
+                  const isPast = actualDate < today;
+
+                  if (normalizedVideoDates.has(dateKey)) {
                     attendedCount++;
-                  } else if (i < currentDayInCycle) {
+                  } else if (isPast) {
                     missedCount++;
                   }
                 }
@@ -2059,17 +2163,16 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         <div className="grid grid-cols-6 gap-2">
                           {Array.from({ length: 60 }, (_, i) => i + 1).map(day => {
                             const actualDate = addDays(cycleStartDate, day - 1);
+                            const dateKey = toISODateKey(actualDate);
                             const isFuture = actualDate > today;
                             const isToday = actualDate.getTime() === today.getTime();
+                            const hasAttended = normalizedVideoDates.has(dateKey);
                             
                             let status: 'none' | 'check' | 'cross' = 'none';
-                            if (day <= currentDayInCycle) {
-                              const checkDay = (day - 1) % 30 + 1;
-                              if (completedDays.includes(checkDay)) {
-                                status = 'check';
-                              } else if (day < currentDayInCycle) {
-                                status = 'cross';
-                              }
+                            if (hasAttended) {
+                              status = 'check';
+                            } else if (actualDate < today) {
+                              status = 'cross';
                             }
 
                             let cellClass = 'bg-blue-50/50 border-blue-100/50 text-blue-900';
@@ -2078,16 +2181,18 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                             } else if (status === 'cross') {
                               cellClass = 'bg-red-500 border-red-600 text-white font-bold';
                             } else if (isToday) {
-                              cellClass = 'bg-[#E0F2FE] border-blue-300 text-blue-600 font-bold';
+                              cellClass = 'bg-[#E0F2FE] border-blue-300 text-blue-600 font-bold ring-2 ring-blue-400';
                             }
 
                             return (
                               <div 
                                 key={day} 
                                 className={`flex flex-col items-center justify-center h-10 rounded-lg relative border transition-colors ${cellClass}`}
-                                title={isToday ? "Ngày học hiện tại" : status === 'check' ? "Đã học" : status === 'cross' ? "Chưa học" : undefined}
+                                title={status === 'check' ? `Ngày ${day} (${formatDDMMYYYY(actualDate)}): Đã học` : status === 'cross' ? `Ngày ${day} (${formatDDMMYYYY(actualDate)}): Vắng / Chưa học` : isToday ? `Ngày ${day} (${formatDDMMYYYY(actualDate)}): Hôm nay (chưa mở video)` : `Ngày ${day} (${formatDDMMYYYY(actualDate)})`}
                               >
                                 <span className="text-[10px] font-black">{day}</span>
+                                {status === 'check' && <CheckCircle size={10} className="text-white mt-0.5" strokeWidth={3} />}
+                                {status === 'cross' && <X size={10} className="text-white mt-0.5" strokeWidth={3} />}
                               </div>
                             );
                           })}
@@ -2127,17 +2232,10 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5" ref={gridRef}>
-                  {Array.from({ length: Math.min(customer.duration_days || 30, 30) }, (_, i) => i + 1).map(day => {
-                    const maxDay = Math.min(customer.duration_days || 30, 30);
-                    let displayActiveDay = allowedDay;
-                    if (allowedDay > maxDay) {
-                      displayActiveDay = allowedDay % maxDay;
-                      if (displayActiveDay === 0) displayActiveDay = maxDay;
-                    }
-                    const cappedAllowedDay = displayActiveDay;
-                    const isLocked = day > allowedDay || isNotStarted;
-                    const isUnlocked = day <= allowedDay;
-                    const isActive = day === cappedAllowedDay && !isNotStarted;
+                  {Array.from({ length: 30 }, (_, i) => i + 1).map(day => {
+                    const isLocked = day > lessonAccess.unlockedDay || lessonAccess.isNotStarted;
+                    const isUnlocked = day <= lessonAccess.unlockedDay && !lessonAccess.isNotStarted;
+                    const isActive = day === lessonAccess.activeDay && !lessonAccess.isNotStarted;
                     const dayTasks = tasks
                       .filter(t => t.day === day)
                       .sort((a, b) => (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true }));
@@ -2145,14 +2243,20 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     // Kiểm tra xem ngày này đã học chưa
                     const isAttended = (customer.raw_backup?.completed_days || []).includes(day);
                     
-                    // Hiển thị đến ngày hiện tại + 1 (ngày hôm sau), luôn hiện ngày 1 nếu chưa bắt đầu
-                    const shouldHide = day > Math.max(1, allowedDay + 1);
-                    if (shouldHide) return null;
+                    // Ẩn các bài vượt quá ngày được hiển thị
+                    const shouldHide = day > lessonAccess.visibleDay;
+                    if (shouldHide && !onNavigate && !isAdmin) return null;
 
                     return (
                       <div 
                         key={day} 
-                        onClick={() => { if(dayTasks.length === 0) handleTaskClick({day} as any) }} 
+                        onClick={() => { 
+                          if (isLocked) {
+                            handleTaskClick({ day } as any);
+                          } else if (dayTasks.length === 0) {
+                            handleTaskClick({ day } as any);
+                          }
+                        }} 
                         className={`rounded-[2rem] border p-6 transform transition-all duration-300 cursor-pointer ${
                           isLocked 
                             ? 'bg-gray-50/80 border-gray-200 shadow-[0_4px_10px_rgba(0,0,0,0.05)]' 
@@ -2161,7 +2265,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                               : 'bg-gradient-to-br from-[#FAFCFF] to-[#F1F6FD] border-blue-100 shadow-[0_10px_35px_rgba(30,58,138,0.12)] hover:-translate-y-2 hover:shadow-[0_15px_40px_rgba(30,58,138,0.18)]'
                         }`}
                       >
-                        <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-3 uppercase tracking-widest ${isUnlocked && !isNotStarted ? 'text-blue-600 border-blue-200/50' : 'text-gray-400 border-gray-300'}`}>
+                        <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-3 uppercase tracking-widest ${isUnlocked && !lessonAccess.isNotStarted ? 'text-blue-600 border-blue-200/50' : 'text-gray-400 border-gray-300'}`}>
                           Ngày {day}
                           {isAttended && <CheckCircle size={14} className="text-green-500" strokeWidth={3} />}
                         </div>
@@ -2180,7 +2284,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                   })}
                 </div>
 
-                {allowedDay >= 30 && !isNotStarted && (
+                {lessonAccess.unlockedDay >= 30 && !lessonAccess.isNotStarted && (
                   <div className="mt-10 px-6 py-6 bg-gradient-to-br from-[#FFF7ED] to-[#FFEDD5] border border-orange-200 rounded-[2rem] shadow-[0_10px_40px_-10px_rgba(249,115,22,0.3)] flex flex-col sm:flex-row items-center gap-5 relative overflow-hidden transform transition-all hover:-translate-y-1">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-orange-400/10 rounded-full blur-2xl transform translate-x-1/2 -translate-y-1/2"></div>
                     <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shrink-0 shadow-[0_4px_15px_rgba(249,115,22,0.15)] text-orange-500 z-10">
