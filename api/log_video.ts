@@ -23,7 +23,7 @@ export default async function handler(req: any, res: any) {
   
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
   
-  const { customer_id, token, day } = req.body;
+  const { customer_id, token, day, current_unlocked_day } = req.body;
   
   if (!customer_id || !token || !supabaseUrl || !supabaseServiceKey) {
     return res.status(400).json({ success: false, message: 'Thiếu thông tin yêu cầu.' });
@@ -75,15 +75,28 @@ export default async function handler(req: any, res: any) {
     const dd = String(vnTime.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
 
+    const markDayCompleted = (dNum: number) => {
+      if (dNum > 0 && dNum <= 30) {
+        if (!raw_backup.completed_days.includes(dNum)) {
+          raw_backup.completed_days.push(dNum);
+        }
+        if (!raw_backup.completed_days_map[dNum]) {
+          raw_backup.completed_days_map[dNum] = dateStr;
+        }
+      }
+    };
+
     if (day !== undefined && day !== null) {
       const dayNum = parseInt(day, 10);
-      if (!isNaN(dayNum)) {
-        if (!raw_backup.completed_days.includes(dayNum)) {
-          raw_backup.completed_days.push(dayNum);
-        }
-        if (!raw_backup.completed_days_map[dayNum]) {
-          raw_backup.completed_days_map[dayNum] = dateStr;
-        }
+      if (!isNaN(dayNum) && dayNum > 0) {
+        markDayCompleted(dayNum);
+      }
+    }
+
+    if (current_unlocked_day !== undefined && current_unlocked_day !== null) {
+      const curNum = parseInt(current_unlocked_day, 10);
+      if (!isNaN(curNum) && curNum > 0) {
+        markDayCompleted(curNum);
       }
     }
     

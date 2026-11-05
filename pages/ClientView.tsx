@@ -760,7 +760,7 @@ const getOrCreateDeviceId = async (customerId: string) => {
 
 export const calculateLessonAccess = (customer: Customer | any, today: Date = toVnZeroHour()) => {
   if (!customer) {
-    return { unlockedDay: 1, visibleDay: 2, isNotStarted: false, activeDay: 1 };
+    return { unlockedDay: 1, visibleDay: 2, isNotStarted: false, activeDay: 1, completedDays: [] as number[] };
   }
 
   const startDate = customer.start_date ? toVnZeroHour(customer.start_date) : today;
@@ -768,14 +768,32 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   const isNotStarted = calendarDay < 1;
 
   if (isNotStarted) {
-    return { unlockedDay: 0, visibleDay: 1, isNotStarted: true, activeDay: 1 };
+    return { unlockedDay: 0, visibleDay: 1, isNotStarted: true, activeDay: 1, completedDays: [] as number[] };
   }
 
   const rawBackup = customer.raw_backup || {};
-  const completedDays: number[] = Array.isArray(rawBackup.completed_days) ? rawBackup.completed_days : [];
-  const maxOpenedDay = completedDays.length > 0 ? Math.max(...completedDays) : 0;
-  const completedDaysMap: Record<number, string> = rawBackup.completed_days_map || {};
+  const rawCompletedDays: number[] = Array.isArray(rawBackup.completed_days) ? rawBackup.completed_days : [];
+  const rawMap: Record<number, string> = rawBackup.completed_days_map || {};
+  const videoOpenDates: string[] = Array.isArray(rawBackup.video_open_dates) ? rawBackup.video_open_dates : [];
   const todayStr = toISODateKey(today);
+
+  // Lấy danh sách các ngày thực tế học viên đã mở xem video (sắp xếp tăng dần theo thời gian)
+  const distinctDates = Array.from(new Set(videoOpenDates.map((d: string) => toISODateKey(d)).filter(Boolean))).sort();
+  const datesAttendedCount = distinctDates.length;
+
+  // Hợp nhất: Mỗi ngày thực tế học viên có vào xem video đều được tính là đã hoàn thành 1 ngày học tương ứng
+  const completedDaysSet = new Set<number>(rawCompletedDays);
+  const completedDaysMap: Record<number, string> = { ...rawMap };
+
+  for (let i = 1; i <= Math.min(30, datesAttendedCount); i++) {
+    completedDaysSet.add(i);
+    if (!completedDaysMap[i]) {
+      completedDaysMap[i] = distinctDates[i - 1];
+    }
+  }
+
+  const completedDays = Array.from(completedDaysSet);
+  const maxOpenedDay = completedDays.length > 0 ? Math.max(...completedDays) : 0;
 
   // 1. Trường hợp học viên đã học (được mở đủ 30 ngày rồi) mà thời gian phác đồ vẫn còn thời hạn:
   // Vẫn mở đủ 30 ngày học đó cho học viên.
@@ -784,7 +802,8 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
       unlockedDay: 30,
       visibleDay: 30,
       isNotStarted: false,
-      activeDay: 30
+      activeDay: 30,
+      completedDays
     };
   }
 
@@ -795,7 +814,8 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
       unlockedDay: 1,
       visibleDay: 2,
       isNotStarted: false,
-      activeDay: 1
+      activeDay: 1,
+      completedDays
     };
   }
 
@@ -840,7 +860,8 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
     unlockedDay,
     visibleDay,
     isNotStarted: false,
-    activeDay
+    activeDay,
+    completedDays
   };
 };
 
@@ -1214,13 +1235,26 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     }
     
     const currentMap = customer.raw_backup?.completed_days_map || {};
-    let updatedCompletedDays = currentCompletedDays;
+    let updatedCompletedDays = [...currentCompletedDays];
     let updatedMap = { ...currentMap };
+
+    // Lấy ngày học hiện tại của học viên
+    const access = calculateLessonAccess(customer, toVnZeroHour());
+    const currentUnlocked = access.unlockedDay;
+    if (currentUnlocked > 0 && currentUnlocked <= 30) {
+      if (!updatedCompletedDays.includes(currentUnlocked)) {
+        updatedCompletedDays.push(currentUnlocked);
+      }
+      if (!updatedMap[currentUnlocked]) {
+        updatedMap[currentUnlocked] = dateStr;
+      }
+    }
+
     if (dayNum !== undefined) {
       const d = Number(dayNum);
-      if (!isNaN(d)) {
-        if (!currentCompletedDays.includes(d)) {
-          updatedCompletedDays = [...currentCompletedDays, d];
+      if (!isNaN(d) && d > 0 && d <= 30) {
+        if (!updatedCompletedDays.includes(d)) {
+          updatedCompletedDays.push(d);
         }
         if (!updatedMap[d]) {
           updatedMap[d] = dateStr;
@@ -1304,7 +1338,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     if (isSocialLink) {
       window.open(trimmedLink, '_blank', 'noopener,noreferrer');
       if (isStudent && customerId) {
-        customerService.logVideoOpen(customerId, customer?.token || token || '', dayNum);
+        const curUnlocked = calculateLessonAccess(customer, toVnZeroHour()).unlockedDay;
+        customerService.logVideoOpen(customerId, customer?.token || token || '', dayNum, curUnlocked);
         markAttendanceLocally(dayNum);
       }
       return;
@@ -1476,7 +1511,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             if (data?.signed_embed_url) {
                 setPlayingVideo(data.signed_embed_url);
                 if (isStudent) {
-                    customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
+                    const curUnlocked = calculateLessonAccess(customer, toVnZeroHour()).unlockedDay;
+                    customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum, curUnlocked);
                     markAttendanceLocally(dayNum);
                 }
             } else {
@@ -1489,7 +1525,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       setToast("Cảnh báo: Video này sử dụng đường dẫn cũ và không được bảo vệ bằng Token.");
       setPlayingVideo(trimmedLink);
       if (isStudent) {
-          customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
+          const curUnlocked = calculateLessonAccess(customer, toVnZeroHour()).unlockedDay;
+          customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum, curUnlocked);
           markAttendanceLocally(dayNum);
       }
     } else if (ytEmbedUrl) {
@@ -2241,7 +2278,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                       .sort((a, b) => (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true }));
                     
                     // Kiểm tra xem ngày này đã học chưa
-                    const isAttended = (customer.raw_backup?.completed_days || []).includes(day);
+                    const isAttended = (lessonAccess.completedDays || customer.raw_backup?.completed_days || []).includes(day);
                     
                     // Ẩn các bài vượt quá ngày được hiển thị
                     const shouldHide = day > lessonAccess.visibleDay;
