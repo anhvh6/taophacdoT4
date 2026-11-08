@@ -760,7 +760,7 @@ const getOrCreateDeviceId = async (customerId: string) => {
 
 export const calculateLessonAccess = (customer: Customer | any, today: Date = toVnZeroHour()) => {
   if (!customer) {
-    return { unlockedDay: 1, visibleDay: 2, isNotStarted: false, activeDay: 1, completedDays: [] as number[] };
+    return { unlockedDay: 1, visibleDay: 2, isNotStarted: false, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
   }
 
   const startDate = customer.start_date ? toVnZeroHour(customer.start_date) : today;
@@ -768,7 +768,7 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   const isNotStarted = calendarDay < 1;
 
   if (isNotStarted) {
-    return { unlockedDay: 0, visibleDay: 1, isNotStarted: true, activeDay: 1, completedDays: [] as number[] };
+    return { unlockedDay: 0, visibleDay: 1, isNotStarted: true, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
   }
 
   const rawBackup = customer.raw_backup || {};
@@ -795,6 +795,23 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   const completedDays = Array.from(completedDaysSet);
   const maxOpenedDay = completedDays.length > 0 ? Math.max(...completedDays) : 0;
 
+  // Xác định ngày mà học viên đã mở bài học HÔM QUA (để hiển thị text màu đỏ duy nhất trong ngày hôm nay)
+  const yesterday = addDays(today, -1);
+  const yesterdayStr = toISODateKey(yesterday);
+
+  let yesterdayStudiedDay: number | null = null;
+  const yesterdayDays: number[] = [];
+  for (const dStr of Object.keys(completedDaysMap)) {
+    const dNum = Number(dStr);
+    if (completedDaysMap[dNum] === yesterdayStr && dNum > 0 && dNum <= 30) {
+      yesterdayDays.push(dNum);
+    }
+  }
+  if (yesterdayDays.length > 0) {
+    // Chỉ chọn duy nhất 1 ngày cao nhất mà học viên đã mở vào hôm qua
+    yesterdayStudiedDay = Math.max(...yesterdayDays);
+  }
+
   // 1. Trường hợp học viên đã học (được mở đủ 30 ngày rồi) mà thời gian phác đồ vẫn còn thời hạn:
   // Vẫn mở đủ 30 ngày học đó cho học viên.
   if (maxOpenedDay >= 30) {
@@ -803,7 +820,8 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
       visibleDay: 30,
       isNotStarted: false,
       activeDay: 30,
-      completedDays
+      completedDays,
+      yesterdayStudiedDay
     };
   }
 
@@ -815,7 +833,8 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
       visibleDay: 2,
       isNotStarted: false,
       activeDay: 1,
-      completedDays
+      completedDays,
+      yesterdayStudiedDay
     };
   }
 
@@ -861,7 +880,8 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
     visibleDay,
     isNotStarted: false,
     activeDay,
-    completedDays
+    completedDays,
+    yesterdayStudiedDay
   };
 };
 
@@ -2266,6 +2286,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tight text-[#2563EB]"><div className="w-2.5 h-2.5 rounded-full bg-[#2563EB]"></div> Bài bắt buộc</div>
                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tight text-[#10B981]"><div className="w-2.5 h-2.5 rounded-full bg-[#10B981]"></div> Bài bổ trợ</div>
                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tight text-[#2563EB]"><div className="w-4 h-4 rounded-md border-2 border-[#2563EB]"></div> Đang học</div>
+                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-tight text-red-600"><div className="w-2.5 h-2.5 rounded-full bg-red-600"></div> Đã mở hôm qua</div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5" ref={gridRef}>
@@ -2302,10 +2323,21 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                               : 'bg-gradient-to-br from-[#FAFCFF] to-[#F1F6FD] border-blue-100 shadow-[0_10px_35px_rgba(30,58,138,0.12)] hover:-translate-y-2 hover:shadow-[0_15px_40px_rgba(30,58,138,0.18)]'
                         }`}
                       >
-                        <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-3 uppercase tracking-widest ${isUnlocked && !lessonAccess.isNotStarted ? 'text-blue-600 border-blue-200/50' : 'text-gray-400 border-gray-300'}`}>
-                          Ngày {day}
-                          {isAttended && <CheckCircle size={14} className="text-green-500" strokeWidth={3} />}
-                        </div>
+                        {(() => {
+                          const isYesterdayStudied = day === lessonAccess.yesterdayStudiedDay;
+                          return (
+                            <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-3 uppercase tracking-widest ${
+                              isYesterdayStudied 
+                                ? 'text-red-600 border-red-200' 
+                                : isUnlocked && !lessonAccess.isNotStarted 
+                                  ? 'text-blue-600 border-blue-200/50' 
+                                  : 'text-gray-400 border-gray-300'
+                            }`}>
+                              <span className={isYesterdayStudied ? 'text-red-600 font-extrabold' : ''}>Ngày {day}</span>
+                              {isAttended && <CheckCircle size={14} className="text-green-500" strokeWidth={3} />}
+                            </div>
+                          );
+                        })()}
                         {dayTasks.length > 0 ? dayTasks.map((t, idx) => (
                           <button 
                             key={idx} 
