@@ -758,6 +758,7 @@ const getOrCreateDeviceId = async (customerId: string) => {
   return randomId;
 };
 
+// Deployment trigger: hien thi ngay ke tiep text xam khoa
 export const calculateLessonAccess = (customer: Customer | any, today: Date = toVnZeroHour()) => {
   if (!customer) {
     return { unlockedDay: 1, visibleDay: 2, isNotStarted: false, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
