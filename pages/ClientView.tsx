@@ -760,7 +760,7 @@ const getOrCreateDeviceId = async (customerId: string) => {
 
 export const calculateLessonAccess = (customer: Customer | any, today: Date = toVnZeroHour()) => {
   if (!customer) {
-    return { unlockedDay: 1, visibleDay: 1, isNotStarted: false, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
+    return { unlockedDay: 1, visibleDay: 2, isNotStarted: false, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
   }
 
   const startDate = customer.start_date ? toVnZeroHour(customer.start_date) : today;
@@ -768,7 +768,7 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   const isNotStarted = calendarDay < 1;
 
   if (isNotStarted) {
-    return { unlockedDay: 0, visibleDay: 0, isNotStarted: true, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
+    return { unlockedDay: 0, visibleDay: 1, isNotStarted: true, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
   }
 
   const rawBackup = customer.raw_backup || {};
@@ -847,11 +847,11 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   }
 
   // 2. Ngày đầu tiên khi phác đồ được mở (calendarDay === 1):
-  // Hôm nay mới là ngày bắt đầu thì chỉ hiển thị tối đa là bài ngày số 1.
+  // Ngày số 1 được mở cho phép học, ngày số 2 được hiển thị (chỉ xem tiêu đề text xám, khóa không cho mở).
   if (calendarDay === 1) {
     return {
       unlockedDay: 1,
-      visibleDay: 1,
+      visibleDay: 2,
       isNotStarted: false,
       activeDay: 1,
       completedDays,
@@ -864,31 +864,22 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   const isStudiedYesterdayOrToday = maxOpenedDay >= (calendarDay - 1);
 
   let unlockedDay = 1;
-  let visibleDay = 1;
 
   if (isStudiedYesterdayOrToday) {
     unlockedDay = Math.min(30, calendarDay);
-    // Nếu calendarDay < 30: ngày hiển thị tối đa bằng số ngày hiện tại trừ đi ngày bắt đầu (= calendarDay)
-    visibleDay = Math.min(30, calendarDay);
   } else {
     const nextStudyDay = Math.max(1, maxOpenedDay + 1);
     const wasMaxOpenedStudiedToday = maxOpenedDay > 0 && completedDaysMap[maxOpenedDay] === todayStr;
 
     if (wasMaxOpenedStudiedToday) {
       unlockedDay = Math.min(30, maxOpenedDay);
-      visibleDay = Math.min(30, maxOpenedDay);
     } else {
       unlockedDay = Math.min(30, nextStudyDay);
-      visibleDay = Math.min(30, nextStudyDay);
     }
   }
 
-  // Áp dụng chặt chẽ quy tắc: Nếu calendarDay < 30 thì ngày hiển thị tối đa bằng calendarDay
-  if (calendarDay < 30) {
-    visibleDay = Math.min(visibleDay, calendarDay);
-    unlockedDay = Math.min(unlockedDay, calendarDay);
-  }
-
+  // Luôn hiển thị bài của ngày đang học (unlockedDay) và bài kế tiếp (unlockedDay + 1) ở dạng text xám khóa
+  const visibleDay = Math.min(30, unlockedDay + 1);
   const activeDay = Math.min(30, Math.max(1, unlockedDay));
 
   return {
