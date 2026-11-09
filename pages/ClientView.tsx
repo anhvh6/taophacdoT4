@@ -760,7 +760,7 @@ const getOrCreateDeviceId = async (customerId: string) => {
 
 export const calculateLessonAccess = (customer: Customer | any, today: Date = toVnZeroHour()) => {
   if (!customer) {
-    return { unlockedDay: 1, visibleDay: 2, isNotStarted: false, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
+    return { unlockedDay: 1, visibleDay: 1, isNotStarted: false, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
   }
 
   const startDate = customer.start_date ? toVnZeroHour(customer.start_date) : today;
@@ -768,7 +768,7 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   const isNotStarted = calendarDay < 1;
 
   if (isNotStarted) {
-    return { unlockedDay: 0, visibleDay: 1, isNotStarted: true, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
+    return { unlockedDay: 0, visibleDay: 0, isNotStarted: true, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
   }
 
   const rawBackup = customer.raw_backup || {};
@@ -776,16 +776,37 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   const rawMap: Record<number, string> = rawBackup.completed_days_map || {};
   const videoOpenDates: string[] = Array.isArray(rawBackup.video_open_dates) ? rawBackup.video_open_dates : [];
   const todayStr = toISODateKey(today);
+  const startKey = toISODateKey(startDate);
 
-  // Lấy danh sách các ngày thực tế học viên đã mở xem video (sắp xếp tăng dần theo thời gian)
-  const distinctDates = Array.from(new Set(videoOpenDates.map((d: string) => toISODateKey(d)).filter(Boolean))).sort();
+  // Chỉ lấy các ngày học viên đã mở video KỂ TỪ NGÀY BẮT ĐẦU của phác đồ hiện tại
+  const distinctDates = Array.from(new Set(
+    videoOpenDates
+      .map((d: string) => toISODateKey(d))
+      .filter((d: string) => Boolean(d) && d >= startKey)
+  )).sort();
   const datesAttendedCount = distinctDates.length;
 
-  // Hợp nhất: Mỗi ngày thực tế học viên có vào xem video đều được tính là đã hoàn thành 1 ngày học tương ứng
-  const completedDaysSet = new Set<number>(rawCompletedDays);
-  const completedDaysMap: Record<number, string> = { ...rawMap };
+  // Lọc completedDays: Nếu từ ngày bắt đầu đến hiện tại < 30 ngày, các ngày hoàn thành cũ không được vượt quá số ngày của đợt này
+  const completedDaysSet = new Set<number>();
+  const completedDaysMap: Record<number, string> = {};
 
-  for (let i = 1; i <= Math.min(30, datesAttendedCount); i++) {
+  if (calendarDay < 30) {
+    // Chỉ giữ các ngày completed_days hợp lệ nằm trong khoảng từ 1 đến calendarDay
+    for (const d of rawCompletedDays) {
+      if (d >= 1 && d <= calendarDay && rawMap[d] && rawMap[d] >= startKey) {
+        completedDaysSet.add(d);
+        completedDaysMap[d] = rawMap[d];
+      }
+    }
+  } else {
+    for (const d of rawCompletedDays) {
+      if (d >= 1 && d <= 30) completedDaysSet.add(d);
+    }
+    Object.assign(completedDaysMap, rawMap);
+  }
+
+  // Hợp nhất với các ngày học viên đã thực tế vào mở video kể từ ngày bắt đầu
+  for (let i = 1; i <= Math.min(calendarDay < 30 ? calendarDay : 30, datesAttendedCount); i++) {
     completedDaysSet.add(i);
     if (!completedDaysMap[i]) {
       completedDaysMap[i] = distinctDates[i - 1];
@@ -812,9 +833,9 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
     yesterdayStudiedDay = Math.max(...yesterdayDays);
   }
 
-  // 1. Trường hợp học viên đã học (được mở đủ 30 ngày rồi) mà thời gian phác đồ vẫn còn thời hạn:
+  // 1. Trường hợp từ ngày bắt đầu đến ngày hiện tại >= 30 ngày VÀ đã học đủ 30 ngày:
   // Vẫn mở đủ 30 ngày học đó cho học viên.
-  if (maxOpenedDay >= 30) {
+  if (calendarDay >= 30 && maxOpenedDay >= 30) {
     return {
       unlockedDay: 30,
       visibleDay: 30,
@@ -826,11 +847,11 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   }
 
   // 2. Ngày đầu tiên khi phác đồ được mở (calendarDay === 1):
-  // Ngày số 1 được mở cho phép học, ngày số 2 được hiển thị (chỉ xem tiêu đề).
+  // Hôm nay mới là ngày bắt đầu thì chỉ hiển thị tối đa là bài ngày số 1.
   if (calendarDay === 1) {
     return {
       unlockedDay: 1,
-      visibleDay: 2,
+      visibleDay: 1,
       isNotStarted: false,
       activeDay: 1,
       completedDays,
@@ -840,37 +861,32 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
 
   // 3. Khi calendarDay > 1:
   // Kiểm tra xem bài mà học viên học gần nhất có phải là bài ngày hôm qua hoặc hôm nay không
-  // (bài hôm qua = calendarDay - 1, bài hôm nay = calendarDay):
   const isStudiedYesterdayOrToday = maxOpenedDay >= (calendarDay - 1);
 
   let unlockedDay = 1;
-  let visibleDay = 2;
+  let visibleDay = 1;
 
   if (isStudiedYesterdayOrToday) {
-    // Trong trường hợp hiện tại ngày hôm nay bài đã được mở theo luật cũ dù học hay chưa học
-    // thì vẫn mở các bài đó và áp dụng luật mới luôn.
     unlockedDay = Math.min(30, calendarDay);
-    visibleDay = Math.min(30, calendarDay + 1);
+    // Nếu calendarDay < 30: ngày hiển thị tối đa bằng số ngày hiện tại trừ đi ngày bắt đầu (= calendarDay)
+    visibleDay = Math.min(30, calendarDay);
   } else {
-    // Trong trường hợp hôm nay đã được mở mà ngày mà học viên học gần nhất lại không phải
-    // là bài ngày hôm qua hoặc hôm nay thì sẽ ẩn các bài trước đó đi,
-    // chỉ hiển thị bài mà học viên đã vào học gần nhất + 1 để học viên vào học tiếp.
     const nextStudyDay = Math.max(1, maxOpenedDay + 1);
-
-    // Nếu bài maxOpenedDay vừa mới hoàn thành trong HÔM NAY:
-    // Theo nguyên tắc "bài học sẽ được mở vào ngày mai và khi bạn hoàn thành bài học của ngày trước đó"
-    // => bài tiếp theo (maxOpenedDay + 1) chỉ mở vào ngày mai! Hôm nay chỉ xem tiêu đề.
-    // Ngược lại, nếu maxOpenedDay đã hoàn thành từ trước hôm nay (hoặc chưa học bài nào):
-    // => Hôm nay đã là ngày mới, nên nextStudyDay được mở cho học viên vào học tiếp!
     const wasMaxOpenedStudiedToday = maxOpenedDay > 0 && completedDaysMap[maxOpenedDay] === todayStr;
 
     if (wasMaxOpenedStudiedToday) {
       unlockedDay = Math.min(30, maxOpenedDay);
-      visibleDay = Math.min(30, maxOpenedDay + 1);
+      visibleDay = Math.min(30, maxOpenedDay);
     } else {
       unlockedDay = Math.min(30, nextStudyDay);
-      visibleDay = Math.min(30, nextStudyDay + 1);
+      visibleDay = Math.min(30, nextStudyDay);
     }
+  }
+
+  // Áp dụng chặt chẽ quy tắc: Nếu calendarDay < 30 thì ngày hiển thị tối đa bằng calendarDay
+  if (calendarDay < 30) {
+    visibleDay = Math.min(visibleDay, calendarDay);
+    unlockedDay = Math.min(unlockedDay, calendarDay);
   }
 
   const activeDay = Math.min(30, Math.max(1, unlockedDay));
