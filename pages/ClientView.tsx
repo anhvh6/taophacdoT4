@@ -809,9 +809,6 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   // Hợp nhất với các ngày học viên đã thực tế vào mở video kể từ ngày bắt đầu
   for (let i = 1; i <= Math.min(calendarDay < 30 ? calendarDay : 30, datesAttendedCount); i++) {
     completedDaysSet.add(i);
-    if (!completedDaysMap[i]) {
-      completedDaysMap[i] = distinctDates[i - 1];
-    }
   }
 
   const completedDays = Array.from(completedDaysSet);
@@ -822,16 +819,22 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   const yesterdayStr = toISODateKey(yesterday);
 
   let yesterdayStudiedDay: number | null = null;
-  const yesterdayDays: number[] = [];
-  for (const dStr of Object.keys(completedDaysMap)) {
-    const dNum = Number(dStr);
-    if (completedDaysMap[dNum] === yesterdayStr && dNum > 0 && dNum <= 30) {
-      yesterdayDays.push(dNum);
+  if (rawBackup.date_to_lesson_day_map && rawBackup.date_to_lesson_day_map[yesterdayStr]) {
+    yesterdayStudiedDay = Number(rawBackup.date_to_lesson_day_map[yesterdayStr]);
+  } else if (rawBackup.last_video_open_date === yesterdayStr && rawBackup.last_opened_lesson_day) {
+    yesterdayStudiedDay = Number(rawBackup.last_opened_lesson_day);
+  } else {
+    const yesterdayDays: number[] = [];
+    for (const dStr of Object.keys(completedDaysMap)) {
+      const dNum = Number(dStr);
+      if (completedDaysMap[dNum] === yesterdayStr && dNum > 0 && dNum <= 30) {
+        yesterdayDays.push(dNum);
+      }
     }
-  }
-  if (yesterdayDays.length > 0) {
-    // Chỉ chọn duy nhất 1 ngày cao nhất mà học viên đã mở vào hôm qua
-    yesterdayStudiedDay = Math.max(...yesterdayDays);
+    if (yesterdayDays.length > 0) {
+      // Ưu tiên bài học thực tế trong khoảng đang học, tránh lấy nhầm bài 29/30
+      yesterdayStudiedDay = Math.min(...yesterdayDays);
+    }
   }
 
   // 1. Trường hợp từ ngày bắt đầu đến ngày hiện tại >= 30 ngày VÀ đã học đủ 30 ngày:
@@ -1266,17 +1269,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     let updatedCompletedDays = [...currentCompletedDays];
     let updatedMap = { ...currentMap };
 
-    // Lấy ngày học hiện tại của học viên
-    const access = calculateLessonAccess(customer, toVnZeroHour());
-    const currentUnlocked = access.unlockedDay;
-    if (currentUnlocked > 0 && currentUnlocked <= 30) {
-      if (!updatedCompletedDays.includes(currentUnlocked)) {
-        updatedCompletedDays.push(currentUnlocked);
-      }
-      if (!updatedMap[currentUnlocked]) {
-        updatedMap[currentUnlocked] = dateStr;
-      }
-    }
+    const rawBackup = { ...(customer.raw_backup || {}) };
+    const dateToLessonMap = { ...(rawBackup.date_to_lesson_day_map || {}) };
 
     if (dayNum !== undefined) {
       const d = Number(dayNum);
@@ -1284,19 +1278,30 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
         if (!updatedCompletedDays.includes(d)) {
           updatedCompletedDays.push(d);
         }
-        if (!updatedMap[d]) {
-          updatedMap[d] = dateStr;
-        }
+        updatedMap[d] = dateStr;
+        dateToLessonMap[dateStr] = d;
+        rawBackup.last_opened_lesson_day = d;
+        rawBackup.last_video_open_date = dateStr;
+      }
+    }
+
+    // Lấy ngày học hiện tại của học viên để cập nhật tiến độ mở bài
+    const access = calculateLessonAccess(customer, toVnZeroHour());
+    const currentUnlocked = access.unlockedDay;
+    if (currentUnlocked > 0 && currentUnlocked <= 30) {
+      if (!updatedCompletedDays.includes(currentUnlocked)) {
+        updatedCompletedDays.push(currentUnlocked);
       }
     }
     
     const updatedCustomer = {
       ...customer,
       raw_backup: {
-        ...(customer.raw_backup || {}),
+        ...rawBackup,
         video_open_dates: updatedDates,
         completed_days: updatedCompletedDays,
-        completed_days_map: updatedMap
+        completed_days_map: updatedMap,
+        date_to_lesson_day_map: dateToLessonMap
       }
     };
     setCustomer(updatedCustomer);
@@ -1596,25 +1601,30 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     return () => clearTimeout(timer);
   }, [customer]);
 
-  // Cuộn đến ngày đang học sau khi render xong
+  // Cuộn đến bài hiển thị màu đỏ (vừa mở hôm qua) hoặc bài đang học sau khi render xong
   useEffect(() => {
     if (!loading && customer && !hasScrolledRef.current) {
       const today = toVnZeroHour();
       const access = calculateLessonAccess(customer, today);
 
-      if (access.activeDay >= 2) {
+      // Cho phép cuộn nếu có bài màu đỏ hoặc activeDay >= 2
+      const shouldScroll = Boolean(access.yesterdayStudiedDay) || access.activeDay >= 2;
+
+      if (shouldScroll) {
         hasScrolledRef.current = true; // Đánh dấu ngay lập tức để không bị trigger nhiều lần
         let retries = 0;
         const scrollLoop = setInterval(() => {
-          const activeCard = document.querySelector('.day-card-active');
-          if (activeCard) {
+          // Ưu tiên trượt xuống bài hiển thị màu đỏ trước
+          const redCard = document.querySelector('.day-card-red');
+          const targetCard = redCard || document.querySelector('.day-card-active');
+          if (targetCard) {
             clearInterval(scrollLoop);
             // Chờ 600ms để đảm bảo các dữ liệu từ API (nếu có delay) đã bung layout ra hoàn chỉnh
             setTimeout(() => {
               try {
-                activeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
               } catch (e) {
-                const topPos = activeCard.getBoundingClientRect().top + window.scrollY - 150;
+                const topPos = targetCard.getBoundingClientRect().top + window.scrollY - 150;
                 window.scrollTo({ top: topPos, behavior: 'smooth' });
               }
             }, 600);
@@ -2313,6 +2323,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                     const shouldHide = day > lessonAccess.visibleDay;
                     if (shouldHide && !onNavigate && !isAdmin) return null;
 
+                    const isYesterdayStudied = day === lessonAccess.yesterdayStudiedDay;
+
                     return (
                       <div 
                         key={day} 
@@ -2324,6 +2336,8 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                           }
                         }} 
                         className={`rounded-[2rem] border p-6 transform transition-all duration-300 cursor-pointer ${
+                          isYesterdayStudied ? 'day-card-red ' : ''
+                        }${
                           isLocked 
                             ? 'bg-gray-50/80 border-gray-200 shadow-[0_4px_10px_rgba(0,0,0,0.05)]' 
                             : isActive
@@ -2332,7 +2346,6 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         }`}
                       >
                         {(() => {
-                          const isYesterdayStudied = day === lessonAccess.yesterdayStudiedDay;
                           return (
                             <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-3 uppercase tracking-widest ${
                               isYesterdayStudied 
