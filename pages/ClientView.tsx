@@ -814,27 +814,37 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   const completedDays = Array.from(completedDaysSet);
   const maxOpenedDay = completedDays.length > 0 ? Math.max(...completedDays) : 0;
 
-  // Xác định ngày mà học viên đã mở bài học HÔM QUA (để hiển thị text màu đỏ duy nhất trong ngày hôm nay)
-  const yesterday = addDays(today, -1);
-  const yesterdayStr = toISODateKey(yesterday);
-
+  // Xác định ngày mà học viên đã mở bài học GẦN NHẤT HÔM TRƯỚC (trước ngày hôm nay < todayStr)
+  // để hiển thị text màu đỏ duy nhất trong ngày hôm nay (không phải mở hôm nay)
   let yesterdayStudiedDay: number | null = null;
-  if (rawBackup.date_to_lesson_day_map && rawBackup.date_to_lesson_day_map[yesterdayStr]) {
-    yesterdayStudiedDay = Number(rawBackup.date_to_lesson_day_map[yesterdayStr]);
-  } else if (rawBackup.last_video_open_date === yesterdayStr && rawBackup.last_opened_lesson_day) {
-    yesterdayStudiedDay = Number(rawBackup.last_opened_lesson_day);
+  const dateLessonMap = rawBackup.date_to_lesson_day_map || {};
+  const priorDatesFromMap = Object.keys(dateLessonMap)
+    .filter(dKey => dKey < todayStr && Boolean(dateLessonMap[dKey]))
+    .sort();
+
+  if (priorDatesFromMap.length > 0) {
+    const latestPriorDate = priorDatesFromMap[priorDatesFromMap.length - 1];
+    const lessonDay = Number(dateLessonMap[latestPriorDate]);
+    if (lessonDay > 0 && lessonDay <= 30) {
+      yesterdayStudiedDay = lessonDay;
+    }
+  } else if (rawBackup.last_video_open_date && rawBackup.last_video_open_date < todayStr && rawBackup.last_opened_lesson_day) {
+    const d = Number(rawBackup.last_opened_lesson_day);
+    if (d > 0 && d <= 30) yesterdayStudiedDay = d;
   } else {
-    const yesterdayDays: number[] = [];
+    let latestDate = "";
+    let latestDay: number | null = null;
     for (const dStr of Object.keys(completedDaysMap)) {
       const dNum = Number(dStr);
-      if (completedDaysMap[dNum] === yesterdayStr && dNum > 0 && dNum <= 30) {
-        yesterdayDays.push(dNum);
+      const dDate = completedDaysMap[dNum];
+      if (dNum > 0 && dNum <= 30 && dDate && dDate < todayStr) {
+        if (!latestDate || dDate > latestDate || (dDate === latestDate && dNum < (latestDay || 999))) {
+          latestDate = dDate;
+          latestDay = dNum;
+        }
       }
     }
-    if (yesterdayDays.length > 0) {
-      // Ưu tiên bài học thực tế trong khoảng đang học, tránh lấy nhầm bài 29/30
-      yesterdayStudiedDay = Math.min(...yesterdayDays);
-    }
+    yesterdayStudiedDay = latestDay;
   }
 
   // 1. Trường hợp từ ngày bắt đầu đến ngày hiện tại >= 30 ngày VÀ đã học đủ 30 ngày:
@@ -864,21 +874,19 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   }
 
   // 3. Khi calendarDay > 1:
-  // Kiểm tra xem bài mà học viên học gần nhất có phải là bài ngày hôm qua hoặc hôm nay không
-  const isStudiedYesterdayOrToday = maxOpenedDay >= (calendarDay - 1);
-
   let unlockedDay = 1;
 
-  if (isStudiedYesterdayOrToday) {
-    unlockedDay = Math.min(30, calendarDay);
+  if (yesterdayStudiedDay && yesterdayStudiedDay > 0) {
+    // QUY TẮC CỦA NGƯỜI DÙNG:
+    // Bài kế tiếp của bài text màu đỏ đó sẽ được hiển thị và cho phép mở học!
+    unlockedDay = Math.min(30, yesterdayStudiedDay + 1);
   } else {
-    const nextStudyDay = Math.max(1, maxOpenedDay + 1);
-    const wasMaxOpenedStudiedToday = maxOpenedDay > 0 && completedDaysMap[maxOpenedDay] === todayStr;
-
-    if (wasMaxOpenedStudiedToday) {
-      unlockedDay = Math.min(30, maxOpenedDay);
+    // Nếu chưa có bài màu đỏ nào trước hôm nay (chưa học bài nào trước hôm nay):
+    const isStudiedYesterdayOrToday = maxOpenedDay >= (calendarDay - 1);
+    if (isStudiedYesterdayOrToday) {
+      unlockedDay = Math.min(30, calendarDay);
     } else {
-      unlockedDay = Math.min(30, nextStudyDay);
+      unlockedDay = Math.min(30, Math.max(1, maxOpenedDay + 1));
     }
   }
 
