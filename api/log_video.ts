@@ -78,6 +78,8 @@ export default async function handler(req: any, res: any) {
     const dd = String(vnTime.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
 
+    const hasCompleted30 = raw_backup.completed_days.includes(30);
+
     if (day !== undefined && day !== null) {
       const dayNum = parseInt(day, 10);
       if (!isNaN(dayNum) && dayNum > 0 && dayNum <= 30) {
@@ -86,18 +88,17 @@ export default async function handler(req: any, res: any) {
         }
         // Ghi nhan chinh xac ngay hoc ma hoc vien thuc te da mo
         raw_backup.completed_days_map[dayNum] = dateStr;
-        raw_backup.date_to_lesson_day_map[dateStr] = dayNum;
-        raw_backup.last_opened_lesson_day = dayNum;
-        raw_backup.last_video_open_date = dateStr;
-      }
-    }
 
-    if (current_unlocked_day !== undefined && current_unlocked_day !== null) {
-      const curNum = parseInt(current_unlocked_day, 10);
-      if (!isNaN(curNum) && curNum > 0 && curNum <= 30) {
-        if (!raw_backup.completed_days.includes(curNum)) {
-          raw_backup.completed_days.push(curNum);
+        if (!hasCompleted30) {
+          // Chưa học hết 30 bài: hệ thống ghi nhận bài học có ngày lớn nhất
+          raw_backup.date_to_lesson_day_map[dateStr] = Math.max(Number(raw_backup.date_to_lesson_day_map[dateStr]) || 0, dayNum);
+          raw_backup.last_opened_lesson_day = Math.max(Number(raw_backup.last_opened_lesson_day) || 0, dayNum);
+        } else {
+          // Đã học hết bài 30: ghi nhận bài mở / học gần nhất
+          raw_backup.date_to_lesson_day_map[dateStr] = dayNum;
+          raw_backup.last_opened_lesson_day = dayNum;
         }
+        raw_backup.last_video_open_date = dateStr;
       }
     }
     

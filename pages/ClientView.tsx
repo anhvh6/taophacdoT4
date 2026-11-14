@@ -813,43 +813,81 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
 
   const completedDays = Array.from(completedDaysSet);
   const maxOpenedDay = completedDays.length > 0 ? Math.max(...completedDays) : 0;
+  const hasCompleted30Lessons = completedDays.includes(30) || (calendarDay >= 30 && maxOpenedDay >= 30);
 
-  // Xác định ngày mà học viên đã mở bài học GẦN NHẤT HÔM TRƯỚC (trước ngày hôm nay < todayStr)
+  // Xác định ngày mà học viên đã mở bài học HÔM TRƯỚC (trước ngày hôm nay < todayStr)
   // để hiển thị text màu đỏ duy nhất trong ngày hôm nay (không phải mở hôm nay)
   let yesterdayStudiedDay: number | null = null;
   const dateLessonMap = rawBackup.date_to_lesson_day_map || {};
-  const priorDatesFromMap = Object.keys(dateLessonMap)
-    .filter(dKey => dKey < todayStr && Boolean(dateLessonMap[dKey]))
-    .sort();
 
-  if (priorDatesFromMap.length > 0) {
-    const latestPriorDate = priorDatesFromMap[priorDatesFromMap.length - 1];
-    const lessonDay = Number(dateLessonMap[latestPriorDate]);
-    if (lessonDay > 0 && lessonDay <= 30) {
-      yesterdayStudiedDay = lessonDay;
+  if (!hasCompleted30Lessons) {
+    // TRƯỜNG HỢP CHƯA HỌC HẾT 30 BÀI:
+    // Học viên đã mở và học nhiều bài trên hệ thống thì hệ thống sẽ ghi nhận
+    // bài học có ngày lớn nhất (đã mở trước hôm nay) để chuyển text màu đỏ của ngày đó!
+    const priorLessonDays: number[] = [];
+
+    // 1. Từ date_to_lesson_day_map của các ngày trước hôm nay
+    for (const dKey of Object.keys(dateLessonMap)) {
+      if (dKey < todayStr && dateLessonMap[dKey]) {
+        const lDay = Number(dateLessonMap[dKey]);
+        if (lDay > 0 && lDay <= 30) priorLessonDays.push(lDay);
+      }
     }
-  } else if (rawBackup.last_video_open_date && rawBackup.last_video_open_date < todayStr && rawBackup.last_opened_lesson_day) {
-    const d = Number(rawBackup.last_opened_lesson_day);
-    if (d > 0 && d <= 30) yesterdayStudiedDay = d;
-  } else {
-    let latestDate = "";
-    let latestDay: number | null = null;
+
+    // 2. Từ completed_days_map của các ngày trước hôm nay
     for (const dStr of Object.keys(completedDaysMap)) {
       const dNum = Number(dStr);
       const dDate = completedDaysMap[dNum];
       if (dNum > 0 && dNum <= 30 && dDate && dDate < todayStr) {
-        if (!latestDate || dDate > latestDate || (dDate === latestDate && dNum < (latestDay || 999))) {
-          latestDate = dDate;
-          latestDay = dNum;
-        }
+        priorLessonDays.push(dNum);
       }
     }
-    yesterdayStudiedDay = latestDay;
+
+    // 3. Từ last_opened_lesson_day nếu mở trước hôm nay
+    if (rawBackup.last_video_open_date && rawBackup.last_video_open_date < todayStr && rawBackup.last_opened_lesson_day) {
+      const lDay = Number(rawBackup.last_opened_lesson_day);
+      if (lDay > 0 && lDay <= 30) priorLessonDays.push(lDay);
+    }
+
+    if (priorLessonDays.length > 0) {
+      yesterdayStudiedDay = Math.max(...priorLessonDays);
+    }
+  } else {
+    // TRƯỜNG HỢP ĐÃ HỌC HẾT BÀI 30:
+    // Hiển thị text màu đỏ với bài mở / học gần nhất
+    const priorDatesFromMap = Object.keys(dateLessonMap)
+      .filter(dKey => dKey < todayStr && Boolean(dateLessonMap[dKey]))
+      .sort();
+
+    if (priorDatesFromMap.length > 0) {
+      const latestPriorDate = priorDatesFromMap[priorDatesFromMap.length - 1];
+      const lessonDay = Number(dateLessonMap[latestPriorDate]);
+      if (lessonDay > 0 && lessonDay <= 30) {
+        yesterdayStudiedDay = lessonDay;
+      }
+    } else if (rawBackup.last_video_open_date && rawBackup.last_video_open_date < todayStr && rawBackup.last_opened_lesson_day) {
+      const d = Number(rawBackup.last_opened_lesson_day);
+      if (d > 0 && d <= 30) yesterdayStudiedDay = d;
+    } else {
+      let latestDate = "";
+      let latestDay: number | null = null;
+      for (const dStr of Object.keys(completedDaysMap)) {
+        const dNum = Number(dStr);
+        const dDate = completedDaysMap[dNum];
+        if (dNum > 0 && dNum <= 30 && dDate && dDate < todayStr) {
+          if (!latestDate || dDate > latestDate || (dDate === latestDate && dNum < (latestDay || 999))) {
+            latestDate = dDate;
+            latestDay = dNum;
+          }
+        }
+      }
+      yesterdayStudiedDay = latestDay;
+    }
   }
 
-  // 1. Trường hợp từ ngày bắt đầu đến ngày hiện tại >= 30 ngày VÀ đã học đủ 30 ngày:
+  // 1. Trường hợp đã học đủ 30 bài:
   // Vẫn mở đủ 30 ngày học đó cho học viên.
-  if (calendarDay >= 30 && maxOpenedDay >= 30) {
+  if (hasCompleted30Lessons) {
     return {
       unlockedDay: 30,
       visibleDay: 30,
@@ -1279,6 +1317,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
     const rawBackup = { ...(customer.raw_backup || {}) };
     const dateToLessonMap = { ...(rawBackup.date_to_lesson_day_map || {}) };
+    const hasCompleted30 = updatedCompletedDays.includes(30);
 
     if (dayNum !== undefined) {
       const d = Number(dayNum);
@@ -1287,18 +1326,17 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           updatedCompletedDays.push(d);
         }
         updatedMap[d] = dateStr;
-        dateToLessonMap[dateStr] = d;
-        rawBackup.last_opened_lesson_day = d;
-        rawBackup.last_video_open_date = dateStr;
-      }
-    }
 
-    // Lấy ngày học hiện tại của học viên để cập nhật tiến độ mở bài
-    const access = calculateLessonAccess(customer, toVnZeroHour());
-    const currentUnlocked = access.unlockedDay;
-    if (currentUnlocked > 0 && currentUnlocked <= 30) {
-      if (!updatedCompletedDays.includes(currentUnlocked)) {
-        updatedCompletedDays.push(currentUnlocked);
+        if (!hasCompleted30) {
+          // Chưa học hết 30 bài: hệ thống ghi nhận bài học có ngày lớn nhất
+          dateToLessonMap[dateStr] = Math.max(Number(dateToLessonMap[dateStr]) || 0, d);
+          rawBackup.last_opened_lesson_day = Math.max(Number(rawBackup.last_opened_lesson_day) || 0, d);
+        } else {
+          // Đã học hết bài 30: ghi nhận bài mở / học gần nhất
+          dateToLessonMap[dateStr] = d;
+          rawBackup.last_opened_lesson_day = d;
+        }
+        rawBackup.last_video_open_date = dateStr;
       }
     }
     
@@ -1379,8 +1417,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     if (isSocialLink) {
       window.open(trimmedLink, '_blank', 'noopener,noreferrer');
       if (isStudent && customerId) {
-        const curUnlocked = calculateLessonAccess(customer, toVnZeroHour()).unlockedDay;
-        customerService.logVideoOpen(customerId, customer?.token || token || '', dayNum, curUnlocked);
+        customerService.logVideoOpen(customerId, customer?.token || token || '', dayNum);
         markAttendanceLocally(dayNum);
       }
       return;
@@ -1552,8 +1589,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             if (data?.signed_embed_url) {
                 setPlayingVideo(data.signed_embed_url);
                 if (isStudent) {
-                    const curUnlocked = calculateLessonAccess(customer, toVnZeroHour()).unlockedDay;
-                    customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum, curUnlocked);
+                    customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
                     markAttendanceLocally(dayNum);
                 }
             } else {
@@ -1566,8 +1602,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       setToast("Cảnh báo: Video này sử dụng đường dẫn cũ và không được bảo vệ bằng Token.");
       setPlayingVideo(trimmedLink);
       if (isStudent) {
-          const curUnlocked = calculateLessonAccess(customer, toVnZeroHour()).unlockedDay;
-          customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum, curUnlocked);
+          customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
           markAttendanceLocally(dayNum);
       }
     } else if (ytEmbedUrl) {
