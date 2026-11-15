@@ -11,36 +11,42 @@ interface LayoutProps {
   actions?: React.ReactNode;
 }
 
+const GOOGLE_SHEETS_URL = "https://docs.google.com/spreadsheets/d/193-BwKDTSLZdgwfQSo-0N3ueREo0HeJ2Ta9gLbI3oc8/edit?usp=sharing";
+
 export const Layout: React.FC<LayoutProps> = ({ children, title, onBack, onIconClick, onTitleClick, actions }) => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white border-b border-blue-100 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 shadow-sm">
-        <div className="flex items-center justify-between w-full sm:w-auto gap-4 flex-1">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            {onBack ? (
-              <button onClick={onBack} className="p-2 hover:bg-blue-50 rounded-full transition-colors shrink-0">
-                <ChevronLeft size={20} className="text-blue-600" />
-              </button>
-            ) : (
-              <div 
-                onClick={onIconClick}
-                className={`w-8 h-8 sm:w-10 sm:h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg sm:text-xl shadow-md shrink-0 ${onIconClick ? 'cursor-pointer hover:bg-blue-700 active:scale-95 transition-all' : ''}`}
-              >
-                M
-              </div>
-            )}
+      <header className="sticky top-0 z-50 bg-white border-b border-blue-100 px-3 sm:px-6 py-1.5 sm:py-2 flex items-center justify-between gap-2 sm:gap-4 shadow-xs">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 min-w-0">
+          {onBack ? (
+            <button onClick={onBack} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors shrink-0" title="Quay lại">
+              <ChevronLeft size={18} className="text-blue-600" />
+            </button>
+          ) : (
+            <a 
+              href={GOOGLE_SHEETS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onIconClick}
+              className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-lg flex items-center justify-center text-white font-bold text-sm sm:text-base shadow-xs shrink-0 transition-all cursor-pointer select-none"
+              title="Mở Google Sheets"
+            >
+              M
+            </a>
+          )}
+          {title && (
             <div 
               onClick={onTitleClick}
-              className={`text-base sm:text-lg font-black text-blue-900 tracking-tight flex-1 min-w-0 ${onTitleClick ? 'cursor-pointer hover:text-blue-600 transition-colors' : ''}`}
+              className={`text-sm sm:text-base font-black text-blue-900 tracking-tight shrink-0 ${onTitleClick ? 'cursor-pointer hover:text-blue-600 transition-colors' : ''}`}
             >
-              {title || <span className="uppercase">MEGA PHƯƠNG ADMIN</span>}
+              {title}
             </div>
-          </div>
+          )}
         </div>
         
         {actions && (
-          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto scrollbar-hide pb-1 sm:pb-0">
+          <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-hide shrink-0">
             {actions}
           </div>
         )}

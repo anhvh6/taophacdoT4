@@ -216,11 +216,7 @@ class SupabaseDatabase {
   }
 
   async saveCustomPlan(id: string, tasks: ExerciseTask[]) {
-    const { error: deleteError } = await supabase.from('customer_tasks').delete().eq('customer_id', id);
-    if (deleteError) throw deleteError;
-    if (!tasks.length) return;
     const rows = tasks.map((t) => ({
-      customer_id: id,
       day: Number(t.day || 0),
       type: t.type || '',
       title: t.title || '',
@@ -230,7 +226,10 @@ class SupabaseDatabase {
       is_deleted: !!t.is_deleted,
       sort_order: Number(t.sort_order || t.day || 0)
     }));
-    const { error } = await supabase.from('customer_tasks').insert(rows);
+    const { error } = await supabase.rpc('replace_customer_tasks_atomic', {
+      p_customer_id: id,
+      p_tasks: rows
+    });
     if (error) throw error;
   }
 

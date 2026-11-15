@@ -1006,78 +1006,87 @@ export const Dashboard: React.FC<{
   return (
     <Layout 
       title={
-        <div className="flex items-center gap-2">
-          {hasPerm('xem_bao_cao') ? (
-            <a 
-              href="https://docs.google.com/spreadsheets/d/193-BwKDTSLZdgwfQSo-0N3ueREo0HeJ2Ta9gLbI3oc8/edit?usp=sharing" 
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-blue-600 transition-colors"
+        (() => {
+          const unviewedCount = pendingRequests.length;
+          return (
+            <div 
+              className="relative cursor-pointer group"
+              onClick={(e) => { e.stopPropagation(); setIsRequestModalOpen(true); }}
+              title="Yêu cầu cần duyệt"
             >
-              MEGA PHƯƠNG ADMIN
-            </a>
-          ) : (
-            <span className="text-blue-900 cursor-default select-none">
-              MEGA PHƯƠNG ADMIN
-            </span>
-          )}
-          {(() => {
-            const unviewedCount = pendingRequests.length;
-            return (
-              <div 
-                className="relative cursor-pointer group"
-                onClick={(e) => { e.stopPropagation(); setIsRequestModalOpen(true); }}
-              >
-                <div className={`p-2 rounded-xl transition-all ${unviewedCount > 0 ? 'bg-red-50 text-red-500 animate-[pulse_2s_infinite]' : 'bg-blue-50 text-blue-400'}`}>
-                  <Bell size={20} strokeWidth={2.5} />
-                </div>
-                {unviewedCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-white shadow-md">
-                    {unviewedCount}
-                  </span>
-                )}
+              <div className={`p-1.5 rounded-lg transition-all ${unviewedCount > 0 ? 'bg-red-50 text-red-500 animate-[pulse_2s_infinite]' : 'bg-blue-50/70 text-blue-500 hover:bg-blue-100'}`}>
+                <Bell size={16} strokeWidth={2.2} />
               </div>
-            );
-          })()}
-        </div>
+              {unviewedCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 flex items-center justify-center rounded-full border border-white shadow-sm">
+                  {unviewedCount}
+                </span>
+              )}
+            </div>
+          );
+        })()
       }
-      onIconClick={handleAddStudent}
       actions={
-        <div className="flex gap-2">
-          <Button variant="primary" size="sm" onClick={() => onNavigate('plan-editor')}>
-            <Plus size={14} className="mr-1.5" /> Tạo PĐ
-          </Button>
+        <div className="flex items-center gap-1 sm:gap-2">
+          <button 
+            type="button"
+            onClick={() => onNavigate('plan-editor')}
+            className="flex items-center gap-1 px-1.5 py-1 text-[11px] sm:text-xs font-bold uppercase tracking-tight text-blue-600 hover:text-blue-700 hover:bg-blue-50/70 rounded transition-colors whitespace-nowrap cursor-pointer"
+          >
+            <Plus size={13} className="stroke-[2.5]" /> Tạo PĐ
+          </button>
           {hasPerm('view_students') && (
-            <Button variant="secondary" size="sm" onClick={() => onNavigate('management')}>
-              <Users size={14} className="mr-1.5" /> HV
-            </Button>
+            <button 
+              type="button"
+              onClick={() => onNavigate('management')}
+              className="flex items-center gap-1 px-1.5 py-1 text-[11px] sm:text-xs font-bold uppercase tracking-tight text-slate-600 hover:text-blue-600 hover:bg-slate-100/70 rounded transition-colors whitespace-nowrap cursor-pointer"
+            >
+              <Users size={13} /> HV
+            </button>
           )}
           {hasPerm('view_products') && (
-            <Button variant="secondary" size="sm" onClick={() => onNavigate('products')}>
-               <Package size={14} className="mr-1.5" /> SP
-            </Button>
+            <button 
+              type="button"
+              onClick={() => onNavigate('products')}
+              className="flex items-center gap-1 px-1.5 py-1 text-[11px] sm:text-xs font-bold uppercase tracking-tight text-slate-600 hover:text-blue-600 hover:bg-slate-100/70 rounded transition-colors whitespace-nowrap cursor-pointer"
+            >
+              <Package size={13} /> SP
+            </button>
           )}
           {hasPerm('save_template') && (
-            <Button variant="secondary" size="sm" onClick={() => onNavigate('video-groups')}>
-              <List size={14} className="mr-1.5" /> PĐ mẫu
-            </Button>
+            <button 
+              type="button"
+              onClick={() => onNavigate('video-groups')}
+              className="flex items-center gap-1 px-1.5 py-1 text-[11px] sm:text-xs font-bold uppercase tracking-tight text-slate-600 hover:text-blue-600 hover:bg-slate-100/70 rounded transition-colors whitespace-nowrap cursor-pointer"
+            >
+              <List size={13} /> PĐ mẫu
+            </button>
           )}
           {currentUserRole === 'super_admin' && (
             <>
-              <Button variant="secondary" size="sm" onClick={() => onNavigate('permissions')}>
-                <Shield size={14} className="mr-1.5" /> Phân quyền
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => onNavigate('ad-campaigns')}>
-                <Play size={14} className="mr-1.5" /> Chiến dịch QC
-              </Button>
+              <button 
+                type="button"
+                onClick={() => onNavigate('permissions')}
+                className="flex items-center gap-1 px-1.5 py-1 text-[11px] sm:text-xs font-bold uppercase tracking-tight text-slate-600 hover:text-blue-600 hover:bg-slate-100/70 rounded transition-colors whitespace-nowrap cursor-pointer"
+              >
+                <Shield size={13} /> Phân quyền
+              </button>
+              <button 
+                type="button"
+                onClick={() => onNavigate('ad-campaigns')}
+                className="flex items-center gap-1 px-1.5 py-1 text-[11px] sm:text-xs font-bold uppercase tracking-tight text-slate-600 hover:text-blue-600 hover:bg-slate-100/70 rounded transition-colors whitespace-nowrap cursor-pointer"
+              >
+                <Play size={13} /> Chiến dịch QC
+              </button>
             </>
           )}
           <button 
+            type="button"
             onClick={onLogout}
-            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all ml-1"
+            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all ml-0.5 cursor-pointer"
             title="Đăng xuất"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut size={16} />
           </button>
         </div>
       }
