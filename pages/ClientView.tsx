@@ -759,6 +759,46 @@ const getOrCreateDeviceId = async (customerId: string) => {
 };
 
 // Deployment trigger: hien thi ngay ke tiep text xam khoa
+export const formatDayMonth = (dateVal?: string | null): string => {
+  if (!dateVal) return '';
+  const m = String(dateVal).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}/${m[2]}`;
+  const m2 = String(dateVal).match(/^(\d{1,2})\/(\d{1,2})/);
+  if (m2) return `${m2[1].padStart(2, '0')}/${m2[2].padStart(2, '0')}`;
+  try {
+    const d = new Date(dateVal);
+    if (!isNaN(d.getTime())) {
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      return `${dd}/${mm}`;
+    }
+  } catch (e) {}
+  return '';
+};
+
+export const getLatestStudyDate = (customer: Customer | any, day: number): string | null => {
+  if (!customer?.raw_backup) return null;
+  const dates: string[] = [];
+  const map = customer.raw_backup.completed_days_map || {};
+  if (map[day]) dates.push(map[day]);
+  if (map[String(day)]) dates.push(map[String(day)]);
+
+  const dateLessonMap = customer.raw_backup.date_to_lesson_day_map || {};
+  for (const [dStr, lDay] of Object.entries(dateLessonMap)) {
+    if (Number(lDay) === day && dStr) {
+      dates.push(dStr);
+    }
+  }
+
+  if (Number(customer.raw_backup.last_opened_lesson_day) === day && customer.raw_backup.last_video_open_date) {
+    dates.push(customer.raw_backup.last_video_open_date);
+  }
+
+  if (dates.length === 0) return null;
+  dates.sort();
+  return dates[dates.length - 1];
+};
+
 export const calculateLessonAccess = (customer: Customer | any, today: Date = toVnZeroHour()) => {
   if (!customer) {
     return { unlockedDay: 1, visibleDay: 2, isNotStarted: false, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
@@ -2389,16 +2429,26 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                         }`}
                       >
                         {(() => {
+                          const latestDate = getLatestStudyDate(customer, day);
+                          const latestDateFormatted = formatDayMonth(latestDate);
+
                           return (
-                            <div className={`flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-3 uppercase tracking-widest ${
+                            <div className={`relative flex items-center justify-center gap-1.5 text-center font-black text-xs border-b mb-4 pb-3 uppercase tracking-widest ${
                               isYesterdayStudied 
                                 ? 'text-red-600 border-red-200' 
                                 : isUnlocked && !lessonAccess.isNotStarted 
                                   ? 'text-blue-600 border-blue-200/50' 
                                   : 'text-gray-400 border-gray-300'
                             }`}>
-                              <span className={isYesterdayStudied ? 'text-red-600 font-extrabold' : ''}>Ngày {day}</span>
-                              {isAttended && <CheckCircle size={14} className="text-green-500" strokeWidth={3} />}
+                              <div className="flex items-center justify-center gap-1.5">
+                                <span className={isYesterdayStudied ? 'text-red-600 font-extrabold' : ''}>Ngày {day}</span>
+                                {isAttended && <CheckCircle size={14} className="text-green-500 shrink-0" strokeWidth={3} />}
+                              </div>
+                              {latestDateFormatted && (
+                                <span className="absolute right-0 top-0 text-[11px] font-semibold text-black tracking-normal normal-case select-none">
+                                  {latestDateFormatted}
+                                </span>
+                              )}
                             </div>
                           );
                         })()}
