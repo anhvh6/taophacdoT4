@@ -67,6 +67,59 @@ export const formatVNDate = (input: string | Date | null | undefined, withYear =
 };
 
 /**
+ * Chuyển đổi ngày (được admin lưu theo lịch giờ Việt Nam UTC+7) sang đối tượng Date 00:00:00 
+ * tại múi giờ địa phương của thiết bị người dùng.
+ * Ví dụ: Ngày bắt đầu 20/11/2026 (giờ VN) = 19/11/2026 09:00 (giờ Mỹ PST)
+ * -> Tại Mỹ, ngày bắt đầu tương ứng theo lịch thiết bị địa phương là ngày 19/11/2026.
+ */
+export const parseVnDateToLocalDate = (input: string | Date | null | undefined): Date | null => {
+  if (!input) return null;
+  if (input instanceof Date) return new Date(input.getFullYear(), input.getMonth(), input.getDate());
+
+  const s = String(input).trim();
+  if (!s) return null;
+
+  let y = 0, m = 0, d = 0;
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    y = parseInt(isoMatch[1], 10);
+    m = parseInt(isoMatch[2], 10);
+    d = parseInt(isoMatch[3], 10);
+  } else if (s.includes('/')) {
+    const parts = s.split('/');
+    d = parseInt(parts[0], 10);
+    m = parseInt(parts[1], 10);
+    y = parts[2] ? parseInt(parts[2], 10) : new Date().getFullYear();
+  } else {
+    const fallback = new Date(s);
+    if (isNaN(fallback.getTime())) return null;
+    return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
+  }
+
+  if (!y || !m || !d) return null;
+
+  // Thời điểm 00:00:00 ngày đó theo giờ Việt Nam (UTC+7) tính bằng UTC timestamp:
+  const vnStartUtcMs = Date.UTC(y, m - 1, d, 0, 0, 0) - 7 * 60 * 60 * 1000;
+  const localDateAtVnStart = new Date(vnStartUtcMs);
+
+  return new Date(localDateAtVnStart.getFullYear(), localDateAtVnStart.getMonth(), localDateAtVnStart.getDate());
+};
+
+/**
+ * Lấy ngày bắt đầu hiệu lực theo lịch thiết bị của người dùng:
+ * Tự động đồng bộ giữa mốc giờ VN (UTC+7) và mốc lịch địa phương của thiết bị.
+ * Nếu ở Mỹ/Châu Âu (sau giờ VN): khi VN đã sang ngày 20/11 thì ở Mỹ là 19/11 đã được mở ngay!
+ * Nếu ở Nhật/Úc (trước giờ VN): khi địa phương sang ngày 20/11 thì cũng được mở ngay!
+ */
+export const getEffectiveLocalDate = (startDateInput: string | Date | null | undefined): Date | null => {
+  if (!startDateInput) return null;
+  const localFromVn = parseVnDateToLocalDate(startDateInput);
+  const plainLocal = parseVNDate(startDateInput);
+  if (!localFromVn || !plainLocal) return localFromVn || plainLocal;
+  return localFromVn.getTime() < plainLocal.getTime() ? localFromVn : plainLocal;
+};
+
+/**
  * Legacy compatibility (re-routing existing calls)
  */
 export const formatDDMMYYYY = (i: any) => formatVNDate(i, true);

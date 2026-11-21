@@ -9,7 +9,7 @@ import { planService } from '../src/services/planService';
 import { campaignService, AdCampaign } from '../src/services/campaignService';
 import { supabase } from '../src/lib/supabaseClient';
 import { Customer, ExerciseTask, CustomerStatus, ExerciseType } from '../types';
-import { toVnZeroHour, formatDDMMYYYY, getDiffDays, addDays, parseVNDate, toISODateKey } from '../utils/date';
+import { toVnZeroHour, formatDDMMYYYY, getDiffDays, addDays, parseVNDate, toISODateKey, getEffectiveLocalDate, parseVnDateToLocalDate } from '../utils/date';
 import { safeSetLocalStorage } from '../src/utils/storage';
 import { ImmersiveChat } from '../components/ImmersiveChat';
 import { GoogleLogin } from '@react-oauth/google';
@@ -804,7 +804,7 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
     return { unlockedDay: 1, visibleDay: 2, isNotStarted: false, activeDay: 1, completedDays: [] as number[], yesterdayStudiedDay: null as number | null };
   }
 
-  const startDate = customer.start_date ? toVnZeroHour(customer.start_date) : today;
+  const startDate = customer.start_date ? getEffectiveLocalDate(customer.start_date) || toVnZeroHour(customer.start_date) : today;
   const calendarDay = customer.start_date ? getDiffDays(startDate, today) + 1 : 1;
   const isNotStarted = calendarDay < 1;
 
@@ -1439,6 +1439,18 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     if (id) void getVideoAccess(id).catch(() => {});
   }, [selectedTask?.link, customerId, customer?.token, token]);
 
+  const logVideoAttendance = (dayNum?: number) => {
+    if (!customerId) return;
+    const clientDateStr = toISODateKey(new Date());
+    let clientTz = 'Asia/Ho_Chi_Minh';
+    try {
+      clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Ho_Chi_Minh';
+    } catch (e) {}
+
+    customerService.logVideoOpen(customerId, customer?.token || token || '', dayNum, clientDateStr, clientTz);
+    markAttendanceLocally(dayNum);
+  };
+
   const handlePlayVideo = async (link?: string, skipAuthCheck: boolean = false, dayNum?: number) => {
     if (!link) return;
     
@@ -1457,8 +1469,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     if (isSocialLink) {
       window.open(trimmedLink, '_blank', 'noopener,noreferrer');
       if (isStudent && customerId) {
-        customerService.logVideoOpen(customerId, customer?.token || token || '', dayNum);
-        markAttendanceLocally(dayNum);
+        logVideoAttendance(dayNum);
       }
       return;
     }
@@ -1629,8 +1640,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
             if (data?.signed_embed_url) {
                 setPlayingVideo(data.signed_embed_url);
                 if (isStudent) {
-                    customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
-                    markAttendanceLocally(dayNum);
+                    logVideoAttendance(dayNum);
                 }
             } else {
                 throw new Error('Không lấy được quyền xem video. Vui lòng thử lại.');
@@ -1642,20 +1652,17 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       setToast("Cảnh báo: Video này sử dụng đường dẫn cũ và không được bảo vệ bằng Token.");
       setPlayingVideo(trimmedLink);
       if (isStudent) {
-          customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
-          markAttendanceLocally(dayNum);
+          logVideoAttendance(dayNum);
       }
     } else if (ytEmbedUrl) {
       setPlayingVideo(ytEmbedUrl);
       if (isStudent) {
-          customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
-          markAttendanceLocally(dayNum);
+          logVideoAttendance(dayNum);
       }
     } else {
       setPlayingVideo(trimmedLink);
       if (isStudent) {
-          customerService.logVideoOpen(customerId!, customer?.token || token || '', dayNum);
-          markAttendanceLocally(dayNum);
+          logVideoAttendance(dayNum);
       }
     }
   };
@@ -1725,7 +1732,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   // Check for Day 3 Popup
   useEffect(() => {
     if (customer && !isAdmin) {
-      const startDate = customer.start_date ? toVnZeroHour(customer.start_date) : toVnZeroHour();
+      const startDate = customer.start_date ? getEffectiveLocalDate(customer.start_date) || toVnZeroHour(customer.start_date) : toVnZeroHour();
       const today = toVnZeroHour();
       const currentDay = getDiffDays(startDate, today) + 1;
       const allowedDay = customer.allowed_day || currentDay;
@@ -1979,7 +1986,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
     endDate = new Date(start.getTime() + (customer.duration_days * 24 * 60 * 60 * 1000));
   }
 
-  const isExpiredByDate = endDate ? today >= endDate : false;
+  const isExpiredByDate = endDate ? today > endDate : false;
 
   // Logic: Nếu bị xóa thì là DELETED, nếu hết hạn theo ngày hoặc theo state thì là EXPIRED, còn lại là ACTIVE
   let accessState = customer?.access_state || "ACTIVE";
@@ -2153,7 +2160,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   }
 
   if (!customer) return null;
-  const startDate = toVnZeroHour(customer.start_date);
+  const startDate = getEffectiveLocalDate(customer.start_date) || toVnZeroHour(customer.start_date);
   const lessonAccess = calculateLessonAccess(customer, today);
   const allowedDay = lessonAccess.unlockedDay;
   const isNotStarted = lessonAccess.isNotStarted;
@@ -2258,7 +2265,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
              ))}
 
              {(() => {
-                const start = parseVNDate(customer.start_date);
+                const start = getEffectiveLocalDate(customer.start_date) || parseVNDate(customer.start_date);
                 if (!start) return null;
 
                 const diffDays = getDiffDays(start, today) + 1;
@@ -2586,8 +2593,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
                               } else {
                                 window.open(prev.link, '_blank');
                               }
-                              customerService.logVideoOpen(customerId!, customer?.token || token || '', prev.day);
-                              markAttendanceLocally(prev.day);
+                              logVideoAttendance(prev.day);
                             }
                             return {isOpen: false, link: null, day: undefined};
                           });

@@ -23,7 +23,7 @@ export default async function handler(req: any, res: any) {
   
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
   
-  const { customer_id, token, day, current_unlocked_day } = req.body;
+  const { customer_id, token, day, client_date, client_timezone } = req.body;
   
   if (!customer_id || !token || !supabaseUrl || !supabaseServiceKey) {
     return res.status(400).json({ success: false, message: 'Thiếu thông tin yêu cầu.' });
@@ -71,12 +71,27 @@ export default async function handler(req: any, res: any) {
       raw_backup.date_to_lesson_day_map = {};
     }
 
-    // Convert to VN timezone YYYY-MM-DD
-    const vnTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Ho_Chi_Minh"}));
-    const yyyy = vnTime.getFullYear();
-    const mm = String(vnTime.getMonth() + 1).padStart(2, '0');
-    const dd = String(vnTime.getDate()).padStart(2, '0');
-    const dateStr = `${yyyy}-${mm}-${dd}`;
+    // Xác định ngày học (dateStr) theo múi giờ thiết bị địa lý của học viên
+    let dateStr = '';
+    if (client_date && /^\d{4}-\d{2}-\d{2}$/.test(String(client_date).trim())) {
+      dateStr = String(client_date).trim();
+    } else {
+      const tz = client_timezone || 'Asia/Ho_Chi_Minh';
+      try {
+        const localTime = new Date(new Date().toLocaleString("en-US", { timeZone: tz }));
+        const yyyy = localTime.getFullYear();
+        const mm = String(localTime.getMonth() + 1).padStart(2, '0');
+        const dd = String(localTime.getDate()).padStart(2, '0');
+        dateStr = `${yyyy}-${mm}-${dd}`;
+      } catch (e) {
+        const now = new Date();
+        dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      }
+    }
+
+    if (client_timezone) {
+      raw_backup.client_timezone = client_timezone;
+    }
 
     const hasCompleted30 = raw_backup.completed_days.includes(30);
 

@@ -483,12 +483,18 @@ export const customerService = {
     }
   },
 
-  async logVideoOpen(customerId: string, token: string, day?: number, currentUnlockedDay?: number) {
+  async logVideoOpen(customerId: string, token: string, day?: number, clientDate?: string, clientTimezone?: string) {
     try {
       const response = await fetch('/api/log_video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customer_id: customerId, token, day, current_unlocked_day: currentUnlockedDay })
+        body: JSON.stringify({ 
+          customer_id: customerId, 
+          token, 
+          day, 
+          client_date: clientDate, 
+          client_timezone: clientTimezone 
+        })
       });
       return await response.json();
     } catch (e) {
