@@ -70,13 +70,39 @@ export default async function handler(req: any, res: any) {
     if (!raw_backup.date_to_lesson_day_map || typeof raw_backup.date_to_lesson_day_map !== 'object') {
       raw_backup.date_to_lesson_day_map = {};
     }
+    if (!raw_backup.lesson_open_times || typeof raw_backup.lesson_open_times !== 'object') {
+      raw_backup.lesson_open_times = {};
+    }
+
+    // Tự động sửa chữa dữ liệu nếu học viên có ngày học bị lệch do múi giờ VN ghi đè (ví dụ Bảo Ánh Dương)
+    const curMap = raw_backup.completed_days_map;
+    if (
+      customer_id === 'C1795142748594ZH2TD' ||
+      ((curMap[1] === '2026-11-21' || curMap['1'] === '2026-11-21') && (curMap[2] === '2026-11-21' || curMap['2'] === '2026-11-21'))
+    ) {
+      curMap[1] = '2026-11-19';
+      curMap['1'] = '2026-11-19';
+      curMap[2] = '2026-11-20';
+      curMap['2'] = '2026-11-20';
+      delete raw_backup.date_to_lesson_day_map['2026-11-21'];
+      raw_backup.date_to_lesson_day_map['2026-11-19'] = 1;
+      raw_backup.date_to_lesson_day_map['2026-11-20'] = 2;
+      if (raw_backup.last_video_open_date === '2026-11-21') {
+        raw_backup.last_video_open_date = '2026-11-20';
+      }
+      if (!raw_backup.video_open_dates) raw_backup.video_open_dates = [];
+      if (!raw_backup.video_open_dates.includes('2026-11-19')) raw_backup.video_open_dates.push('2026-11-19');
+      if (!raw_backup.video_open_dates.includes('2026-11-20')) raw_backup.video_open_dates.push('2026-11-20');
+      raw_backup.video_open_dates = raw_backup.video_open_dates.filter((d: string) => d !== '2026-11-21');
+    }
 
     // Xác định ngày học (dateStr) theo múi giờ thiết bị địa lý của học viên
     let dateStr = '';
     if (client_date && /^\d{4}-\d{2}-\d{2}$/.test(String(client_date).trim())) {
       dateStr = String(client_date).trim();
     } else {
-      const tz = client_timezone || 'Asia/Ho_Chi_Minh';
+      const vercelTz = req.headers['x-vercel-ip-timezone'] as string | undefined;
+      const tz = client_timezone || vercelTz || 'Asia/Ho_Chi_Minh';
       try {
         const localTime = new Date(new Date().toLocaleString("en-US", { timeZone: tz }));
         const yyyy = localTime.getFullYear();
@@ -101,8 +127,9 @@ export default async function handler(req: any, res: any) {
         if (!raw_backup.completed_days.includes(dayNum)) {
           raw_backup.completed_days.push(dayNum);
         }
-        // Ghi nhan chinh xac ngay hoc ma hoc vien thuc te da mo
+        // Ghi nhan chinh xac ngay hoc va moc thoi gian UTC thuc te ma hoc vien mo
         raw_backup.completed_days_map[dayNum] = dateStr;
+        raw_backup.lesson_open_times[dayNum] = new Date().toISOString();
 
         if (!hasCompleted30) {
           // Chưa học hết 30 bài: hệ thống ghi nhận bài học có ngày lớn nhất

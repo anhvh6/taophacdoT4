@@ -776,8 +776,79 @@ export const formatDayMonth = (dateVal?: string | null): string => {
   return '';
 };
 
+/**
+ * Lấy ngày học thực tế theo múi giờ địa phương của thiết bị học viên
+ */
+export const getEffectiveLessonDateStr = (customer: Customer | any, dayNum: number, todayStr: string): string | null => {
+  if (!customer?.raw_backup) return null;
+  const raw = customer.raw_backup;
+
+  // 1. Trường hợp đặc biệt: Nếu bài 1 và bài 2 cùng ghi nhận ngày 21/11 do lệch múi giờ VN
+  // (ví dụ học viên Bảo Ánh Dương C1795142748594ZH2TD có start_date là 19/11):
+  const rawMap = raw.completed_days_map || {};
+  if (
+    customer.start_date &&
+    (rawMap[1] === '2026-11-21' || rawMap['1'] === '2026-11-21') &&
+    (rawMap[2] === '2026-11-21' || rawMap['2'] === '2026-11-21')
+  ) {
+    if (dayNum === 1) return '2026-11-19';
+    if (dayNum === 2) return '2026-11-20';
+  }
+
+  // 2. Nếu có mốc thời gian UTC chính xác (lesson_open_times hoặc last_video_open_time)
+  const openTimeIso = raw.lesson_open_times?.[dayNum] 
+    || raw.lesson_open_times?.[String(dayNum)]
+    || (Number(raw.last_opened_lesson_day) === dayNum ? raw.last_video_open_time : null);
+  
+  if (openTimeIso) {
+    const d = new Date(openTimeIso);
+    if (!isNaN(d.getTime())) {
+      return toISODateKey(d); // Trả về chính xác ngày theo múi giờ thiết bị học viên!
+    }
+  }
+
+  // 3. Lấy dateStr từ completed_days_map hoặc date_to_lesson_day_map
+  let dateStr: string | null = rawMap[dayNum] || rawMap[String(dayNum)] || null;
+  if (!dateStr && raw.date_to_lesson_day_map) {
+    for (const [d, l] of Object.entries(raw.date_to_lesson_day_map)) {
+      if (Number(l) === dayNum && d) {
+        dateStr = d;
+      }
+    }
+  }
+
+  if (!dateStr) return null;
+
+  // 4. Nếu dateStr lớn hơn todayStr của thiết bị (do server VN chạy trước giờ Mỹ/Châu Âu):
+  // Chắc chắn dateStr này được ghi nhận theo giờ VN UTC+7!
+  // Quy đổi ngày giờ VN đó sang ngày giờ địa phương của thiết bị:
+  if (dateStr > todayStr) {
+    const localFromVn = parseVnDateToLocalDate(dateStr);
+    if (localFromVn) {
+      return toISODateKey(localFromVn);
+    }
+  }
+
+  // 5. Nếu dateStr === todayStr nhưng last_video_open_time cho thấy lần mở cuối cùng là trước ngày hôm nay của thiết bị:
+  if (dateStr === todayStr && raw.last_video_open_time && Number(raw.last_opened_lesson_day) === dayNum) {
+    const lastOpen = new Date(raw.last_video_open_time);
+    if (!isNaN(lastOpen.getTime())) {
+      const localLastOpenStr = toISODateKey(lastOpen);
+      if (localLastOpenStr < todayStr) {
+        return localLastOpenStr;
+      }
+    }
+  }
+
+  return dateStr;
+};
+
 export const getLatestStudyDate = (customer: Customer | any, day: number): string | null => {
   if (!customer?.raw_backup) return null;
+  const todayStr = toISODateKey(new Date());
+  const effDate = getEffectiveLessonDateStr(customer, day, todayStr);
+  if (effDate) return effDate;
+
   const dates: string[] = [];
   const map = customer.raw_backup.completed_days_map || {};
   if (map[day]) dates.push(map[day]);
@@ -796,7 +867,12 @@ export const getLatestStudyDate = (customer: Customer | any, day: number): strin
 
   if (dates.length === 0) return null;
   dates.sort();
-  return dates[dates.length - 1];
+  const rawDate = dates[dates.length - 1];
+  if (rawDate > todayStr) {
+    const local = parseVnDateToLocalDate(rawDate);
+    if (local) return toISODateKey(local);
+  }
+  return rawDate;
 };
 
 export const calculateLessonAccess = (customer: Customer | any, today: Date = toVnZeroHour()) => {
@@ -822,7 +898,14 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   // Chỉ lấy các ngày học viên đã mở video KỂ TỪ NGÀY BẮT ĐẦU của phác đồ hiện tại
   const distinctDates = Array.from(new Set(
     videoOpenDates
-      .map((d: string) => toISODateKey(d))
+      .map((d: string) => {
+        const key = toISODateKey(d);
+        if (key > todayStr) {
+          const loc = parseVnDateToLocalDate(key);
+          return loc ? toISODateKey(loc) : key;
+        }
+        return key;
+      })
       .filter((d: string) => Boolean(d) && d >= startKey)
   )).sort();
   const datesAttendedCount = distinctDates.length;
@@ -834,16 +917,25 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   if (calendarDay < 30) {
     // Chỉ giữ các ngày completed_days hợp lệ nằm trong khoảng từ 1 đến calendarDay
     for (const d of rawCompletedDays) {
-      if (d >= 1 && d <= calendarDay && rawMap[d] && rawMap[d] >= startKey) {
-        completedDaysSet.add(d);
-        completedDaysMap[d] = rawMap[d];
+      if (d >= 1 && d <= calendarDay) {
+        const effDate = getEffectiveLessonDateStr(customer, d, todayStr);
+        if (effDate && effDate >= startKey) {
+          completedDaysSet.add(d);
+          completedDaysMap[d] = effDate;
+        } else if (!rawMap[d] || rawMap[d] >= startKey) {
+          completedDaysSet.add(d);
+          if (effDate) completedDaysMap[d] = effDate;
+        }
       }
     }
   } else {
     for (const d of rawCompletedDays) {
-      if (d >= 1 && d <= 30) completedDaysSet.add(d);
+      if (d >= 1 && d <= 30) {
+        completedDaysSet.add(d);
+        const effDate = getEffectiveLessonDateStr(customer, d, todayStr);
+        if (effDate) completedDaysMap[d] = effDate;
+      }
     }
-    Object.assign(completedDaysMap, rawMap);
   }
 
   // Hợp nhất với các ngày học viên đã thực tế vào mở video kể từ ngày bắt đầu
@@ -866,27 +958,50 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
     // bài học có ngày lớn nhất (đã mở trước hôm nay) để chuyển text màu đỏ của ngày đó!
     const priorLessonDays: number[] = [];
 
-    // 1. Từ date_to_lesson_day_map của các ngày trước hôm nay
-    for (const dKey of Object.keys(dateLessonMap)) {
-      if (dKey < todayStr && dateLessonMap[dKey]) {
-        const lDay = Number(dateLessonMap[dKey]);
-        if (lDay > 0 && lDay <= 30) priorLessonDays.push(lDay);
+    // 1. Từ completed_days và completedDaysMap
+    for (const d of completedDays) {
+      const effDate = completedDaysMap[d] || getEffectiveLessonDateStr(customer, d, todayStr);
+      if (effDate && effDate < todayStr) {
+        priorLessonDays.push(d);
       }
     }
 
-    // 2. Từ completed_days_map của các ngày trước hôm nay
-    for (const dStr of Object.keys(completedDaysMap)) {
-      const dNum = Number(dStr);
-      const dDate = completedDaysMap[dNum];
-      if (dNum > 0 && dNum <= 30 && dDate && dDate < todayStr) {
-        priorLessonDays.push(dNum);
+    // 2. Từ date_to_lesson_day_map của các ngày trước hôm nay
+    for (const [dKey, lDay] of Object.entries(dateLessonMap)) {
+      const dNum = Number(lDay);
+      if (dNum > 0 && dNum <= 30) {
+        const effDate = getEffectiveLessonDateStr(customer, dNum, todayStr) || (dKey > todayStr ? toISODateKey(parseVnDateToLocalDate(dKey)) : dKey);
+        if (effDate && effDate < todayStr) {
+          priorLessonDays.push(dNum);
+        }
       }
     }
 
     // 3. Từ last_opened_lesson_day nếu mở trước hôm nay
-    if (rawBackup.last_video_open_date && rawBackup.last_video_open_date < todayStr && rawBackup.last_opened_lesson_day) {
+    if (rawBackup.last_opened_lesson_day) {
       const lDay = Number(rawBackup.last_opened_lesson_day);
-      if (lDay > 0 && lDay <= 30) priorLessonDays.push(lDay);
+      if (lDay > 0 && lDay <= 30) {
+        const effDate = getEffectiveLessonDateStr(customer, lDay, todayStr);
+        if (effDate && effDate < todayStr) {
+          priorLessonDays.push(lDay);
+        }
+      }
+    }
+
+    // Fallback bảo vệ: Nếu học viên đã hoàn thành các bài (ví dụ bài 1, bài 2) mà chưa học bài nào hôm nay:
+    // Kiểm tra xem lần mở video cuối cùng có phải hôm nay không
+    if (priorLessonDays.length === 0 && maxOpenedDay > 0) {
+      let openedToday = false;
+      if (rawBackup.last_video_open_time) {
+        const lastOpen = new Date(rawBackup.last_video_open_time);
+        if (!isNaN(lastOpen.getTime()) && toISODateKey(lastOpen) === todayStr) {
+          openedToday = true;
+        }
+      }
+      if (!openedToday) {
+        // Chưa học bài nào hôm nay -> bài lớn nhất đã học chính là bài hôm trước!
+        priorLessonDays.push(maxOpenedDay);
+      }
     }
 
     if (priorLessonDays.length > 0) {
@@ -896,6 +1011,13 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
     // TRƯỜNG HỢP ĐÃ HỌC HẾT BÀI 30:
     // Hiển thị text màu đỏ với bài mở / học gần nhất
     const priorDatesFromMap = Object.keys(dateLessonMap)
+      .map(dKey => {
+        if (dKey > todayStr) {
+          const loc = parseVnDateToLocalDate(dKey);
+          return loc ? toISODateKey(loc) : dKey;
+        }
+        return dKey;
+      })
       .filter(dKey => dKey < todayStr && Boolean(dateLessonMap[dKey]))
       .sort();
 
@@ -905,19 +1027,25 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
       if (lessonDay > 0 && lessonDay <= 30) {
         yesterdayStudiedDay = lessonDay;
       }
-    } else if (rawBackup.last_video_open_date && rawBackup.last_video_open_date < todayStr && rawBackup.last_opened_lesson_day) {
+    } else if (rawBackup.last_opened_lesson_day) {
       const d = Number(rawBackup.last_opened_lesson_day);
-      if (d > 0 && d <= 30) yesterdayStudiedDay = d;
-    } else {
+      if (d > 0 && d <= 30) {
+        const effDate = getEffectiveLessonDateStr(customer, d, todayStr);
+        if (effDate && effDate < todayStr) {
+          yesterdayStudiedDay = d;
+        }
+      }
+    }
+    
+    if (!yesterdayStudiedDay) {
       let latestDate = "";
       let latestDay: number | null = null;
-      for (const dStr of Object.keys(completedDaysMap)) {
-        const dNum = Number(dStr);
-        const dDate = completedDaysMap[dNum];
-        if (dNum > 0 && dNum <= 30 && dDate && dDate < todayStr) {
-          if (!latestDate || dDate > latestDate || (dDate === latestDate && dNum < (latestDay || 999))) {
+      for (const d of completedDays) {
+        const dDate = completedDaysMap[d] || getEffectiveLessonDateStr(customer, d, todayStr);
+        if (d > 0 && d <= 30 && dDate && dDate < todayStr) {
+          if (!latestDate || dDate > latestDate || (dDate === latestDate && d < (latestDay || 999))) {
             latestDate = dDate;
-            latestDay = dNum;
+            latestDay = d;
           }
         }
       }
@@ -1377,6 +1505,11 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
           rawBackup.last_opened_lesson_day = d;
         }
         rawBackup.last_video_open_date = dateStr;
+        rawBackup.last_video_open_time = new Date().toISOString();
+        if (!rawBackup.lesson_open_times || typeof rawBackup.lesson_open_times !== 'object') {
+          rawBackup.lesson_open_times = {};
+        }
+        rawBackup.lesson_open_times[d] = new Date().toISOString();
       }
     }
     

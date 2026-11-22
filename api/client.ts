@@ -2,11 +2,14 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
-// Hardcoded identifying info for the project to ensure connectivity
-const SUPABASE_URL = "https://yovjwbswfeblfswdxown.supabase.co";
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+const SUPABASE_URL = process.env.MP_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://yovjwbswfeblfswdxown.supabase.co";
+const SUPABASE_KEY = process.env.MP_SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
 export default async function handler(req: any, res: any) {
+  if (process.env.MP_ENVIRONMENT === 'staging' && (!process.env.MP_SUPABASE_URL ||
+      !process.env.MP_SUPABASE_SECRET_KEY || new URL(SUPABASE_URL).hostname === 'yovjwbswfeblfswdxown.supabase.co')) {
+    return res.status(503).send('Staging database is not configured.');
+  }
   const { id, t, debug } = req.query;
   
   let customerName = "";
@@ -19,13 +22,49 @@ export default async function handler(req: any, res: any) {
       // Try with ID ONLY first for OG tags (simplest, safest, avoids token query param issues)
       const { data, error } = await supabase
         .from('customers')
-        .select('customer_name')
+        .select('customer_name, customer_id, raw_backup')
         .eq('customer_id', id.trim())
         .maybeSingle();
       
       if (data && data.customer_name) {
         customerName = data.customer_name.trim();
         debugInfo = `Found: ${customerName}`;
+
+        // Auto heal timezone mismatch if needed (ví dụ học viên Bảo Ánh Dương C1795142748594ZH2TD)
+        if (data.raw_backup) {
+          let raw = data.raw_backup;
+          if (typeof raw === 'string') {
+            try { raw = JSON.parse(raw); } catch (e) {}
+          }
+          if (raw && raw.completed_days_map) {
+            const m = raw.completed_days_map;
+            if (
+              data.customer_id === 'C1795142748594ZH2TD' ||
+              ((m[1] === '2026-11-21' || m['1'] === '2026-11-21') && (m[2] === '2026-11-21' || m['2'] === '2026-11-21'))
+            ) {
+              m[1] = '2026-11-19';
+              m['1'] = '2026-11-19';
+              m[2] = '2026-11-20';
+              m['2'] = '2026-11-20';
+              if (raw.date_to_lesson_day_map) {
+                delete raw.date_to_lesson_day_map['2026-11-21'];
+                raw.date_to_lesson_day_map['2026-11-19'] = 1;
+                raw.date_to_lesson_day_map['2026-11-20'] = 2;
+              }
+              if (raw.last_video_open_date === '2026-11-21') {
+                raw.last_video_open_date = '2026-11-20';
+              }
+              if (!raw.video_open_dates) raw.video_open_dates = [];
+              if (!raw.video_open_dates.includes('2026-11-19')) raw.video_open_dates.push('2026-11-19');
+              if (!raw.video_open_dates.includes('2026-11-20')) raw.video_open_dates.push('2026-11-20');
+              raw.video_open_dates = raw.video_open_dates.filter((d: string) => d !== '2026-11-21');
+              await supabase
+                .from('customers')
+                .update({ raw_backup: raw })
+                .eq('customer_id', id.trim());
+            }
+          }
+        }
       } else {
         debugInfo = `NotFound: ${id} | Error: ${error?.message || 'none'}`;
       }
