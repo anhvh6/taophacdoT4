@@ -44,20 +44,21 @@ export default async function handler(req: any, res: any) {
             ) {
               m[1] = '2026-11-19';
               m['1'] = '2026-11-19';
-              m[2] = '2026-11-20';
-              m['2'] = '2026-11-20';
-              if (raw.date_to_lesson_day_map) {
-                delete raw.date_to_lesson_day_map['2026-11-21'];
-                raw.date_to_lesson_day_map['2026-11-19'] = 1;
-                raw.date_to_lesson_day_map['2026-11-20'] = 2;
-              }
-              if (raw.last_video_open_date === '2026-11-21') {
-                raw.last_video_open_date = '2026-11-20';
-              }
+              m[2] = '2026-11-21';
+              m['2'] = '2026-11-21';
+              if (!raw.date_to_lesson_day_map) raw.date_to_lesson_day_map = {};
+              delete raw.date_to_lesson_day_map['2026-11-20'];
+              raw.date_to_lesson_day_map['2026-11-19'] = 1;
+              raw.date_to_lesson_day_map['2026-11-21'] = 2;
+              raw.last_opened_lesson_day = 2;
+              raw.last_video_open_date = '2026-11-21';
               if (!raw.video_open_dates) raw.video_open_dates = [];
               if (!raw.video_open_dates.includes('2026-11-19')) raw.video_open_dates.push('2026-11-19');
-              if (!raw.video_open_dates.includes('2026-11-20')) raw.video_open_dates.push('2026-11-20');
-              raw.video_open_dates = raw.video_open_dates.filter((d: string) => d !== '2026-11-21');
+              if (!raw.video_open_dates.includes('2026-11-21')) raw.video_open_dates.push('2026-11-21');
+              raw.video_open_dates = raw.video_open_dates.filter((d: string) => d !== '2026-11-20');
+              if (!raw.completed_days) raw.completed_days = [];
+              if (!raw.completed_days.includes(1)) raw.completed_days.push(1);
+              if (!raw.completed_days.includes(2)) raw.completed_days.push(2);
               await supabase
                 .from('customers')
                 .update({ raw_backup: raw })

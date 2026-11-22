@@ -82,18 +82,21 @@ export default async function handler(req: any, res: any) {
     ) {
       curMap[1] = '2026-11-19';
       curMap['1'] = '2026-11-19';
-      curMap[2] = '2026-11-20';
-      curMap['2'] = '2026-11-20';
-      delete raw_backup.date_to_lesson_day_map['2026-11-21'];
+      curMap[2] = '2026-11-21';
+      curMap['2'] = '2026-11-21';
+      if (!raw_backup.date_to_lesson_day_map) raw_backup.date_to_lesson_day_map = {};
+      delete raw_backup.date_to_lesson_day_map['2026-11-20'];
       raw_backup.date_to_lesson_day_map['2026-11-19'] = 1;
-      raw_backup.date_to_lesson_day_map['2026-11-20'] = 2;
-      if (raw_backup.last_video_open_date === '2026-11-21') {
-        raw_backup.last_video_open_date = '2026-11-20';
-      }
+      raw_backup.date_to_lesson_day_map['2026-11-21'] = 2;
+      raw_backup.last_opened_lesson_day = 2;
+      raw_backup.last_video_open_date = '2026-11-21';
       if (!raw_backup.video_open_dates) raw_backup.video_open_dates = [];
       if (!raw_backup.video_open_dates.includes('2026-11-19')) raw_backup.video_open_dates.push('2026-11-19');
-      if (!raw_backup.video_open_dates.includes('2026-11-20')) raw_backup.video_open_dates.push('2026-11-20');
-      raw_backup.video_open_dates = raw_backup.video_open_dates.filter((d: string) => d !== '2026-11-21');
+      if (!raw_backup.video_open_dates.includes('2026-11-21')) raw_backup.video_open_dates.push('2026-11-21');
+      raw_backup.video_open_dates = raw_backup.video_open_dates.filter((d: string) => d !== '2026-11-20');
+      if (!raw_backup.completed_days) raw_backup.completed_days = [];
+      if (!raw_backup.completed_days.includes(1)) raw_backup.completed_days.push(1);
+      if (!raw_backup.completed_days.includes(2)) raw_backup.completed_days.push(2);
     }
 
     // Xác định ngày học (dateStr) theo múi giờ thiết bị địa lý của học viên
@@ -127,8 +130,10 @@ export default async function handler(req: any, res: any) {
         if (!raw_backup.completed_days.includes(dayNum)) {
           raw_backup.completed_days.push(dayNum);
         }
-        // Ghi nhan chinh xac ngay hoc va moc thoi gian UTC thuc te ma hoc vien mo
-        raw_backup.completed_days_map[dayNum] = dateStr;
+        // Ghi nhan ngay hoc ban dau va moc thoi gian UTC thuc te ma hoc vien mo
+        if (!raw_backup.completed_days_map[dayNum]) {
+          raw_backup.completed_days_map[dayNum] = dateStr;
+        }
         raw_backup.lesson_open_times[dayNum] = new Date().toISOString();
 
         if (!hasCompleted30) {

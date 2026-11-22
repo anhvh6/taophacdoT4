@@ -785,14 +785,19 @@ export const getEffectiveLessonDateStr = (customer: Customer | any, dayNum: numb
 
   // 1. Trường hợp đặc biệt: Nếu bài 1 và bài 2 cùng ghi nhận ngày 21/11 do lệch múi giờ VN
   // (ví dụ học viên Bảo Ánh Dương C1795142748594ZH2TD có start_date là 19/11):
+  if (customer.customer_id === 'C1795142748594ZH2TD') {
+    if (dayNum === 1) return '2026-11-19';
+    if (dayNum === 2) return '2026-11-21';
+  }
+
   const rawMap = raw.completed_days_map || {};
   if (
     customer.start_date &&
     (rawMap[1] === '2026-11-21' || rawMap['1'] === '2026-11-21') &&
     (rawMap[2] === '2026-11-21' || rawMap['2'] === '2026-11-21')
   ) {
-    if (dayNum === 1) return '2026-11-19';
-    if (dayNum === 2) return '2026-11-20';
+    if (dayNum === 1) return toISODateKey(getEffectiveLocalDate(customer.start_date) || customer.start_date) || '2026-11-19';
+    if (dayNum === 2) return '2026-11-21';
   }
 
   // 2. Nếu có mốc thời gian UTC chính xác (lesson_open_times hoặc last_video_open_time)
@@ -1085,19 +1090,21 @@ export const calculateLessonAccess = (customer: Customer | any, today: Date = to
   if (yesterdayStudiedDay && yesterdayStudiedDay > 0) {
     // QUY TẮC CỦA NGƯỜI DÙNG:
     // Bài kế tiếp của bài text màu đỏ đó sẽ được hiển thị và cho phép mở học!
-    unlockedDay = Math.min(30, yesterdayStudiedDay + 1);
+    // Đồng thời đảm bảo tất cả các bài học viên đã hoàn thành (maxOpenedDay) không bao giờ bị khóa!
+    unlockedDay = Math.min(30, Math.max(yesterdayStudiedDay + 1, maxOpenedDay));
   } else {
     // Nếu chưa có bài màu đỏ nào trước hôm nay (chưa học bài nào trước hôm nay):
     const isStudiedYesterdayOrToday = maxOpenedDay >= (calendarDay - 1);
     if (isStudiedYesterdayOrToday) {
-      unlockedDay = Math.min(30, calendarDay);
+      unlockedDay = Math.min(30, Math.max(calendarDay, maxOpenedDay));
     } else {
       unlockedDay = Math.min(30, Math.max(1, maxOpenedDay + 1));
     }
   }
 
   // Luôn hiển thị bài của ngày đang học (unlockedDay) và bài kế tiếp (unlockedDay + 1) ở dạng text xám khóa
-  const visibleDay = Math.min(30, unlockedDay + 1);
+  // Đồng thời đảm bảo tất cả bài đã hoàn thành (maxOpenedDay) và bài kế tiếp của nó đều hiển thị
+  const visibleDay = Math.min(30, Math.max(unlockedDay + 1, maxOpenedDay + 1));
   const activeDay = Math.min(30, Math.max(1, unlockedDay));
 
   return {
@@ -1151,7 +1158,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const [activeCampaign, setActiveCampaign] = useState<AdCampaign | null>(null);
   const hasAdPrompted = useRef(false);
 
-  const CLIENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 phút cache để tiết kiệm Egress cho gói Free
+  const CLIENT_CACHE_TTL_MS = 15 * 1000; // 15 giây cache giúp làm mới nhanh chóng mà vẫn có hiệu ứng tức thì
   const lastBackgroundRefreshRef = useRef<number>(0);
   const refreshInFlight = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -2064,8 +2071,9 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
   const handleTaskClick = (task: ExerciseTask) => {
     const today = toVnZeroHour();
     const access = calculateLessonAccess(customer, today);
+    const isAttended = (access.completedDays || customer?.raw_backup?.completed_days || []).includes(task.day);
 
-    if (access.isNotStarted) {
+    if (!isAttended && access.isNotStarted) {
       setInfoModal({ 
         isOpen: true, 
         title: "Chưa đến thời gian tập", 
@@ -2075,7 +2083,7 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
       return;
     }
 
-    if (task.day > access.unlockedDay) {
+    if (!isAttended && task.day > access.unlockedDay) {
       setInfoModal({ 
         isOpen: true, 
         title: "Chưa đến ngày mở bài", 
@@ -2532,18 +2540,17 @@ export const ClientView: React.FC<{ customerId: string; token?: string; onNaviga
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5" ref={gridRef}>
                   {Array.from({ length: 30 }, (_, i) => i + 1).map(day => {
-                    const isLocked = day > lessonAccess.unlockedDay || lessonAccess.isNotStarted;
-                    const isUnlocked = day <= lessonAccess.unlockedDay && !lessonAccess.isNotStarted;
+                    // Kiểm tra xem ngày này đã học chưa
+                    const isAttended = (lessonAccess.completedDays || customer.raw_backup?.completed_days || []).includes(day);
+                    const isLocked = !isAttended && (day > lessonAccess.unlockedDay || lessonAccess.isNotStarted);
+                    const isUnlocked = isAttended || (day <= lessonAccess.unlockedDay && !lessonAccess.isNotStarted);
                     const isActive = day === lessonAccess.activeDay && !lessonAccess.isNotStarted;
                     const dayTasks = tasks
                       .filter(t => t.day === day)
                       .sort((a, b) => (a.title || "").localeCompare(b.title || "", 'vi', { numeric: true }));
                     
-                    // Kiểm tra xem ngày này đã học chưa
-                    const isAttended = (lessonAccess.completedDays || customer.raw_backup?.completed_days || []).includes(day);
-                    
-                    // Ẩn các bài vượt quá ngày được hiển thị
-                    const shouldHide = day > lessonAccess.visibleDay;
+                    // Ẩn các bài vượt quá ngày được hiển thị (bài đã học KHÔNG BAO GIỜ bị ẩn)
+                    const shouldHide = !isAttended && day > lessonAccess.visibleDay;
                     if (shouldHide && !onNavigate && !isAdmin) return null;
 
                     const isYesterdayStudied = day === lessonAccess.yesterdayStudiedDay;
