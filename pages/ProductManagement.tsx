@@ -165,12 +165,17 @@ export const ProductManagement: React.FC<{ onNavigate: (page: string) => void, o
                       </td>
                       <td className="p-2 text-center">
                         <select 
-                          className="line-input text-[10px] text-center cursor-pointer" 
+                          className={`line-input text-[10px] text-center font-bold cursor-pointer rounded px-1 py-0.5 ${
+                            p.trang_thai === 0 ? 'bg-red-50 text-red-700 border border-red-200' :
+                            p.trang_thai === 2 ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                            'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}
                           value={p.trang_thai ?? 1} 
                           onChange={e => updateProduct(idx, { trang_thai: parseInt(e.target.value) || 0 })}
                         >
-                          <option value={1}>Còn hàng</option>
-                          <option value={0}>Hết hàng</option>
+                          <option value={1} className="text-emerald-700 font-semibold">Còn hàng / Đang bán</option>
+                          <option value={0} className="text-red-700 font-semibold">Ngừng bán</option>
+                          <option value={2} className="text-amber-700 font-semibold">Tạm hết hàng</option>
                         </select>
                       </td>
                       <td className="p-2 text-center">

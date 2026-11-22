@@ -6,5 +6,8 @@ const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env ?
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY');
 }
+if (import.meta.env.VITE_MP_ENVIRONMENT === 'staging' && new URL(supabaseUrl).hostname === 'yovjwbswfeblfswdxown.supabase.co') {
+  throw new Error('Staging cannot use the Production Supabase project.');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

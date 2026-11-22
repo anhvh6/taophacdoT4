@@ -94,6 +94,8 @@ export interface Customer {
   duration_days: number;
   video_date: string;
   status: CustomerStatus;
+  protocol_closed_at?: string|null;
+  protocol_close_reason?: string|null;
   sidebar_blocks_json: SidebarBlock[];
   link: string;
   token: string;

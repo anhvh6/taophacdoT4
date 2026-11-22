@@ -1,5 +1,5 @@
 
-import { Search, UserPlus, Users, Calendar, ExternalLink, Edit2, Copy, Package, Clock, AlertTriangle, CheckCircle, Archive, Zap, CopyPlus, UserCircle, Filter, Eraser, AlertCircle, X, Plus, Mail, MapPin, Truck, FileWarning, User, Play, List, ChevronDown, ChevronRight, ChevronLeft, Trash2, RefreshCw, ShoppingBag, Phone, ClipboardList, BookOpen, LogOut, BarChart3, Bell, Shield, Pin, DollarSign } from 'lucide-react';
+import { Search, UserPlus, Users, Calendar, ExternalLink, Edit2, Copy, Package, Clock, AlertTriangle, CheckCircle, Archive, Zap, CopyPlus, UserCircle, Filter, Eraser, AlertCircle, X, Plus, Mail, MapPin, Truck, FileWarning, User, Play, List, ChevronDown, ChevronRight, ChevronLeft, Trash2, RefreshCw, ShoppingBag, Phone, ClipboardList, BookOpen, LogOut, BarChart3, Bell, Shield, Pin, DollarSign, Download } from 'lucide-react';
 import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { Layout } from '../components/Layout';
 import { Card, Button, LineInput, Modal, Toast } from '../components/UI';
@@ -11,6 +11,7 @@ import { calcRevenueCostProfit, isChuaGan, buildProductMap, getProfitMonth } fro
 import { formatDDMM, formatDDMMYYYY, toISODateKey, parseVNDate, getDiffDays } from '../utils/date';
 import { matchesSearch, normalizeSearchText } from '../utils/search';
 import { ProfitChartModal } from '../components/ProfitChartModal';
+import { ACTIVE_STUDENT_DEFINITION, isActiveStudent } from '../utils/studentValidity';
 
 const formatVND = (num: number) => new Intl.NumberFormat('vi-VN').format(num);
 
@@ -148,6 +149,7 @@ const CustomerCardBase: React.FC<CustomerCardProps> = ({ customer, products, pro
             {customer.creator_email.substring(0, 2).toUpperCase()}
           </div>
         )}
+        {customer.protocol_closed_at && <span className="rounded bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800">ĐANG ĐÓNG</span>}
         {customer.is_deposit && !customer.is_consultation && (
           <div className="text-red-500 bg-red-50 rounded-full p-1 border border-red-100 shadow-sm" title="Đã đặt cọc">
             <DollarSign size={14} strokeWidth={2.5} />
@@ -277,7 +279,8 @@ const GroupHeader: React.FC<{
   filterFrom?: string;
   filterTo?: string;
   onFilterChange?: (from: string, to: string) => void;
-}> = ({ icon: Icon, title, count, colorClass, isCollapsed, onToggle, filterLabel, filterFrom, filterTo, onFilterChange }) => (
+  onDownloadNames?: () => void;
+}> = ({ icon: Icon, title, count, colorClass, isCollapsed, onToggle, filterLabel, filterFrom, filterTo, onFilterChange, onDownloadNames }) => (
   <div 
     onClick={onToggle}
     className={`flex flex-col sm:flex-row sm:items-center justify-between mb-5 mt-12 first:mt-0 ${colorClass} cursor-pointer hover:opacity-80 transition-all select-none group gap-3`}
@@ -286,7 +289,22 @@ const GroupHeader: React.FC<{
       <div className="w-1.5 h-6 bg-current opacity-30 rounded-full"></div>
       <Icon size={22} strokeWidth={3} className="opacity-80" />
       <h3 className="text-[14px] font-black uppercase tracking-[0.15em] flex items-center">
-        {title} <span className="ml-2 px-2 py-0.5 bg-current/10 rounded-lg text-[11px]">{count}</span>
+        {title}
+        {onDownloadNames ? (
+          <span 
+            onClick={(e) => {
+              e.stopPropagation();
+              onDownloadNames();
+            }}
+            title="Nhấn vào số lượng để tải về file danh sách tên học viên (.txt)"
+            className="ml-2 px-2.5 py-0.5 bg-current/10 hover:bg-current/25 hover:scale-105 active:scale-95 rounded-lg text-[11px] cursor-pointer transition-all inline-flex items-center gap-1 font-bold shadow-xs border border-current/15"
+          >
+            <span>{count}</span>
+            <Download size={11} className="opacity-70 group-hover:opacity-100" />
+          </span>
+        ) : (
+          <span className="ml-2 px-2 py-0.5 bg-current/10 rounded-lg text-[11px]">{count}</span>
+        )}
       </h3>
     </div>
     <div className="flex items-center gap-3">
@@ -331,8 +349,9 @@ export const Dashboard: React.FC<{
   onDelete: (id: string) => Promise<any>;
   onLogout: () => void;
   currentUserRole?: string;
+  canManageIntegrations?: boolean;
   checkPermission?: (perm: string) => boolean;
-}> = ({ onNavigate, initialAction, filterStatus, customers, products, loading, onRefresh, onUpsert, onDelete, onLogout, currentUserRole = 'super_admin', checkPermission }) => {
+}> = ({ onNavigate, initialAction, filterStatus, customers, products, loading, onRefresh, onUpsert, onDelete, onLogout, currentUserRole = 'super_admin', canManageIntegrations = false, checkPermission }) => {
   const hasPerm = (perm: string) => checkPermission ? checkPermission(perm) : true;
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -530,6 +549,45 @@ export const Dashboard: React.FC<{
     } catch (err) {
       console.error('Fallback copy failed', err);
     }
+  };
+
+  const handleExportGroupNames = (groupTitle: string, list: Customer[]) => {
+    if (!list || list.length === 0) {
+      setToast(`Nhóm "${groupTitle}" hiện không có học viên nào để tải về.`);
+      return;
+    }
+    const names = list
+      .map(c => (c.customer_name || '').trim())
+      .filter(Boolean);
+
+    if (names.length === 0) {
+      setToast(`Không tìm thấy tên học viên nào trong nhóm "${groupTitle}".`);
+      return;
+    }
+
+    const fileContent = '\uFEFF' + names.join('\r\n');
+    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const cleanTitle = groupTitle
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/[^a-z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+
+    link.href = url;
+    link.download = `danh_sach_${cleanTitle || 'hoc_vien'}_${dateStr}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setToast(`Đã tải về danh sách ${names.length} học viên nhóm "${groupTitle}"`);
   };
 
   const handleAddStudent = () => {
@@ -751,13 +809,13 @@ export const Dashboard: React.FC<{
         else if (dashboardFilter === 'consultation') matchFilter = !!c.is_consultation;
         else if (dashboardFilter === 'deposit') matchFilter = !!c.is_deposit;
         else if (dashboardFilter === 'active') {
-          const { currentDay, daysLeft } = calcInfo(c);
-          matchFilter = !!c.video_date && String(c.video_date).trim() !== "" && currentDay >= 1 && daysLeft >= 0 && daysLeft > 5;
+          matchFilter = isActiveStudent(c);
         }
         else if (dashboardFilter === 'expiring') {
           const { daysLeft } = calcInfo(c);
-          matchFilter = daysLeft >= 0 && daysLeft <= 5;
+          matchFilter = isActiveStudent(c) && daysLeft >= 0 && daysLeft <= 5;
         }
+        else if(dashboardFilter==='closed') matchFilter=!!c.protocol_closed_at&&c.status!==CustomerStatus.DELETED;
       }
 
       let matchCreator = true;
@@ -814,6 +872,7 @@ export const Dashboard: React.FC<{
     const active: Customer[] = [];
     const notStarted: Customer[] = [];
     const expired: Customer[] = [];
+    const closed: Customer[] = [];
 
     const isSearching = deferredSearchTerm.trim() !== "";
 
@@ -848,6 +907,10 @@ export const Dashboard: React.FC<{
       const matchGlobalDate = isSearching || videoOpenFilter || ((!dateFrom || createdAtISO >= dateFrom) && (!dateTo || createdAtISO <= dateTo));
 
       if (isNewToday) newToday.push(c);
+      if(c.protocol_closed_at) {
+        if(matchGlobalDate) closed.push(c);
+        return;
+      }
 
       if (c.is_consultation) {
         if (matchGlobalDate) consultation.push(c);
@@ -885,18 +948,11 @@ export const Dashboard: React.FC<{
     notStarted.sort((a, b) => calcInfo(a).start.getTime() - calcInfo(b).start.getTime());
     expired.sort((a, b) => (calcInfo(b).start.getTime() + (b.duration_days || 0) * 86400000) - (calcInfo(a).start.getTime() + (a.duration_days || 0) * 86400000));
 
-    return { newToday, consultation, deposit, noPlan, expiring, active, notStarted, expired, deleted };
+    return { newToday, consultation, deposit, noPlan, expiring, active, notStarted, expired, deleted, closed };
   }, [filteredBySearch, todayStr, dateFilters, dateFrom, dateTo, deferredSearchTerm, videoOpenFilter]);
 
   const summaryStats = useMemo(() => {
-    // Calculate "Hoạt động" count independent of date filter
-    // but still respecting search term and color filter
-    const totalActiveCount = filteredBySearch.filter(c => {
-      if (c.status === CustomerStatus.DELETED) return false;
-      const { currentDay, daysLeft } = calcInfo(c);
-      const hasPlan = !!c.video_date && String(c.video_date).trim() !== "";
-      return hasPlan && currentDay >= 1 && daysLeft >= 0 && daysLeft > 5;
-    }).length;
+    const totalActiveCount = customers.filter(c=>isActiveStudent(c)).length;
 
     return { 
       new: groups.newToday.length, 
@@ -1080,6 +1136,12 @@ export const Dashboard: React.FC<{
               </button>
             </>
           )}
+          {canManageIntegrations && (
+            <button type="button" onClick={() => onNavigate('connections')}
+              className="flex items-center px-1.5 py-1 text-[11px] sm:text-xs font-bold uppercase tracking-tight text-slate-600 hover:text-blue-600 hover:bg-slate-100/70 rounded transition-colors whitespace-nowrap">
+              Kết nối
+            </button>
+          )}
           <button 
             type="button"
             onClick={onLogout}
@@ -1098,7 +1160,7 @@ export const Dashboard: React.FC<{
              <div onClick={() => setDashboardFilter(dashboardFilter === 'noPlan' ? null : 'noPlan')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'noPlan' ? 'bg-red-50 sm:bg-transparent text-red-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><FileWarning size={14} className="text-red-500" /> {summaryStats.noPlan} Chưa có PĐ</div>
              <div onClick={() => setDashboardFilter(dashboardFilter === 'consultation' ? null : 'consultation')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'consultation' ? 'bg-purple-50 sm:bg-transparent text-purple-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><Phone size={14} className="text-purple-500" /> {summaryStats.consultation} Chưa TV</div>
              <div onClick={() => setDashboardFilter(dashboardFilter === 'deposit' ? null : 'deposit')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'deposit' ? 'bg-pink-50 sm:bg-transparent text-pink-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><DollarSign size={14} className="text-pink-500" /> {summaryStats.deposit} Đặt cọc</div>
-             <div onClick={() => setDashboardFilter(dashboardFilter === 'active' ? null : 'active')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'active' ? 'bg-green-50 sm:bg-transparent text-green-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><CheckCircle size={14} className="text-green-500" /> {summaryStats.active} Hoạt động</div>
+             <div onClick={() => setDashboardFilter(dashboardFilter === 'active' ? null : 'active')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'active' ? 'bg-green-50 sm:bg-transparent text-green-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`} title="Tổng học viên có phác đồ đang hoạt động (gồm đang tập và sắp hết hạn)"><CheckCircle size={14} className="text-green-500" /> {summaryStats.active} Hoạt động</div>
              <div onClick={() => setDashboardFilter(dashboardFilter === 'expiring' ? null : 'expiring')} className={`flex items-center gap-2 p-2 rounded-xl sm:p-0 cursor-pointer transition-all ${dashboardFilter === 'expiring' ? 'bg-amber-50 sm:bg-transparent text-amber-600 sm:text-blue-900 scale-105 sm:scale-100' : 'bg-white border border-blue-50 sm:border-none hover:opacity-70'}`}><AlertTriangle size={14} className="text-orange-400" /> {summaryStats.expiring} Sắp hết hạn</div>
              <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-blue-50 sm:border-none sm:p-0"><Clock size={14} className="text-blue-500" /> {summaryStats.total} Tổng</div>
              {hasPerm('view_financials') && (
@@ -1112,6 +1174,7 @@ export const Dashboard: React.FC<{
              )}
           </div>
           
+          <p className="px-1 text-xs text-slate-500">Hoạt động: {ACTIVE_STUDENT_DEFINITION} (Tổng {summaryStats.active} học viên đang hoạt động, gồm {groups.active.length} đang tập và {groups.expiring.length} sắp hết hạn).</p>
           <div className="flex overflow-x-auto gap-3 sm:gap-x-4 sm:gap-y-2 mt-1 px-1 items-center scrollbar-hide pb-2 sm:pb-0">
              <button onClick={() => setVideoOpenFilter(!videoOpenFilter)} className={`shrink-0 group flex items-center gap-2 transition-all p-2 px-3 rounded-xl border ${videoOpenFilter ? 'bg-indigo-50 border-indigo-200 shadow-sm scale-105' : 'bg-white border-blue-50 sm:bg-transparent sm:border-transparent opacity-70 hover:opacity-100 hover:bg-gray-50'}`}>
                 <div className={`w-2.5 h-2.5 rounded-full ${videoOpenFilter ? 'bg-indigo-600 animate-pulse' : 'bg-indigo-400'}`}></div>
@@ -1179,7 +1242,7 @@ export const Dashboard: React.FC<{
           <div className="flex flex-col gap-6 px-1">
             {groups.newToday.length > 0 && (
               <div>
-                <GroupHeader icon={Zap} title="Mới tạo hôm nay" count={groups.newToday.length} colorClass="text-orange-700" isCollapsed={!!collapsedGroups['newToday'] && !isSearching} onToggle={() => toggleGroup('newToday')} />
+                <GroupHeader icon={Zap} title="Mới tạo hôm nay" count={groups.newToday.length} colorClass="text-orange-700" isCollapsed={!!collapsedGroups['newToday'] && !isSearching} onToggle={() => toggleGroup('newToday')} onDownloadNames={() => handleExportGroupNames("Mới tạo hôm nay", groups.newToday)} />
                 {(!collapsedGroups['newToday'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
                     {groups.newToday.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-orange-600" groupIcon={Zap} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
@@ -1189,7 +1252,7 @@ export const Dashboard: React.FC<{
             )}
             {groups.noPlan.length > 0 && (
               <div id="group-noPlan">
-                <GroupHeader icon={FileWarning} title="Chưa có Phác đồ" count={groups.noPlan.length} colorClass="text-red-700" isCollapsed={!!collapsedGroups['noPlan'] && !isSearching} onToggle={() => toggleGroup('noPlan')} />
+                <GroupHeader icon={FileWarning} title="Chưa có Phác đồ" count={groups.noPlan.length} colorClass="text-red-700" isCollapsed={!!collapsedGroups['noPlan'] && !isSearching} onToggle={() => toggleGroup('noPlan')} onDownloadNames={() => handleExportGroupNames("Chưa có Phác đồ", groups.noPlan)} />
                 {(!collapsedGroups['noPlan'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
                     {groups.noPlan.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-red-500" groupIcon={FileWarning} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
@@ -1199,7 +1262,7 @@ export const Dashboard: React.FC<{
             )}
             {groups.deposit.length > 0 && (
               <div id="group-deposit">
-                <GroupHeader icon={DollarSign} title="Đặt cọc" count={groups.deposit.length} colorClass="text-pink-700" isCollapsed={!!collapsedGroups['deposit'] && !isSearching} onToggle={() => toggleGroup('deposit')} />
+                <GroupHeader icon={DollarSign} title="Đặt cọc" count={groups.deposit.length} colorClass="text-pink-700" isCollapsed={!!collapsedGroups['deposit'] && !isSearching} onToggle={() => toggleGroup('deposit')} onDownloadNames={() => handleExportGroupNames("Đặt cọc", groups.deposit)} />
                 {(!collapsedGroups['deposit'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
                     {groups.deposit.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-pink-600" groupIcon={DollarSign} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
@@ -1209,7 +1272,7 @@ export const Dashboard: React.FC<{
             )}
             {groups.consultation.length > 0 && (
               <div id="group-consultation">
-                <GroupHeader icon={Phone} title="Chưa tư vấn" count={groups.consultation.length} colorClass="text-purple-700" isCollapsed={!!collapsedGroups['consultation'] && !isSearching} onToggle={() => toggleGroup('consultation')} />
+                <GroupHeader icon={Phone} title="Chưa tư vấn" count={groups.consultation.length} colorClass="text-purple-700" isCollapsed={!!collapsedGroups['consultation'] && !isSearching} onToggle={() => toggleGroup('consultation')} onDownloadNames={() => handleExportGroupNames("Chưa tư vấn", groups.consultation)} />
                 {(!collapsedGroups['consultation'] || isSearching) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
                     {groups.consultation.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-purple-600" groupIcon={Phone} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
@@ -1219,7 +1282,7 @@ export const Dashboard: React.FC<{
             )}
             {/* Always show groups with filters even if length is 0 */}
             <div id="group-expiring">
-              <GroupHeader icon={AlertTriangle} title="Sắp hết hạn" count={groups.expiring.length} colorClass="text-amber-700" isCollapsed={!!collapsedGroups['expiring'] && !isSearching} onToggle={() => toggleGroup('expiring')} filterLabel="Hết hạn từ" filterFrom={dateFilters.expiring.from} filterTo={dateFilters.expiring.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, expiring: {from, to}})} />
+              <GroupHeader icon={AlertTriangle} title="Sắp hết hạn" count={groups.expiring.length} colorClass="text-amber-700" isCollapsed={!!collapsedGroups['expiring'] && !isSearching} onToggle={() => toggleGroup('expiring')} filterLabel="Hết hạn từ" filterFrom={dateFilters.expiring.from} filterTo={dateFilters.expiring.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, expiring: {from, to}})} onDownloadNames={() => handleExportGroupNames("Sắp hết hạn", groups.expiring)} />
               {(!collapsedGroups['expiring'] || isSearching) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
                   {groups.expiring.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-amber-500" groupIcon={AlertTriangle} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
@@ -1229,7 +1292,7 @@ export const Dashboard: React.FC<{
             </div>
 
             <div id="group-active">
-              <GroupHeader icon={CheckCircle} title="Hoạt động" count={groups.active.length} colorClass="text-green-800" isCollapsed={!!collapsedGroups['active'] && !isSearching} onToggle={() => toggleGroup('active')} filterLabel="Bắt đầu từ" filterFrom={dateFilters.active.from} filterTo={dateFilters.active.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, active: {from, to}})} />
+              <GroupHeader icon={CheckCircle} title="Hoạt động" count={groups.active.length} colorClass="text-green-800" isCollapsed={!!collapsedGroups['active'] && !isSearching} onToggle={() => toggleGroup('active')} filterLabel="Bắt đầu từ" filterFrom={dateFilters.active.from} filterTo={dateFilters.active.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, active: {from, to}})} onDownloadNames={() => handleExportGroupNames("Hoạt động", groups.active)} />
               {(!collapsedGroups['active'] || isSearching) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
                   {groups.active.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-green-600" groupIcon={CheckCircle} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
@@ -1239,7 +1302,7 @@ export const Dashboard: React.FC<{
             </div>
 
             <div id="group-notStarted">
-              <GroupHeader icon={Clock} title="Chưa bắt đầu" count={groups.notStarted.length} colorClass="text-blue-800" isCollapsed={!!collapsedGroups['notStarted'] && !isSearching} onToggle={() => toggleGroup('notStarted')} filterLabel="Bắt đầu từ" filterFrom={dateFilters.notStarted.from} filterTo={dateFilters.notStarted.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, notStarted: {from, to}})} />
+              <GroupHeader icon={Clock} title="Chưa bắt đầu" count={groups.notStarted.length} colorClass="text-blue-800" isCollapsed={!!collapsedGroups['notStarted'] && !isSearching} onToggle={() => toggleGroup('notStarted')} filterLabel="Bắt đầu từ" filterFrom={dateFilters.notStarted.from} filterTo={dateFilters.notStarted.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, notStarted: {from, to}})} onDownloadNames={() => handleExportGroupNames("Chưa bắt đầu", groups.notStarted)} />
               {(!collapsedGroups['notStarted'] || isSearching) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
                   {groups.notStarted.map(c => <CustomerCard key={c.customer_id} customer={c} products={products} productMap={productMap} onEdit={(id) => onNavigate('plan-editor', { customerId: id, returnTo: 'dashboard' })} onPreview={(id, token) => onNavigate('preview', { customerId: id, token })} onDuplicate={(id) => onNavigate('plan-editor', { templateId: id })} onCopyPlan={handleCopyPlan} onDetail={(id) => onNavigate('management', { customerId: id })} onCopyLink={handleCopyLink} onCopyName={handleCopyName} groupColor="text-blue-500" groupIcon={Clock} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle} />)}
@@ -1249,7 +1312,7 @@ export const Dashboard: React.FC<{
             </div>
 
             <div id="group-expired">
-              <GroupHeader icon={Archive} title="Đã kết thúc" count={groups.expired.length} colorClass="text-red-800" isCollapsed={!!collapsedGroups['expired'] && !isSearching} onToggle={() => toggleGroup('expired')} filterLabel="Hết hạn từ" filterFrom={dateFilters.expired.from} filterTo={dateFilters.expired.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, expired: {from, to}})} />
+              <GroupHeader icon={Archive} title="Đã kết thúc" count={groups.expired.length} colorClass="text-red-800" isCollapsed={!!collapsedGroups['expired'] && !isSearching} onToggle={() => toggleGroup('expired')} filterLabel="Hết hạn từ" filterFrom={dateFilters.expired.from} filterTo={dateFilters.expired.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, expired: {from, to}})} onDownloadNames={() => handleExportGroupNames("Đã kết thúc", groups.expired)} />
               {(!collapsedGroups['expired'] || isSearching) && (
                 <div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
@@ -1282,7 +1345,7 @@ export const Dashboard: React.FC<{
             </div>
 
             <div>
-              <GroupHeader icon={Trash2} title="Đã xóa" count={groups.deleted.length} colorClass="text-gray-500" isCollapsed={!!collapsedGroups['deleted'] && !isSearching} onToggle={() => toggleGroup('deleted')} filterLabel="Ngày xóa từ" filterFrom={dateFilters.deleted.from} filterTo={dateFilters.deleted.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, deleted: {from, to}})} />
+              <GroupHeader icon={Trash2} title="Đã xóa" count={groups.deleted.length} colorClass="text-gray-500" isCollapsed={!!collapsedGroups['deleted'] && !isSearching} onToggle={() => toggleGroup('deleted')} filterLabel="Ngày xóa từ" filterFrom={dateFilters.deleted.from} filterTo={dateFilters.deleted.to} onFilterChange={(from, to) => setDateFilters({...dateFilters, deleted: {from, to}})} onDownloadNames={() => handleExportGroupNames("Đã xóa", groups.deleted)} />
               {(!collapsedGroups['deleted'] || isSearching) && (
                 <div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300 opacity-70 grayscale-[0.3]">
@@ -1313,7 +1376,26 @@ export const Dashboard: React.FC<{
                 </div>
               )}
             </div>
-            {groups.newToday.length === 0 && groups.expiring.length === 0 && groups.active.length === 0 && groups.notStarted.length === 0 && groups.expired.length === 0 && groups.deleted.length === 0 && !loading && (
+            {groups.closed.length>0 && <section className="mt-8 space-y-4">
+              <h3 className="font-bold text-amber-800 flex items-center gap-2">
+                <span>PHÁC ĐỒ ĐANG ĐÓNG</span>
+                <span>·</span>
+                <span 
+                  onClick={(e) => { e.stopPropagation(); handleExportGroupNames("Phác đồ đang đóng", groups.closed); }}
+                  title="Nhấn vào số lượng để tải về file danh sách tên học viên (.txt)"
+                  className="px-2 py-0.5 bg-amber-800/10 hover:bg-amber-800/25 hover:scale-105 active:scale-95 rounded-lg text-[11px] cursor-pointer transition-all inline-flex items-center gap-1 font-bold shadow-xs border border-amber-800/15"
+                >
+                  <span>{groups.closed.length}</span>
+                  <Download size={11} className="opacity-70 hover:opacity-100" />
+                </span>
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{groups.closed.map(c=><CustomerCard key={c.customer_id}
+                customer={c} products={products} productMap={productMap} onEdit={id=>onNavigate('plan-editor',{customerId:id,returnTo:'dashboard'})}
+                onPreview={(id,token)=>onNavigate('preview',{customerId:id,token})} onDuplicate={id=>onNavigate('plan-editor',{templateId:id})}
+                onCopyPlan={handleCopyPlan} onDetail={id=>onNavigate('management',{customerId:id})} onCopyLink={handleCopyLink} onCopyName={handleCopyName}
+                groupColor="text-amber-800" groupIcon={Archive} checkPermission={checkPermission} onFilterCreator={handleCreatorFilterToggle}/>)}</div>
+            </section>}
+            {groups.newToday.length === 0 && groups.closed.length===0 && groups.expiring.length === 0 && groups.active.length === 0 && groups.notStarted.length === 0 && groups.expired.length === 0 && groups.deleted.length === 0 && !loading && (
               <div className="py-24 text-center bg-gray-50/50 rounded-[2.5rem] border border-dashed border-gray-200">
                 <p className="text-gray-400 italic text-sm font-medium">Hệ thống không tìm thấy học viên nào khớp với bộ lọc...</p>
               </div>

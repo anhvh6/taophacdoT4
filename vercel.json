@@ -6,6 +6,18 @@
   },
   "rewrites": [
     {
+      "source": "/api/v1/:path*",
+      "destination": "/api/mp-integration?mp_route=:path*"
+    },
+    {
+      "source": "/api/webhooks/pancake-pos",
+      "destination": "/api/mp-integration?mp_route=@webhook"
+    },
+    {
+      "source": "/mcp",
+      "destination": "/api/mp-integration?mp_route=@mcp"
+    },
+    {
       "source": "/client/:id",
       "destination": "/api/client?id=:id"
     },
@@ -13,5 +25,7 @@
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "framework": "vite",
+  "outputDirectory": "dist"
 }

@@ -16,13 +16,14 @@ const ProductManagement = React.lazy(() => import('./pages/ProductManagement').t
 const ClientView = React.lazy(() => import('./pages/ClientView').then(m => ({ default: m.ClientView })));
 const VideoGroupManagement = React.lazy(() => import('./pages/VideoGroupManagement').then(m => ({ default: m.VideoGroupManagement })));
 const AnalyticsDashboard = React.lazy(() => import('./pages/AnalyticsDashboard').then(m => ({ default: m.AnalyticsDashboard })));
+const IntegrationsManagement = React.lazy(() => import('./pages/IntegrationsManagement').then(m => ({ default: m.IntegrationsManagement })));
 const PermissionsManagement = React.lazy(() => import('./pages/PermissionsManagement').then(m => ({ default: m.PermissionsManagement })));
 const AdminUsersManagement = React.lazy(() => import('./pages/AdminUsersManagement').then(m => ({ default: m.AdminUsersManagement })));
 const AdCampaignManagement = React.lazy(() => import('./pages/AdCampaignManagement'));
 const MigrationTool = React.lazy(() => import('./src/pages/MigrationTool').then(m => ({ default: m.MigrationTool })));
 
 
-type Page = 'dashboard' | 'management' | 'plan-editor' | 'products' | 'preview' | 'video-groups' | 'login' | 'migrate' | 'analytics' | 'permissions' | 'admin-users' | 'ad-campaigns';
+type Page = 'dashboard' | 'management' | 'plan-editor' | 'products' | 'preview' | 'video-groups' | 'login' | 'migrate' | 'analytics' | 'integrations' | 'permissions' | 'admin-users' | 'ad-campaigns';
 
 const APP_MODE = import.meta.env.VITE_APP_MODE || 'admin';
 
@@ -49,6 +50,7 @@ const App: React.FC = () => {
     if (path === '#/products') return 'products';
     if (path === '#/video-groups') return 'video-groups';
     if (path === '#/analytics') return 'analytics';
+    if (path === '#/connections' || path === '#/integrations') return 'integrations';
     if (path === '#/permissions') return 'permissions';
     if (path === '#/admin-users') return 'admin-users';
     if (path === '#/ad-campaigns') return 'ad-campaigns';
@@ -155,8 +157,11 @@ const App: React.FC = () => {
         const { data: { session } } = await auth.getSession();
         setSession(session);
         if (session) {
-          auth.isAdmin(session.user.id).then(setIsAdmin);
-          auth.getAdminRole(session.user.id).then(setAdminRole);
+          const [admin, role] = await Promise.all([
+            auth.isAdmin(session.user.id), auth.getAdminRole(session.user.id)
+          ]);
+          setIsAdmin(admin);
+          setAdminRole(role);
         }
       } catch (e) {
         console.error("Auth init failed:", e);
@@ -424,6 +429,9 @@ const App: React.FC = () => {
       } else if (path === '#/analytics') {
         setCurrentPage('analytics');
         setPageParams({});
+      } else if (path === '#/connections' || path === '#/integrations') {
+        setCurrentPage('integrations');
+        setPageParams({});
       } else if (path === '#/permissions') {
         setCurrentPage('permissions');
         setPageParams({});
@@ -471,6 +479,7 @@ const App: React.FC = () => {
       products: 'view_products',
       'video-groups': 'save_template',
       analytics: 'view_reports',
+      integrations: 'super_admin_only',
       'plan-editor': 'view_plan',
       permissions: 'super_admin_only',
       'admin-users': 'super_admin_only'
@@ -687,6 +696,7 @@ const App: React.FC = () => {
               onDelete={handleDeleteCustomer}
               onLogout={handleLogout}
               currentUserRole={adminRole || 'super_admin'}
+              canManageIntegrations={adminRole === 'super_admin'}
               checkPermission={checkPermission}
             />
           )}
@@ -725,6 +735,9 @@ const App: React.FC = () => {
           )}
           {currentPage === 'analytics' && (
             <AnalyticsDashboard onNavigate={navigate} customers={customers} products={products} checkPermission={checkPermission} />
+          )}
+          {currentPage === 'integrations' && adminRole === 'super_admin' && (
+            <IntegrationsManagement onNavigate={navigate} />
           )}
           {currentPage === 'permissions' && (
             <PermissionsManagement onNavigate={navigate} currentUserRole={adminRole || 'super_admin'} />

@@ -15,6 +15,7 @@ import { calcRevenueCostProfit, isChuaGan, buildProductMap, getProfitMonth } fro
 import { toVnZeroHour, getDiffDays, formatDDMM, formatDDMMYYYY, toInputDateString, toISODateKey, parseVNDate, addDays } from '../utils/date';
 import { matchesSearch } from '../utils/search';
 import { ProfitChartModal } from '../components/ProfitChartModal';
+import { StudentAutomationHistory } from '../components/StudentAutomationHistory';
 import { generateCustomerLink } from '../src/services/customerService';
 
 const getCustomerCategory = (c: Customer, products: Product[], productMap?: Map<string, Product>): 'orange' | 'green' | 'gray' | 'brown' | null => {
@@ -799,6 +800,9 @@ export const CustomerManagement: React.FC<{
             </div>
           </div>
 
+          {!isNew && currentUserRole==='super_admin' && <div className="max-h-72 overflow-y-auto px-6 sm:px-10 pb-4 shrink-0">
+            <StudentAutomationHistory key={customer.customer_id} studentId={customer.customer_id}/>
+          </div>}
           <div className="p-6 sm:p-8 bg-blue-50/50 border-t border-blue-50 flex flex-col sm:flex-row justify-between gap-3 sm:gap-4 shrink-0">
             <div>
               {!isNew && hasPerm('delete_student') && (

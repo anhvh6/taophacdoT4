@@ -36,6 +36,7 @@ import {
 import { Customer, Product, CustomerStatus } from '../types';
 import { calcRevenueCostProfit, getProfitMonth } from '../utils/finance';
 import { toISODateKey, parseVNDate } from '../utils/date';
+import { ACTIVE_STUDENT_DEFINITION, studentValidity } from '../utils/studentValidity';
 
 const formatVND = (num: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
 const formatNumber = (num: number) => new Intl.NumberFormat('vi-VN').format(num);
@@ -158,10 +159,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
     
     // Student Status
     const statusCounts = {
+      closed:0,
       active: 0,
       noPlan: 0,
       expiring: 0,
-      expired: 0
+      expired: 0,
+      notStarted: 0
     };
     
     // Monthly Data for Year Chart
@@ -209,31 +212,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
       }
       
       // Status Logic
-      const hasPlan = !!c.video_date && String(c.video_date).trim() !== "";
-      const start = parseVNDate(c.start_date) || new Date();
-      const end = parseVNDate(c.end_date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const diff = today.getTime() - start.getTime();
-      const currentDay = Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
-      
-      let daysLeft = 0;
-      if (end) {
-        const diffEnd = end.getTime() - today.getTime();
-        daysLeft = Math.ceil(diffEnd / (1000 * 60 * 60 * 24));
-      } else {
-        daysLeft = (c.duration_days || 30) - (currentDay > 0 ? currentDay : 0);
-      }
-      
-      if (!hasPlan) statusCounts.noPlan++;
-      else if (currentDay < 1) {
-        // "Chưa bắt đầu" is now ignored or merged into active for the chart as per request to remove it
-        statusCounts.active++; 
-      }
-      else if (daysLeft < 0) statusCounts.expired++;
-      else if (daysLeft <= 5) statusCounts.expiring++;
-      else statusCounts.active++;
+      const validity=studentValidity(c);
+      if(c.protocol_closed_at) statusCounts.closed++;
+      else if (validity.active) {
+        statusCounts.active++;
+        if (validity.daysLeft!<=5) statusCounts.expiring++;
+      } else if(validity.dataIssue) statusCounts.noPlan++;
+      else if(validity.daysSinceStart!<0) statusCounts.notStarted++;
+      else statusCounts.expired++;
     });
 
     const profitContribution = totalProfit === 0 ? 0 : (currentCycleProfit / totalProfit) * 100;
@@ -286,8 +272,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
   }, [growthData]);
 
   const pieData = [
+    {name:'Phác đồ đang đóng',value:stats.statusCounts.closed,color:'#B45309',statusKey:'closed'},
     { name: 'Đang hoạt động', value: stats.statusCounts.active, color: '#10B981', statusKey: 'active' },
-    { name: 'Sắp hết hạn', value: stats.statusCounts.expiring, color: '#F59E0B', statusKey: 'expiring' },
+    { name: 'Chưa bắt đầu', value: stats.statusCounts.notStarted, color: '#F59E0B', statusKey: 'notStarted' },
     { name: 'Chưa có phác đồ', value: stats.statusCounts.noPlan, color: '#EF4444', statusKey: 'noPlan' },
     { name: 'Đã kết thúc', value: stats.statusCounts.expired, color: '#6B7280', statusKey: 'expired' },
   ];
@@ -358,9 +345,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
               </div>
             </div>
             <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Tỷ lệ hoạt động</h3>
+            <p className="text-sm font-semibold">{stats.statusCounts.active} học viên hoạt động · {stats.statusCounts.expiring} còn tối đa 5 ngày</p>
             <p className="text-2xl font-black text-orange-700">
               {stats.totalStudents > 0 ? ((stats.statusCounts.active / stats.totalStudents) * 100).toFixed(1) : 0}%
             </p>
+            <p className="mt-2 text-xs text-slate-500">{ACTIVE_STUDENT_DEFINITION}</p>
           </Card>
         </div>
 
@@ -659,12 +648,12 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onNaviga
                 <p className="text-[10px] font-bold uppercase tracking-widest mb-3 opacity-60">Top trạng thái</p>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold">Hoạt động</span>
-                  <span className="text-xs font-black">{((stats.statusCounts.active / stats.totalStudents) * 100).toFixed(0)}%</span>
+                  <span className="text-xs font-black">{(stats.totalStudents ? (stats.statusCounts.active / stats.totalStudents) * 100 : 0).toFixed(0)}%</span>
                 </div>
                 <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
                   <div 
                     className="bg-emerald-400 h-full rounded-full" 
-                    style={{ width: `${(stats.statusCounts.active / stats.totalStudents) * 100}%` }}
+                    style={{ width: `${stats.totalStudents ? (stats.statusCounts.active / stats.totalStudents) * 100 : 0}%` }}
                   ></div>
                 </div>
               </div>
