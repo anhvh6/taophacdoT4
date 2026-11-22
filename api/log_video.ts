@@ -82,18 +82,18 @@ export default async function handler(req: any, res: any) {
     ) {
       curMap[1] = '2026-11-19';
       curMap['1'] = '2026-11-19';
-      curMap[2] = '2026-11-21';
-      curMap['2'] = '2026-11-21';
+      curMap[2] = '2026-11-20';
+      curMap['2'] = '2026-11-20';
       if (!raw_backup.date_to_lesson_day_map) raw_backup.date_to_lesson_day_map = {};
-      delete raw_backup.date_to_lesson_day_map['2026-11-20'];
+      delete raw_backup.date_to_lesson_day_map['2026-11-21'];
       raw_backup.date_to_lesson_day_map['2026-11-19'] = 1;
-      raw_backup.date_to_lesson_day_map['2026-11-21'] = 2;
+      raw_backup.date_to_lesson_day_map['2026-11-20'] = 2;
       raw_backup.last_opened_lesson_day = 2;
-      raw_backup.last_video_open_date = '2026-11-21';
+      raw_backup.last_video_open_date = '2026-11-20';
       if (!raw_backup.video_open_dates) raw_backup.video_open_dates = [];
       if (!raw_backup.video_open_dates.includes('2026-11-19')) raw_backup.video_open_dates.push('2026-11-19');
-      if (!raw_backup.video_open_dates.includes('2026-11-21')) raw_backup.video_open_dates.push('2026-11-21');
-      raw_backup.video_open_dates = raw_backup.video_open_dates.filter((d: string) => d !== '2026-11-20');
+      if (!raw_backup.video_open_dates.includes('2026-11-20')) raw_backup.video_open_dates.push('2026-11-20');
+      raw_backup.video_open_dates = raw_backup.video_open_dates.filter((d: string) => d !== '2026-11-21');
       if (!raw_backup.completed_days) raw_backup.completed_days = [];
       if (!raw_backup.completed_days.includes(1)) raw_backup.completed_days.push(1);
       if (!raw_backup.completed_days.includes(2)) raw_backup.completed_days.push(2);

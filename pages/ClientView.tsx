@@ -787,7 +787,7 @@ export const getEffectiveLessonDateStr = (customer: Customer | any, dayNum: numb
   // (ví dụ học viên Bảo Ánh Dương C1795142748594ZH2TD có start_date là 19/11):
   if (customer.customer_id === 'C1795142748594ZH2TD') {
     if (dayNum === 1) return '2026-11-19';
-    if (dayNum === 2) return '2026-11-21';
+    if (dayNum === 2) return '2026-11-20';
   }
 
   const rawMap = raw.completed_days_map || {};
@@ -797,7 +797,7 @@ export const getEffectiveLessonDateStr = (customer: Customer | any, dayNum: numb
     (rawMap[2] === '2026-11-21' || rawMap['2'] === '2026-11-21')
   ) {
     if (dayNum === 1) return toISODateKey(getEffectiveLocalDate(customer.start_date) || customer.start_date) || '2026-11-19';
-    if (dayNum === 2) return '2026-11-21';
+    if (dayNum === 2) return '2026-11-20';
   }
 
   // 2. Nếu có mốc thời gian UTC chính xác (lesson_open_times hoặc last_video_open_time)
